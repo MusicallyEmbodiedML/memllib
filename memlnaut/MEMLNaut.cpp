@@ -3,19 +3,19 @@
 MEMLNaut* MEMLNaut::instance = nullptr;
 
 // Static interrupt handlers implementation
-void MEMLNaut::handleMomA1() { if(instance && instance->momA1Callback) instance->momA1Callback(); }
-void MEMLNaut::handleMomA2() { if(instance && instance->momA2Callback) instance->momA2Callback(); }
-void MEMLNaut::handleMomB1() { if(instance && instance->momB1Callback) instance->momB1Callback(); }
-void MEMLNaut::handleMomB2() { if(instance && instance->momB2Callback) instance->momB2Callback(); }
-void MEMLNaut::handleReSW() { if(instance && instance->reSWCallback) instance->reSWCallback(); }
-void MEMLNaut::handleReA() { if(instance && instance->reACallback) instance->reACallback(); }
-void MEMLNaut::handleReB() { if(instance && instance->reBCallback) instance->reBCallback(); }
-void MEMLNaut::handleJoySW() { if(instance && instance->joySWCallback) instance->joySWCallback(); }
+void MEMLNaut::handleMomA1() { if(instance && instance->checkDebounce(0) && instance->momA1Callback) instance->momA1Callback(); }
+void MEMLNaut::handleMomA2() { if(instance && instance->checkDebounce(1) && instance->momA2Callback) instance->momA2Callback(); }
+void MEMLNaut::handleMomB1() { if(instance && instance->checkDebounce(2) && instance->momB1Callback) instance->momB1Callback(); }
+void MEMLNaut::handleMomB2() { if(instance && instance->checkDebounce(3) && instance->momB2Callback) instance->momB2Callback(); }
+void MEMLNaut::handleReSW() { if(instance && instance->checkDebounce(4) && instance->reSWCallback) instance->reSWCallback(); }
+void MEMLNaut::handleReA() { if(instance && instance->checkDebounce(5) && instance->reACallback) instance->reACallback(); }
+void MEMLNaut::handleReB() { if(instance && instance->checkDebounce(6) && instance->reBCallback) instance->reBCallback(); }
+void MEMLNaut::handleJoySW() { if(instance && instance->checkDebounce(7) && instance->joySWCallback) instance->joySWCallback(); }
 
-void MEMLNaut::handleTogA1() { if(instance && instance->togA1Callback) instance->togA1Callback(digitalRead(Pins::TOG_A1) == LOW); }
-void MEMLNaut::handleTogA2() { if(instance && instance->togA2Callback) instance->togA2Callback(digitalRead(Pins::TOG_A2) == LOW); }
-void MEMLNaut::handleTogB1() { if(instance && instance->togB1Callback) instance->togB1Callback(digitalRead(Pins::TOG_B1) == LOW); }
-void MEMLNaut::handleTogB2() { if(instance && instance->togB2Callback) instance->togB2Callback(digitalRead(Pins::TOG_B2) == LOW); }
+void MEMLNaut::handleTogA1() { if(instance && instance->checkDebounce(8) && instance->togA1Callback) instance->togA1Callback(digitalRead(Pins::TOG_A1) == LOW); }
+void MEMLNaut::handleTogA2() { if(instance && instance->checkDebounce(9) && instance->togA2Callback) instance->togA2Callback(digitalRead(Pins::TOG_A2) == LOW); }
+void MEMLNaut::handleTogB1() { if(instance && instance->checkDebounce(10) && instance->togB1Callback) instance->togB1Callback(digitalRead(Pins::TOG_B1) == LOW); }
+void MEMLNaut::handleTogB2() { if(instance && instance->checkDebounce(11) && instance->togB2Callback) instance->togB2Callback(digitalRead(Pins::TOG_B2) == LOW); }
 
 MEMLNaut::MEMLNaut() {
     instance = this;
@@ -79,6 +79,15 @@ void MEMLNaut::setRVY1Callback(AnalogCallback cb, uint16_t threshold) {
 }
 void MEMLNaut::setRVX1Callback(AnalogCallback cb, uint16_t threshold) {
     adcStates[6] = {analogRead(Pins::RV_X1) / ADC_SCALE, threshold, cb};
+}
+
+bool MEMLNaut::checkDebounce(size_t index) {
+    unsigned long now = millis();
+    if (now - lastDebounceTime[index] >= DEBOUNCE_TIME) {
+        lastDebounceTime[index] = now;
+        return true;
+    }
+    return false;
 }
 
 void MEMLNaut::loop() {
