@@ -23,8 +23,8 @@ public:
      */
     static constexpr uint8_t MOM_A1 = 24;  ///< Momentary switch A1
     static constexpr uint8_t MOM_A2 = 25;  ///< Momentary switch A2
-    static constexpr uint8_t MOM_B1 = 26;  ///< Momentary switch B1
-    static constexpr uint8_t MOM_B2 = 27;  ///< Momentary switch B2
+    static constexpr uint8_t MOM_B1 = 28;  ///< Momentary switch B1
+    static constexpr uint8_t MOM_B2 = 29;  ///< Momentary switch B2
     static constexpr uint8_t RE_SW = 23;   ///< Rotary encoder switch
     static constexpr uint8_t RE_B = 17;    ///< Rotary encoder B signal
     static constexpr uint8_t RE_A = 11;    ///< Rotary encoder A signal
@@ -36,8 +36,8 @@ public:
      * Digital inputs with internal pull-up resistors
      * @{
      */
-    static constexpr uint8_t TOG_A1 = 28;  ///< Toggle switch A1
-    static constexpr uint8_t TOG_A2 = 29;  ///< Toggle switch A2
+    static constexpr uint8_t TOG_A1 = 26;  ///< Toggle switch A1
+    static constexpr uint8_t TOG_A2 = 27;  ///< Toggle switch A2
     static constexpr uint8_t TOG_B1 = 30;  ///< Toggle switch B1
     static constexpr uint8_t TOG_B2 = 31;  ///< Toggle switch B2
     /** @} */
