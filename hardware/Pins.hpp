@@ -28,7 +28,6 @@ public:
     static constexpr uint8_t RE_SW = 23;   ///< Rotary encoder switch
     static constexpr uint8_t RE_B = 17;    ///< Rotary encoder B signal
     static constexpr uint8_t RE_A = 11;    ///< Rotary encoder A signal
-    static constexpr uint8_t JOY_SW = 32;  ///< Joystick switch
     /** @} */
 
     /**
@@ -40,6 +39,7 @@ public:
     static constexpr uint8_t TOG_A2 = 29;  ///< Toggle switch A2
     static constexpr uint8_t TOG_B1 = 30;  ///< Toggle switch B1
     static constexpr uint8_t TOG_B2 = 31;  ///< Toggle switch B2
+    static constexpr uint8_t JOY_SW = 32;  ///< Joystick switch
     /** @} */
 
     /**
@@ -78,13 +78,13 @@ public:
         pinMode(RE_SW, INPUT_PULLUP);
         pinMode(RE_B, INPUT_PULLUP);
         pinMode(RE_A, INPUT_PULLUP);
-        pinMode(JOY_SW, INPUT_PULLUP);
 
         // Initialize toggle switches
         pinMode(TOG_A1, INPUT_PULLUP);
         pinMode(TOG_A2, INPUT_PULLUP);
         pinMode(TOG_B1, INPUT_PULLUP);
         pinMode(TOG_B2, INPUT_PULLUP);
+        pinMode(JOY_SW, INPUT_PULLUP);
 
         // Initialize ADC pins
         pinMode(JOY_X, INPUT);

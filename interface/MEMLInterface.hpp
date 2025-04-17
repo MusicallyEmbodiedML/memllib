@@ -2,10 +2,11 @@
 #define __MEML_INTERFACE_HPP__
 
 
-#include "../common/common_defs.h"
 #include <cstdint>
 #include <vector>
 #include "pico/util/queue.h"
+#include "../../memlp/Data.h"
+#include "../../../AppDefs.hpp"
 
 class MEMLInterface {
  public:

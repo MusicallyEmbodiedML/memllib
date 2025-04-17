@@ -36,7 +36,7 @@ FMSynth::FMSynth(float sample_rate) :
     note_freq_(0),
     note_amplitude_(0),
     play_note_(false),
-    midi_enabled_(true)
+    midi_enabled_(false)
 {
     // std::srand(0);
     maxiSettings::setup(sample_rate, 1, 16);

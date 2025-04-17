@@ -18,7 +18,7 @@ private:
     static constexpr uint16_t DEFAULT_THRESHOLD = 100;
     static constexpr size_t FILTER_SIZE = 5;
     static constexpr float ADC_SCALE = 41287.0f;
-    static constexpr unsigned long DEBOUNCE_TIME = 2;  // 2ms debounce
+    static constexpr unsigned long DEBOUNCE_TIME = 10;  // 10ms debounce
     std::array<unsigned long, 12> lastDebounceTime = {0};  // Store last trigger time for each input
 
     bool checkDebounce(size_t index);
@@ -40,12 +40,12 @@ private:
     ButtonCallback reSWCallback;
     ButtonCallback reACallback;
     ButtonCallback reBCallback;
-    ButtonCallback joySWCallback;
     
     ToggleCallback togA1Callback;
     ToggleCallback togA2Callback;
     ToggleCallback togB1Callback;
     ToggleCallback togB2Callback;
+    ToggleCallback joySWCallback;
 
     // Static interrupt handlers
     static void handleMomA1();
@@ -55,12 +55,12 @@ private:
     static void handleReSW();
     static void handleReA();
     static void handleReB();
-    static void handleJoySW();
     
     static void handleTogA1();
     static void handleTogA2();
     static void handleTogB1();
     static void handleTogB2();
+    static void handleJoySW();
 
 public:
     static MEMLNaut* Instance() {
@@ -87,13 +87,13 @@ public:
     void setReSWCallback(ButtonCallback cb);
     void setReACallback(ButtonCallback cb);
     void setReBCallback(ButtonCallback cb);
-    void setJoySWCallback(ButtonCallback cb);
 
     // Set callbacks for toggle switches
     void setTogA1Callback(ToggleCallback cb);
     void setTogA2Callback(ToggleCallback cb);
     void setTogB1Callback(ToggleCallback cb);
     void setTogB2Callback(ToggleCallback cb);
+    void setJoySWCallback(ToggleCallback cb);
 
     // ADC callback setters
     void setJoyXCallback(AnalogCallback cb, uint16_t threshold = DEFAULT_THRESHOLD);

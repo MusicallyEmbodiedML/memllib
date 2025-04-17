@@ -1,8 +1,7 @@
 #include "mlp_task.hpp"
-#include "../mlp/MLP.h"
-#include "../mlp/Data.h"
-#include "../mlp/Dataset.hpp"
-#include "../utils/PrintVector.hpp"
+#include "../../memlp/MLP.h"
+#include "../../memlp/Data.h"
+#include "../../memlp/Dataset.hpp"
 #include "../interface/DaisyUARTSend.hpp"
 
 #include <algorithm>
@@ -13,7 +12,8 @@
 #include <deque>
 #include <memory>
 
-#include "../PicoDefs.hpp"
+#include "../../../AppDefs.hpp"
+#include "../hardware/Pins.hpp"
 
 #include <Arduino.h>
 //#include "RingBuf.h"
@@ -51,8 +51,9 @@ static bool redraw_weights_ = true;
 static bool flag_zoom_in_ = false;
 static float speed_ = 1.0f;
 static size_t nn_n_ = 0;
+static size_t n_inputs_ = 0;
+static size_t n_params_ = 0;
 
-static std::shared_ptr<MIDIDevice> midi_;
 
 
 /******************************
@@ -63,10 +64,10 @@ queue_t *nn_paramupdate_ = nullptr;
 
 std::deque<float> inputRB; //ring buffer for inputs. Maybe a more efficient way to do this?
 
-void mlp_init(queue_t *nn_paramupdate, size_t n_inputs, size_t n_params, size_t n_inputbuffer, std::shared_ptr<MIDIDevice> _midiDev)
+void mlp_init(queue_t *nn_paramupdate, size_t n_inputs, size_t n_params, size_t n_inputbuffer)
 {
     Serial.printf("MLP- Initialise with: %d -> %d\n", n_inputs, n_params);
-    daisy_uart_ = std::make_unique<DaisyUARTSend>(uart_DaisyPIOTx);
+    daisy_uart_ = std::make_unique<DaisyUARTSend>(Pins::DAISY_TX);
 
     n_inputs *= n_inputbuffer;
     // fill up a ring buffer
@@ -115,7 +116,8 @@ void mlp_init(queue_t *nn_paramupdate, size_t n_inputs, size_t n_params, size_t 
     zoom_mode_centre_.resize(n_inputs, init_val);
     mlp_stored_input.resize(n_inputs, init_val);
 
-    // midi_ = _midiDev;
+    n_inputs_ = n_inputs;
+    n_params_ = n_params;
 
     Serial.println("MLP- Initialised.");
 
@@ -167,7 +169,7 @@ void mlp_train()
     num_t loss = mlp_[nn_n_]->Train(dataset,
               1.,
               gAppState.n_iterations,
-              0.0001,
+              0.00001,
               false);
     Serial.print("MLP- Trained, loss = ");
     Serial.println(loss, 10);
@@ -202,11 +204,10 @@ void mlp_draw(float speed)
         mlp_trigger_redraw_();
         flag_zoom_in_ = false;
     }
-    //if (redraw_weights_) {
+    if (redraw_weights_) {
         mlp_[nn_n_]->DrawWeights();
         Serial.println("MLP- Weights randomised.");
-        //redraw_weights_ = false;
-#if 0
+        redraw_weights_ = false;
     } else {
         if (gAppState.current_expl_mode == expl_mode_zoom) {
 
@@ -242,7 +243,6 @@ void mlp_draw(float speed)
 
         }
     }
-#endif
 }
 
 void mlp_add_data_point(const std::vector<float> &in, const std::vector<float> &out)
@@ -288,7 +288,7 @@ void mlp_pretrain_centre_()
         Serial.println("MLP- mlp_stored_output.size() == 0!");
         return;
     }
-    std::vector<float> single_feature(kNInputParams, 0.5f);
+    std::vector<float> single_feature(n_inputs_, 0.5f);
     single_feature.push_back(1.f);  // with bias
     std::vector<std::vector<float>> features {
         single_feature,
@@ -309,7 +309,7 @@ void mlp_pretrain_centre_()
     Serial.println("Training MLP on centre...");
     mlp_[nn_n_]->Train(dataset,
               1.,
-              1000,
+              100,
               0.00001,
               false);
 }
@@ -324,7 +324,7 @@ void mlp_set_speed(float speed)
 void mlp_set_expl_mode(te_expl_mode mode)
 {
     gAppState.current_expl_mode = mode;
-    // redraw_weights_ = true;
+    //redraw_weights_ = true;
     zoom_mode_centre_ = kZoom_mode_reset;
 }
 
@@ -401,12 +401,9 @@ void mlp_inference(input_data_t joystick_read) {
     mlp_stored_output = output;
 
     // Send result
-    // queue_try_add(
-    //     nn_paramupdate_,
-    //     reinterpret_cast<void *>(mlp_stored_output.data())
-    // );
+    queue_try_add(
+        nn_paramupdate_,
+        reinterpret_cast<void *>(mlp_stored_output.data())
+    );
     daisy_uart_->SendParams(mlp_stored_output);
-
-    // Send MIDI
-    // midi_->SendParamsAsCC(mlp_stored_output);
 }

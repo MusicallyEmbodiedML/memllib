@@ -10,12 +10,12 @@ void MEMLNaut::handleMomB2() { if(instance && instance->checkDebounce(3) && inst
 void MEMLNaut::handleReSW() { if(instance && instance->checkDebounce(4) && instance->reSWCallback) instance->reSWCallback(); }
 void MEMLNaut::handleReA() { if(instance && instance->checkDebounce(5) && instance->reACallback) instance->reACallback(); }
 void MEMLNaut::handleReB() { if(instance && instance->checkDebounce(6) && instance->reBCallback) instance->reBCallback(); }
-void MEMLNaut::handleJoySW() { if(instance && instance->checkDebounce(7) && instance->joySWCallback) instance->joySWCallback(); }
 
-void MEMLNaut::handleTogA1() { if(instance && instance->checkDebounce(8) && instance->togA1Callback) instance->togA1Callback(digitalRead(Pins::TOG_A1) == LOW); }
-void MEMLNaut::handleTogA2() { if(instance && instance->checkDebounce(9) && instance->togA2Callback) instance->togA2Callback(digitalRead(Pins::TOG_A2) == LOW); }
-void MEMLNaut::handleTogB1() { if(instance && instance->checkDebounce(10) && instance->togB1Callback) instance->togB1Callback(digitalRead(Pins::TOG_B1) == LOW); }
-void MEMLNaut::handleTogB2() { if(instance && instance->checkDebounce(11) && instance->togB2Callback) instance->togB2Callback(digitalRead(Pins::TOG_B2) == LOW); }
+void MEMLNaut::handleTogA1() { if(instance && instance->checkDebounce(7) && instance->togA1Callback) instance->togA1Callback(digitalRead(Pins::TOG_A1) == LOW); }
+void MEMLNaut::handleTogA2() { if(instance && instance->checkDebounce(8) && instance->togA2Callback) instance->togA2Callback(digitalRead(Pins::TOG_A2) == LOW); }
+void MEMLNaut::handleTogB1() { if(instance && instance->checkDebounce(9) && instance->togB1Callback) instance->togB1Callback(digitalRead(Pins::TOG_B1) == LOW); }
+void MEMLNaut::handleTogB2() { if(instance && instance->checkDebounce(10) && instance->togB2Callback) instance->togB2Callback(digitalRead(Pins::TOG_B2) == LOW); }
+void MEMLNaut::handleJoySW() { if(instance && instance->checkDebounce(11) && instance->joySWCallback) instance->joySWCallback(digitalRead(Pins::JOY_SW) == LOW); }
 
 MEMLNaut::MEMLNaut() {
     instance = this;
@@ -33,13 +33,13 @@ MEMLNaut::MEMLNaut() {
     attachInterrupt(digitalPinToInterrupt(Pins::RE_SW), handleReSW, FALLING);
     attachInterrupt(digitalPinToInterrupt(Pins::RE_A), handleReA, FALLING);
     attachInterrupt(digitalPinToInterrupt(Pins::RE_B), handleReB, FALLING);
-    attachInterrupt(digitalPinToInterrupt(Pins::JOY_SW), handleJoySW, FALLING);
     
     // Attach toggle switch interrupts (CHANGE)
     attachInterrupt(digitalPinToInterrupt(Pins::TOG_A1), handleTogA1, CHANGE);
     attachInterrupt(digitalPinToInterrupt(Pins::TOG_A2), handleTogA2, CHANGE);
     attachInterrupt(digitalPinToInterrupt(Pins::TOG_B1), handleTogB1, CHANGE);
     attachInterrupt(digitalPinToInterrupt(Pins::TOG_B2), handleTogB2, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(Pins::JOY_SW), handleJoySW, CHANGE);
 }
 
 // Momentary switch callback setters
@@ -50,13 +50,13 @@ void MEMLNaut::setMomB2Callback(ButtonCallback cb) { momB2Callback = cb; }
 void MEMLNaut::setReSWCallback(ButtonCallback cb) { reSWCallback = cb; }
 void MEMLNaut::setReACallback(ButtonCallback cb) { reACallback = cb; }
 void MEMLNaut::setReBCallback(ButtonCallback cb) { reBCallback = cb; }
-void MEMLNaut::setJoySWCallback(ButtonCallback cb) { joySWCallback = cb; }
 
 // Toggle switch callback setters
 void MEMLNaut::setTogA1Callback(ToggleCallback cb) { togA1Callback = cb; }
 void MEMLNaut::setTogA2Callback(ToggleCallback cb) { togA2Callback = cb; }
 void MEMLNaut::setTogB1Callback(ToggleCallback cb) { togB1Callback = cb; }
 void MEMLNaut::setTogB2Callback(ToggleCallback cb) { togB2Callback = cb; }
+void MEMLNaut::setJoySWCallback(ToggleCallback cb) { joySWCallback = cb; }
 
 // ADC callback setters
 void MEMLNaut::setJoyXCallback(AnalogCallback cb, uint16_t threshold) {

@@ -10,7 +10,7 @@
 #include "../PicoDefs.hpp"
 
 
-#define TEST_TONES    1
+#define TEST_TONES    0
 #define PASSTHROUGH   0
 
 

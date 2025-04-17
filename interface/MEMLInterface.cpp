@@ -1,5 +1,5 @@
 #include "MEMLInterface.hpp"
-#include "../PicoDefs.hpp"
+#include "../../../AppDefs.hpp"
 
 // STL includes
 #include <string>
@@ -34,6 +34,11 @@ MEMLInterface::MEMLInterface(queue_t *interface_fmsynth,
     for (auto &j : joystick_current_) {
         j = 0.5;
     }
+
+    mlp_init(interface_fmsynth,
+        nn_input_size,
+        nn_output_size,
+        1);
 }
 
 void MEMLInterface::EnableMIDI(bool midi_on)
@@ -84,6 +89,10 @@ void MEMLInterface::SetPot(size_t pot_n, num_t value)
         Serial.print(pot_n);
         Serial.println(" out of bounds.");
     }
+    Serial.print("INTF- Pot ");
+    Serial.print(pot_n);
+    Serial.print(" value: ");
+    Serial.println(value);
 }
 
 void MEMLInterface::UpdatePots()
@@ -112,7 +121,7 @@ void MEMLInterface::SetToggleButton(te_button_idx button_n, int8_t state)
             }
             gAppState.current_nn_mode = static_cast<te_nn_mode>(state);
             // Set the LED
-            digitalWrite(led_Training, gAppState.current_nn_mode);
+            //digitalWrite(led_Training, gAppState.current_nn_mode);
             std::string dbg_mode(( gAppState.current_nn_mode == mode_training ) ? "training" : "inference");
             Serial.print("INTF- Mode: ");
             Serial.println(dbg_mode.c_str());

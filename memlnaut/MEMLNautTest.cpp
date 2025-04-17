@@ -9,13 +9,13 @@ void onMomB2() { Serial.println("MOM_B2 pressed"); }
 void onReSW() { Serial.println("RE_SW pressed"); }
 void onReA() { Serial.println("RE_A triggered"); }
 void onReB() { Serial.println("RE_B triggered"); }
-void onJoySW() { Serial.println("JOY_SW pressed"); }
 
 // Toggle callback functions
 void onTogA1(bool state) { Serial.printf("TOG_A1: %s\n", state ? "ON" : "OFF"); }
 void onTogA2(bool state) { Serial.printf("TOG_A2: %s\n", state ? "ON" : "OFF"); }
 void onTogB1(bool state) { Serial.printf("TOG_B1: %s\n", state ? "ON" : "OFF"); }
 void onTogB2(bool state) { Serial.printf("TOG_B2: %s\n", state ? "ON" : "OFF"); }
+void onJoySW(bool state) { Serial.printf("JOY_SW: %s\n", state ? "ON" : "OFF"); }
 
 // ADC callback functions
 void onJoyX(float value) { Serial.printf("JOY_X: %.3f\n", value); }
@@ -40,13 +40,13 @@ namespace MEMLNautTest {
         MEMLNaut::Instance()->setReSWCallback(onReSW);
         MEMLNaut::Instance()->setReACallback(onReA);
         MEMLNaut::Instance()->setReBCallback(onReB);
-        MEMLNaut::Instance()->setJoySWCallback(onJoySW);
 
         // Set up toggle switch callbacks
         MEMLNaut::Instance()->setTogA1Callback(onTogA1);
         MEMLNaut::Instance()->setTogA2Callback(onTogA2);
         MEMLNaut::Instance()->setTogB1Callback(onTogB1);
         MEMLNaut::Instance()->setTogB2Callback(onTogB2);
+        MEMLNaut::Instance()->setJoySWCallback(onJoySW);
 
         // Set up ADC callbacks with default threshold
         MEMLNaut::Instance()->setJoyXCallback(onJoyX);

@@ -1,13 +1,12 @@
 #ifndef __MLP_TASK_HPP__
 #define __MLP_TASK_HPP__
 
-#include "../common/common_defs.h"
-#include "../PicoDefs.hpp"
+#include "../../../AppDefs.hpp"
 
 #include <vector>
 #include <memory>
 
-#include "MIDI.hpp"
+//#include "MIDI.hpp"
 
 #include "pico/util/queue.h"
 
@@ -17,8 +16,7 @@ using input_data_t = std::vector<float>;
 void mlp_init(queue_t *nn_paramupdate,
         size_t n_inputs,
         size_t n_params,
-        size_t n_inputbuffer,
-        std::shared_ptr<MIDIDevice> _midiDev = nullptr);
+        size_t n_inputbuffer);
 void mlp_inference(input_data_t joystick_read);
 void mlp_train();
 void mlp_draw(float speed = 0.01);

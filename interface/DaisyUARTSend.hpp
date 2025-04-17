@@ -49,12 +49,12 @@ public:
 
         // Finally, write the SLIP_END marker
         pioSerial_.write(SLIP_END);
-        Serial.print(params[0], 5);
-        Serial.print(", ");
-        Serial.print(params[params.size()-1], 5);
-        Serial.print(" ");
-        Serial.print(params.size());
-        Serial.println("");
+        // Serial.print(params[0], 5);
+        // Serial.print(", ");
+        // Serial.print(params[params.size()-1], 5);
+        // Serial.print(" ");
+        // Serial.print(params.size());
+        // Serial.println("");
     }
 
 private:
