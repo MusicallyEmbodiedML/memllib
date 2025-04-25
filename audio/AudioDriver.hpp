@@ -31,10 +31,8 @@ enum PinConfig_i2c {
     i2s_pMCLK = 10,
 };
 
-class AudioDriver_Output {
-
+class AudioDriver {
  public:
-
     static bool Setup();
     static inline void SetCallback(audiocallback_fptr_t callback) {
         audio_callback_ = callback;
@@ -42,11 +40,12 @@ class AudioDriver_Output {
         Serial.printf("%p\n", audio_callback_);
     }
 
-    AudioDriver_Output() = delete;
+    static inline size_t GetSampleRate() { return kSampleRate; }
+
+    AudioDriver() = delete;
 
     static void i2sOutputCallback(void);
     static stereosample_t silence_(stereosample_t);
 };
-
 
 #endif  // __AUDIO_DRIVER_HPP__

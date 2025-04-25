@@ -1,4 +1,6 @@
 #include "mlp_task.hpp"
+
+#if 0
 #include "../../memlp/MLP.h"
 #include "../../memlp/Data.h"
 #include "../../memlp/Dataset.hpp"
@@ -407,3 +409,5 @@ void mlp_inference(input_data_t joystick_read) {
     );
     daisy_uart_->SendParams(mlp_stored_output);
 }
+
+#endif

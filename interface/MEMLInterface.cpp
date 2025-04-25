@@ -1,4 +1,6 @@
 #include "MEMLInterface.hpp"
+
+#if 0
 #include "../../../AppDefs.hpp"
 
 // STL includes
@@ -209,3 +211,5 @@ void MEMLInterface::SendMIDI(ts_midi_note midi_note)
         // );
     }
 }
+
+#endif

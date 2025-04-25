@@ -1,6 +1,5 @@
-#ifndef __MEML_INTERFACE_HPP__
+#if 0
 #define __MEML_INTERFACE_HPP__
-
 
 #include <cstdint>
 #include <vector>

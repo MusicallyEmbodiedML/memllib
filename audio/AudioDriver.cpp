@@ -25,7 +25,7 @@ static int32_t AUDIO_MEM_2 sample = amplitude; // current sample value
 
 static AudioControlSGTL5000 codecCtl;
 
-audiocallback_fptr_t audio_callback_;
+audiocallback_fptr_t audio_callback_ = nullptr;
 
 static __attribute__((aligned(8))) pio_i2s i2s;
 
@@ -129,7 +129,7 @@ static void __isr dma_i2s_in_handler(void) {
 }
 
 
-void __isr AudioDriver_Output::i2sOutputCallback() {
+void __isr AudioDriver::i2sOutputCallback() {
 
 
     // for(size_t i=0;  i < kBufferSize; i++) {
@@ -159,9 +159,11 @@ void __isr AudioDriver_Output::i2sOutputCallback() {
     // }
 }
 
-bool AudioDriver_Output::Setup() {
+bool AudioDriver::Setup() {
 
-    audio_callback_ = &silence_;
+    if (nullptr == audio_callback_) {
+        audio_callback_ = &silence_;
+    }
 
     maxiSettings::setup(kSampleRate, 2, kBufferSize);
 
@@ -188,16 +190,16 @@ bool AudioDriver_Output::Setup() {
 
     // init i2c
     codecCtl.enable();
-    codecCtl.volume(0.99);
+    codecCtl.volume(0.85);
     codecCtl.inputSelect(AUDIO_INPUT_LINEIN);
-    codecCtl.lineInLevel(5);
+    codecCtl.lineInLevel(3);
 
 
     return true;
 }
 
 
-stereosample_t AudioDriver_Output::silence_(stereosample_t x) {
+stereosample_t AudioDriver::silence_(stereosample_t x) {
     x.L = 0;
     x.R = 0;
 
