@@ -102,6 +102,8 @@ public:
 
         // Set ADC resolution to 12 bits
         analogReadResolution(12);
+
+        Serial.println("Pins initialized.");
     }
 };
 

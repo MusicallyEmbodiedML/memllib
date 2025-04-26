@@ -20,12 +20,14 @@ void MEMLNaut::handleJoySW() { if(instance && instance->checkDebounce(11) && ins
 MEMLNaut::MEMLNaut() {
     instance = this;
     loopCallback = nullptr;
-    
     // Initialize median filters
     for(auto& filter : adcFilters) {
         filter.init(FILTER_SIZE);
     }
-    
+
+    // Initialise all pins
+    Pins::initializePins();
+
     // Attach momentary switch interrupts (FALLING edge)
     attachInterrupt(digitalPinToInterrupt(Pins::MOM_A1), handleMomA1, FALLING);
     attachInterrupt(digitalPinToInterrupt(Pins::MOM_A2), handleMomA2, FALLING);
@@ -34,7 +36,7 @@ MEMLNaut::MEMLNaut() {
     attachInterrupt(digitalPinToInterrupt(Pins::RE_SW), handleReSW, FALLING);
     attachInterrupt(digitalPinToInterrupt(Pins::RE_A), handleReA, FALLING);
     attachInterrupt(digitalPinToInterrupt(Pins::RE_B), handleReB, FALLING);
-    
+
     // Attach toggle switch interrupts (CHANGE)
     attachInterrupt(digitalPinToInterrupt(Pins::TOG_A1), handleTogA1, CHANGE);
     attachInterrupt(digitalPinToInterrupt(Pins::TOG_A2), handleTogA2, CHANGE);

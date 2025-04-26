@@ -18,7 +18,7 @@ private:
     static constexpr size_t NUM_ADCS = 7;
     static constexpr uint16_t DEFAULT_THRESHOLD = 100;
     static constexpr size_t FILTER_SIZE = 5;
-    static constexpr float ADC_SCALE = 41287.0f;
+    static constexpr float ADC_SCALE = 4128.7f;
     static constexpr unsigned long DEBOUNCE_TIME = 10;  // 10ms debounce
     std::array<unsigned long, 12> lastDebounceTime = {0};  // Store last trigger time for each input
 
@@ -32,7 +32,7 @@ private:
 
     std::array<ADCState, NUM_ADCS> adcStates;
     std::array<MedianFilter<uint16_t>, NUM_ADCS> adcFilters;
-    
+
     // Callback storage
     ButtonCallback momA1Callback;
     ButtonCallback momA2Callback;
@@ -41,7 +41,7 @@ private:
     ButtonCallback reSWCallback;
     ButtonCallback reACallback;
     ButtonCallback reBCallback;
-    
+
     ToggleCallback togA1Callback;
     ToggleCallback togA2Callback;
     ToggleCallback togB1Callback;
