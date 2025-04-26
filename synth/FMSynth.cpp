@@ -48,8 +48,8 @@ FMSynth::FMSynth(float sample_rate) :
     
 }
 
-void FMSynth::mapParameters(std::vector<float> &params) {
-    float *params_ptr = params.data();
+void FMSynth::mapParameters(const std::vector<float> &params) {
+    const float *params_ptr = params.data();
     float *dest_ptr = synthparams.data();
 
     *dest_ptr++ = 20 + ((*(params_ptr) * *(params_ptr)) * 5000);

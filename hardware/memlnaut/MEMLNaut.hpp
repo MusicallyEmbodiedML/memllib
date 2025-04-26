@@ -11,6 +11,7 @@ public:
     using ButtonCallback = std::function<void(void)>;
     using ToggleCallback = std::function<void(bool)>;
     using AnalogCallback = std::function<void(float)>;
+    using LoopCallback = std::function<void(void)>;
 
 private:
     static MEMLNaut* instance;
@@ -46,6 +47,8 @@ private:
     ToggleCallback togB1Callback;
     ToggleCallback togB2Callback;
     ToggleCallback joySWCallback;
+
+    LoopCallback loopCallback;
 
     // Static interrupt handlers
     static void handleMomA1();
@@ -103,6 +106,9 @@ public:
     void setRVZ1Callback(AnalogCallback cb, uint16_t threshold = DEFAULT_THRESHOLD);
     void setRVY1Callback(AnalogCallback cb, uint16_t threshold = DEFAULT_THRESHOLD);
     void setRVX1Callback(AnalogCallback cb, uint16_t threshold = DEFAULT_THRESHOLD);
+
+    // Main loop callback setter
+    void setLoopCallback(LoopCallback cb);
 
     void loop();
 };

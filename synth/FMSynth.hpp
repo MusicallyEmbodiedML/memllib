@@ -119,7 +119,7 @@ class FMSynth {
     FMSynth(float sample_rate);
     float process();
     int32_t processInt();
-    void mapParameters(std::vector<float> &params);
+    void mapParameters(const std::vector<float> &params);
     // void EnableMIDI(bool en);
     // void AddMIDINote(ts_midi_note note);
     void UpdateParams();

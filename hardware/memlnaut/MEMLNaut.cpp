@@ -19,6 +19,7 @@ void MEMLNaut::handleJoySW() { if(instance && instance->checkDebounce(11) && ins
 
 MEMLNaut::MEMLNaut() {
     instance = this;
+    loopCallback = nullptr;
     
     // Initialize median filters
     for(auto& filter : adcFilters) {
@@ -81,6 +82,10 @@ void MEMLNaut::setRVX1Callback(AnalogCallback cb, uint16_t threshold) {
     adcStates[6] = {analogRead(Pins::RV_X1) / ADC_SCALE, threshold, cb};
 }
 
+void MEMLNaut::setLoopCallback(LoopCallback cb) {
+    loopCallback = cb;
+}
+
 bool MEMLNaut::checkDebounce(size_t index) {
     unsigned long now = millis();
     if (now - lastDebounceTime[index] >= DEBOUNCE_TIME) {
@@ -101,10 +106,14 @@ void MEMLNaut::loop() {
         uint16_t filteredValue = adcFilters[i].process(rawValue);
         float currentValue = filteredValue / ADC_SCALE;
         auto& state = adcStates[i];
-        
+
         if (state.callback && abs(static_cast<int>(filteredValue - (state.lastValue * ADC_SCALE))) > state.threshold) {
             state.callback(currentValue);
             state.lastValue = currentValue;
         }
+    }
+
+    if (loopCallback) {
+        loopCallback();
     }
 }
