@@ -6,6 +6,7 @@
 #include <functional>
 #include <array>
 
+
 class MEMLNaut {
 public:
     using ButtonCallback = std::function<void(void)>;
