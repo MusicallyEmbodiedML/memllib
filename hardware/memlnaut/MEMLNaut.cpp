@@ -59,12 +59,36 @@ void MEMLNaut::handleMomA1() {
         instance->momA1Callback();
     }
 }
-void MEMLNaut::handleMomA2() { if(instance && instance->checkDebounce(1) && instance->momA2Callback) instance->momA2Callback(); }
-void MEMLNaut::handleMomB1() { if(instance && instance->checkDebounce(2) && instance->momB1Callback) instance->momB1Callback(); }
-void MEMLNaut::handleMomB2() { if(instance && instance->checkDebounce(3) && instance->momB2Callback) instance->momB2Callback(); }
-void MEMLNaut::handleReSW() { if(instance && instance->checkDebounce(4) && instance->reSWCallback) instance->reSWCallback(); }
-void MEMLNaut::handleReA() { if(instance && instance->checkDebounce(5) && instance->reACallback) instance->reACallback(); }
-void MEMLNaut::handleReB() { if(instance && instance->checkDebounce(6) && instance->reBCallback) instance->reBCallback(); }
+void MEMLNaut::handleMomA2() {
+    if (debouncers[1].debounce() && instance && instance->momA2Callback) {
+        instance->momA2Callback();
+    }
+}
+void MEMLNaut::handleMomB1() {
+    if (debouncers[2].debounce() && instance && instance->momB1Callback) {
+        instance->momB1Callback();
+    }
+}
+void MEMLNaut::handleMomB2() {
+    if (debouncers[3].debounce() && instance && instance->momB2Callback) {
+        instance->momB2Callback();
+    }
+}
+void MEMLNaut::handleReSW() {
+    if (debouncers[4].debounce() && instance && instance->reSWCallback) {
+        instance->reSWCallback();
+    }
+}
+void MEMLNaut::handleReA() {
+    if (debouncers[5].debounce() && instance && instance->reACallback) {
+        instance->reACallback();
+    }
+}
+void MEMLNaut::handleReB() {
+    if (debouncers[6].debounce() && instance && instance->reBCallback) {
+        instance->reBCallback();
+    }
+}
 
 void MEMLNaut::handleTogA1() {
     bool should_update = toggleDebouncers[0].debounce(digitalRead(Pins::TOG_A1) == LOW);
@@ -73,10 +97,34 @@ void MEMLNaut::handleTogA1() {
         instance->togA1Callback(val);
     }
 }
-void MEMLNaut::handleTogA2() { if(instance && instance->checkDebounce(8) && instance->togA2Callback) instance->togA2Callback(digitalRead(Pins::TOG_A2) == LOW); }
-void MEMLNaut::handleTogB1() { if(instance && instance->checkDebounce(9) && instance->togB1Callback) instance->togB1Callback(digitalRead(Pins::TOG_B1) == LOW); }
-void MEMLNaut::handleTogB2() { if(instance && instance->checkDebounce(10) && instance->togB2Callback) instance->togB2Callback(digitalRead(Pins::TOG_B2) == LOW); }
-void MEMLNaut::handleJoySW() { if(instance && instance->checkDebounce(11) && instance->joySWCallback) instance->joySWCallback(digitalRead(Pins::JOY_SW) == LOW); }
+void MEMLNaut::handleTogA2() {
+    bool should_update = toggleDebouncers[1].debounce(digitalRead(Pins::TOG_A2) == LOW);
+    if (should_update && instance && instance->togA2Callback) {
+        bool val = toggleDebouncers[1].getState();
+        instance->togA2Callback(val);
+    }
+}
+void MEMLNaut::handleTogB1() {
+    bool should_update = toggleDebouncers[2].debounce(digitalRead(Pins::TOG_B1) == LOW);
+    if (should_update && instance && instance->togB1Callback) {
+        bool val = toggleDebouncers[2].getState();
+        instance->togB1Callback(val);
+    }
+}
+void MEMLNaut::handleTogB2() {
+    bool should_update = toggleDebouncers[3].debounce(digitalRead(Pins::TOG_B2) == LOW);
+    if (should_update && instance && instance->togB2Callback) {
+        bool val = toggleDebouncers[3].getState();
+        instance->togB2Callback(val);
+    }
+}
+void MEMLNaut::handleJoySW() {
+    bool should_update = toggleDebouncers[4].debounce(digitalRead(Pins::JOY_SW) == LOW);
+    if (should_update && instance && instance->joySWCallback) {
+        bool val = toggleDebouncers[4].getState();
+        instance->joySWCallback(val);
+    }
+}
 
 MEMLNaut::MEMLNaut() {
     instance = this;
@@ -147,15 +195,6 @@ void MEMLNaut::setRVX1Callback(AnalogCallback cb, uint16_t threshold) {
 
 void MEMLNaut::setLoopCallback(LoopCallback cb) {
     loopCallback = cb;
-}
-
-bool MEMLNaut::checkDebounce(size_t index) {
-    unsigned long now = millis();
-    if (now - lastDebounceTime[index] >= DEBOUNCE_TIME) {
-        lastDebounceTime[index] = now;
-        return true;
-    }
-    return false;
 }
 
 void MEMLNaut::loop() {

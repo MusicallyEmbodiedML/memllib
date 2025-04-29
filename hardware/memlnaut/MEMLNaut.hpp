@@ -20,10 +20,6 @@ private:
     static constexpr uint16_t DEFAULT_THRESHOLD = 100;
     static constexpr size_t FILTER_SIZE = 5;
     static constexpr float ADC_SCALE = 4128.7f;
-    static constexpr unsigned long DEBOUNCE_TIME = 10;  // 10ms debounce
-    std::array<unsigned long, 12> lastDebounceTime = {0};  // Store last trigger time for each input
-
-    bool checkDebounce(size_t index);
 
     struct ADCState {
         float lastValue = 0.0f;
