@@ -2,10 +2,10 @@
 #define __MEMLNAUT_HPP__
 
 #include "Pins.hpp"
+#include "../../utils/Debounce.hpp"
 #include "../../utils/MedianFilter.h"
 #include <functional>
 #include <array>
-
 
 class MEMLNaut {
 public:
@@ -21,6 +21,9 @@ private:
     static constexpr size_t FILTER_SIZE = 5;
     static constexpr float ADC_SCALE = 4128.7f;
 
+    static constexpr size_t NUM_BUTTONS = 7;
+    static constexpr size_t NUM_TOGGLES = 5;
+
     struct ADCState {
         float lastValue = 0.0f;
         uint16_t threshold = DEFAULT_THRESHOLD;
@@ -29,6 +32,9 @@ private:
 
     std::array<ADCState, NUM_ADCS> adcStates;
     std::array<MedianFilter<uint16_t>, NUM_ADCS> adcFilters;
+
+    std::array<ButtonDebounce, NUM_BUTTONS> debouncers;
+    std::array<ToggleDebounce, NUM_TOGGLES> toggleDebouncers;
 
     // Callback storage
     ButtonCallback momA1Callback;
@@ -55,7 +61,7 @@ private:
     static void handleReSW();
     static void handleReA();
     static void handleReB();
-    
+
     static void handleTogA1();
     static void handleTogA2();
     static void handleTogB1();

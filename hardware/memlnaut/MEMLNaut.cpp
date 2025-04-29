@@ -2,127 +2,86 @@
 
 MEMLNaut* MEMLNaut::instance = nullptr;
 
-static const int nButtons = 7;
-static const int nToggles = 5;
-
-class ButtonDebounce {
-private:
-    static constexpr unsigned long kHaltTime_ms = 25;
-    unsigned long lastPressTime_ms = 0;
-
-public:
-    bool debounce() {
-        unsigned long currentTime = millis();
-        if (currentTime - lastPressTime_ms >= kHaltTime_ms) {
-            lastPressTime_ms = currentTime;
-            return true;
-        }
-        return false;
-    }
-};
-
-class ToggleDebounce {
-private:
-    static constexpr unsigned long kHaltTime_ms = 25;
-    unsigned long lastChangeTime_ms = 0;
-    bool lastState = false;
-    bool stateChanged = false;
-
-public:
-    // Returns true only when state has changed AND debounce time has passed
-    bool debounce(bool currentState) {
-        unsigned long currentTime = millis();
-        bool shouldUpdate = false;
-
-        if (currentState != lastState && 
-            currentTime - lastChangeTime_ms >= kHaltTime_ms) {
-            lastChangeTime_ms = currentTime;
-            lastState = currentState;
-            shouldUpdate = true;
-        }
-        return shouldUpdate;
-    }
-
-    // Get the current stable state
-    bool getState() const {
-        return lastState;
-    }
-};
-
-ButtonDebounce debouncers[nButtons];
-ToggleDebounce toggleDebouncers[nToggles];
-
-
 // Static interrupt handlers implementation
 void MEMLNaut::handleMomA1() {
-    if (debouncers[0].debounce() && instance && instance->momA1Callback) {
+    if (instance && instance->debouncers[0].debounce() && instance->momA1Callback) {
         instance->momA1Callback();
     }
 }
 void MEMLNaut::handleMomA2() {
-    if (debouncers[1].debounce() && instance && instance->momA2Callback) {
+    if (instance && instance->debouncers[1].debounce() && instance->momA2Callback) {
         instance->momA2Callback();
     }
 }
 void MEMLNaut::handleMomB1() {
-    if (debouncers[2].debounce() && instance && instance->momB1Callback) {
+    if (instance && instance->debouncers[2].debounce() && instance->momB1Callback) {
         instance->momB1Callback();
     }
 }
 void MEMLNaut::handleMomB2() {
-    if (debouncers[3].debounce() && instance && instance->momB2Callback) {
+    if (instance && instance->debouncers[3].debounce() && instance->momB2Callback) {
         instance->momB2Callback();
     }
 }
 void MEMLNaut::handleReSW() {
-    if (debouncers[4].debounce() && instance && instance->reSWCallback) {
+    if (instance && instance->debouncers[4].debounce() && instance->reSWCallback) {
         instance->reSWCallback();
     }
 }
 void MEMLNaut::handleReA() {
-    if (debouncers[5].debounce() && instance && instance->reACallback) {
+    if (instance && instance->debouncers[5].debounce() && instance->reACallback) {
         instance->reACallback();
     }
 }
 void MEMLNaut::handleReB() {
-    if (debouncers[6].debounce() && instance && instance->reBCallback) {
+    if (instance && instance->debouncers[6].debounce() && instance->reBCallback) {
         instance->reBCallback();
     }
 }
 
 void MEMLNaut::handleTogA1() {
-    bool should_update = toggleDebouncers[0].debounce(digitalRead(Pins::TOG_A1) == LOW);
-    if (should_update && instance && instance->togA1Callback) {
-        bool val = toggleDebouncers[0].getState();
-        instance->togA1Callback(val);
+    if (instance) {
+        bool should_update = instance->toggleDebouncers[0].debounce(digitalRead(Pins::TOG_A1) == LOW);
+        if (should_update && instance->togA1Callback) {
+            bool val = instance->toggleDebouncers[0].getState();
+            instance->togA1Callback(val);
+        }
     }
 }
 void MEMLNaut::handleTogA2() {
-    bool should_update = toggleDebouncers[1].debounce(digitalRead(Pins::TOG_A2) == LOW);
-    if (should_update && instance && instance->togA2Callback) {
-        bool val = toggleDebouncers[1].getState();
-        instance->togA2Callback(val);
+    if (instance) {
+        bool should_update = instance->toggleDebouncers[1].debounce(digitalRead(Pins::TOG_A2) == LOW);
+        if (should_update && instance->togA2Callback) {
+            bool val = instance->toggleDebouncers[1].getState();
+            instance->togA2Callback(val);
+        }
     }
 }
 void MEMLNaut::handleTogB1() {
-    bool should_update = toggleDebouncers[2].debounce(digitalRead(Pins::TOG_B1) == LOW);
-    if (should_update && instance && instance->togB1Callback) {
-        bool val = toggleDebouncers[2].getState();
-        instance->togB1Callback(val);
+    if (instance) {
+        bool should_update = instance->toggleDebouncers[2].debounce(digitalRead(Pins::TOG_B1) == LOW);
+        if (should_update && instance->togB1Callback) {
+            bool val = instance->toggleDebouncers[2].getState();
+            instance->togB1Callback(val);
+        }
     }
 }
 void MEMLNaut::handleTogB2() {
-    bool should_update = toggleDebouncers[3].debounce(digitalRead(Pins::TOG_B2) == LOW);
-    if (should_update && instance && instance->togB2Callback) {
-        bool val = toggleDebouncers[3].getState();
-        instance->togB2Callback(val);
+    if (instance) {
+        bool should_update = instance->toggleDebouncers[3].debounce(digitalRead(Pins::TOG_B2) == LOW);
+        if (should_update && instance->togB2Callback) {
+            bool val = instance->toggleDebouncers[3].getState();
+            instance->togB2Callback(val);
+        }
     }
 }
 void MEMLNaut::handleJoySW() {
-    bool should_update = toggleDebouncers[4].debounce(digitalRead(Pins::JOY_SW) == LOW);
-    if (should_update && instance && instance->joySWCallback) {
-        bool val = toggleDebouncers[4].getState();
-        instance->joySWCallback(val);
+    if (instance) {
+        bool should_update = instance->toggleDebouncers[4].debounce(digitalRead(Pins::JOY_SW) == LOW);
+        if (should_update && instance->joySWCallback) {
+            bool val = instance->toggleDebouncers[4].getState();
+            instance->joySWCallback(val);
+        }
     }
 }
 
