@@ -46,6 +46,7 @@ class AudioDriver {
 
     static void i2sOutputCallback(void);
     static stereosample_t silence_(stereosample_t);
+    static void setHeadphoneVolume(float n);
 };
 
 #endif  // __AUDIO_DRIVER_HPP__

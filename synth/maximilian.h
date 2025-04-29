@@ -1229,7 +1229,6 @@ public:
         return (low * lpmix) + (band * bpmix) + (high * hpmix) + (notch * notchmix);
     }
 
-private:
     inline void setParams(float _freq, float _res)
     {
         freq = _freq;
@@ -1243,6 +1242,8 @@ private:
         g3 = g * ginv;
         g4 = 2.0 * ginv;
     }
+
+    private:
 
     float v0z, v1, v2, g, damping, k, ginv, g1, g2, g3, g4;
     float freq, res;
