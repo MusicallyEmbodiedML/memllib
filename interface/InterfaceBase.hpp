@@ -13,7 +13,9 @@ protected:
     bool init_done_;
     size_t n_inputs_;
     size_t n_outputs_;
+    size_t n_directparams_;
     queue_t queue_audioparam_;
+    queue_t queue_directparam_;
 
 public:
     ~InterfaceBase();
@@ -27,11 +29,15 @@ public:
     InterfaceBase& operator=(InterfaceBase&&) = delete;
 
     // Virtual functions with default implementations
+    virtual void setup(size_t n_inputs, size_t n_outputs,
+        size_t n_directparams);
     virtual void setup(size_t n_inputs, size_t n_outputs);
 
     // Queue management
     void SendParamsToQueue(const std::vector<float>& data);
     bool ReceiveParamsFromQueue(std::vector<float>& data);
+    void SendDirectParamsToQueue(const std::vector<float>& data);
+    bool ReceiveDirectParamsFromQueue(std::vector<float>& data);
 };
 
 #endif// __INTERFACE_BASE_HPP__

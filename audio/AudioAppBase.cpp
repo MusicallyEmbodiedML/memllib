@@ -26,6 +26,10 @@ void AudioAppBase::ProcessParams(const std::vector<float>& params) {
     // Default implementation does nothing
 }
 
+void AudioAppBase::ProcessDirectParams(const std::vector<float>& params) {
+    // Default implementation does nothing
+}
+
 void AudioAppBase::loop() {
     if (!interface_) {
         Serial.println("AudioAppBase::loop - Error: Interface is null");
@@ -35,5 +39,8 @@ void AudioAppBase::loop() {
     std::vector<float> x;
     if (interface_->ReceiveParamsFromQueue(x)) {
         ProcessParams(x);
+    }
+    if (interface_->ReceiveDirectParamsFromQueue(x)) {
+        ProcessDirectParams(x);
     }
 }

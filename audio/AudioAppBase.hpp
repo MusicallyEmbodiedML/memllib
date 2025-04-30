@@ -21,6 +21,7 @@ public:
     static stereosample_t audioCallback(const stereosample_t x);
     virtual void Setup(float sample_rate, std::shared_ptr<InterfaceBase> interface);
     virtual void ProcessParams(const std::vector<float>& params);
+    virtual void ProcessDirectParams(const std::vector<float>& params);
     void loop();
 };
 
