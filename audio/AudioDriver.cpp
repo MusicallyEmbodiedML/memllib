@@ -190,7 +190,7 @@ bool AudioDriver::Setup() {
 
     // init i2c
     codecCtl.enable();
-    codecCtl.volume(0.4);
+    codecCtl.volume(0.8);
     codecCtl.inputSelect(AUDIO_INPUT_LINEIN);
     codecCtl.lineInLevel(3);
 
@@ -206,6 +206,7 @@ stereosample_t AudioDriver::silence_(stereosample_t x) {
     return x;
 }
 
-void AudioDriver::setHeadphoneVolume(float n) {
+//breaking change
+void AudioDriver::setDACVolume(float n) {
     codecCtl.dacVolume(n);
 }

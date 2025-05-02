@@ -42,9 +42,9 @@
 using namespace std;
 
 #ifndef PI
-#define PI 3.1415926
+#define PI 3.1415926f
 #endif
-#define TWOPI 6.2831853
+#define TWOPI 6.2831853f
 
 #define MAXITYPE float
 
