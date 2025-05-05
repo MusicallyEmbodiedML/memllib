@@ -1,15 +1,11 @@
 #ifndef MAXIPAF_HPP
 #define MAXIPAF_HPP
 
-#define LOGTABSIZE 9
-#define TABSIZE (1 << LOGTABSIZE)
-#define TABRANGE 3
+constexpr size_t LOGTABSIZE  = 9;
+constexpr size_t LOGTABSIZEINV  = 32 - LOGTABSIZE;
+constexpr size_t TABSIZE = (1 << LOGTABSIZE);
+constexpr size_t TABRANGE = 3;
 
-/* value of Cauchy distribution at TABRANGE */
-#define CAUCHYVAL (1./ (1. + TABRANGE * TABRANGE))
-/* first derivative of Cauchy distribution at TABRANGE */
-#define CAUCHYSLOPE ((-2. * TABRANGE) * CAUCHYVAL * CAUCHYVAL)
-#define ADDSQ (- CAUCHYSLOPE / (2 * TABRANGE))
 
 
 typedef struct _tabpoint
@@ -19,10 +15,8 @@ typedef struct _tabpoint
 } t_tabpoint;
 
 
-t_tabpoint paf_gauss[TABSIZE];
-t_tabpoint paf_cauchy[TABSIZE];
-
-
+// t_tabpoint paf_gauss[TABSIZE];
+// t_tabpoint paf_cauchy[TABSIZE];
 
 
 typedef struct _linenv
@@ -35,8 +29,9 @@ typedef struct _linenv
     int l_ticks;
 } t_linenv;
 
-#define UNITBIT32 1572864.		/* 3*2^19 -- bit 32 has value 1 */
-#define TABFRACSHIFT (UNITBIT32/TABSIZE) 
+
+constexpr size_t UNITBIT32 = 1572864.f;		/* 3*2^19 -- bit 32 has value 1 */
+constexpr float TABFRACSHIFT = (UNITBIT32/TABSIZE);
 
 
 //little endian
@@ -46,14 +41,6 @@ typedef struct _linenv
 #include <sys/types.h>
 #define int32 u_int32_t
 
-#define A1 ((float)(4 * (3.14159265/2)))
-#define A3 ((float)(64 * (2.5 - 3.14159265)))
-#define A5 ((float)(1024 * ((3.14159265/2) - 1.5)))
-    /* value of Cauchy distribution at TABRANGE */
-    #define CAUCHYVAL (1./ (1. + TABRANGE * TABRANGE))
-    /* first derivative of Cauchy distribution at TABRANGE */
-#define CAUCHYSLOPE ((-2. * TABRANGE) * CAUCHYVAL * CAUCHYVAL)
-#define ADDSQ (- CAUCHYSLOPE / (2 * TABRANGE))
 
 #define LINENV_RUN(linenv, current, incr) 		\
     if (linenv.l_ticks > 0)				\
@@ -70,9 +57,20 @@ typedef struct _linenv
     }
 
 
+constexpr float PAFA1 = 4 * (3.14159265/2);
+constexpr float PAFA3 = ((64 * (2.5 - 3.14159265)));
+constexpr float PAFA5 ((1024 * ((3.14159265/2) - 1.5)));
+    /* value of Cauchy distribution at TABRANGE */
+constexpr float CAUCHYVAL = (1./ (1. + TABRANGE * TABRANGE));
+    /* first derivative of Cauchy distribution at TABRANGE */
+constexpr float CAUCHYSLOPE = ((-2. * TABRANGE) * CAUCHYVAL * CAUCHYVAL);
+constexpr float ADDSQ = (- CAUCHYSLOPE / (2 * TABRANGE));
+constexpr float HALFSINELIM  = (0.997 * TABRANGE);
+constexpr float TABRANGERCPR = 1.f/TABRANGE;
 
 class maxiPAFOperator {
 public:
+
 
     void linenv_init(t_linenv &l)
     {
@@ -85,9 +83,9 @@ public:
     void init()
     {
         int i;
-        float CAUCHYFAKEAT3  =
+        const float CAUCHYFAKEAT3  =
             (CAUCHYVAL + ADDSQ * TABRANGE * TABRANGE);
-        float CAUCHYRESIZE = (1./ (1. - CAUCHYFAKEAT3));
+        const float CAUCHYRESIZE = (1./ (1. - CAUCHYFAKEAT3));
         for (i = 0; i <= TABSIZE; i++)
         {
             float f = i * ((float)TABRANGE/(float)TABSIZE);
@@ -125,8 +123,6 @@ public:
         x_shiftphase = 0.;
         x_vibphase = 0.;
         x_triggerme = 0;
-        x_cauchy = 0;
-    
     }
 
     void linenv_setsr(t_linenv &l, const float sr, const int vecsize)
@@ -147,7 +143,7 @@ public:
         linenv_setsr(x_shiftenv, sr, vecsize);
     }
 
-    void linenv_set(t_linenv &l, const float target, const long timdel)
+    inline void linenv_set(t_linenv &l, const float target, const long timdel)
     {
         if (timdel > 0)
         {
@@ -164,44 +160,44 @@ public:
         }
     }
 
-    void freq(float val, const int time)
+    inline void freq(float val, const int time)
     {
         if (val < 1.f) val = 1.f;
         if (val > 10000000.f) val = 1000000.f;
         linenv_set(x_freqenv, val, time);
     }
     
-    void cf(const float val, const int time)
+    inline void cf(const float val, const int time)
     {
         linenv_set(x_cfenv, val, time);
     }
     
-    void bw(const float val, const int time)
+    inline void bw(const float val, const int time)
     {
         linenv_set(x_bwenv, val, time);
     }
     
-    void amp(const float val, const int time)
+    inline void amp(const float val, const int time)
     {
         linenv_set(x_ampenv, val, time);
     }
     
-    void vib(const float val, const int time)
+    inline void vib(const float val, const int time)
     {
         linenv_set(x_vibenv, val, time);
     }
     
-    void vfr(const float val, const int time)
+    inline void vfr(const float val, const int time)
     {
         linenv_set(x_vfrenv, val, time);
     }
     
-    void shift(const float val, const int time)
+    inline void shift(const float val, const int time)
     {
         linenv_set(x_shiftenv, val, time);
     }
     
-    void phase(const float mainphase, const float shiftphase,
+    inline void phase(const float mainphase, const float shiftphase,
         const float vibphase)
     {
         x_phase = mainphase;
@@ -210,14 +206,17 @@ public:
         x_triggerme = 1;
     }
     
-    void play(float *out1, int n)
+    inline void play(float *out1, int n, float freqval, const float cfval, const float bwval, 
+        const float vibval,
+        const float vfrval,
+        const bool x_cauchy=false)
     {
-        float freqval, freqinc;
-        float cfval, cfinc;
-        float bwval, bwinc;
-        float ampval, ampinc;
-        float vibval, vibinc;
-        float vfrval, vfrinc;
+        // float freqinc;
+        // float cfval, cfinc;
+        // float bwval, bwinc;
+        // float ampval, ampinc;
+        // float vibval, vibinc;
+        // float vfrval, vfrinc;
         float shiftval, shiftinc;
         float bwquotient, bwqincr;
         double  ub32 = UNITBIT32;
@@ -242,12 +241,12 @@ public:
         shiftphase = *phasehackp;
     
         /* propagate line envelopes */
-        LINENV_RUN(x_freqenv, freqval, freqinc);
-        LINENV_RUN(x_cfenv, cfval, cfinc);
-        LINENV_RUN(x_bwenv, bwval, bwinc);
-        LINENV_RUN(x_ampenv, ampval, ampinc);
-        LINENV_RUN(x_vibenv, vibval, vibinc);
-        LINENV_RUN(x_vfrenv, vfrval, vfrinc);
+        // LINENV_RUN(x_freqenv, freqval, freqinc);
+        // LINENV_RUN(x_cfenv, cfval, cfinc);
+        // LINENV_RUN(x_bwenv, bwval, bwinc);
+        // LINENV_RUN(x_ampenv, ampval, ampinc);
+        // LINENV_RUN(x_vibenv, vibval, vibinc);
+        // LINENV_RUN(x_vfrenv, vfrval, vfrinc);
         LINENV_RUN(x_shiftenv, shiftval, shiftinc);
     
         /* fake line envelope for quotient of bw and frequency */
@@ -270,7 +269,8 @@ public:
         shiftinc *= x_isr;
         
         /* if phase or amplitude is zero, load in new params */
-        if (ampval == 0 || phase == ub32 || x_triggerme)
+        // if (ampval == 0 || phase == ub32 || x_triggerme)
+        if (phase == ub32 || x_triggerme)
         {
             float cf_over_freq = cfval/freqval;
             held_freq = freqval * x_isr;
@@ -284,7 +284,7 @@ public:
             double newphase = phase + held_freq;
             double carphase1, carphase2, fracnewphase;
             float fphase, fcarphase1, fcarphase2, carrier;
-            float g, g2, g3, cosine1, cosine2, halfsine, mod, tabfrac;
+            float g, g2, g3, cosine1, cosine2, halfsine;
             t_tabpoint *p;
                 /* put new phase into 64-bit memory location.  Bash upper
                 32 bits to get fractional part (plus "ub32").  */
@@ -318,24 +318,24 @@ public:
             else g = 0.25f - fcarphase1;
             g2 = g * g;
             g3 = g * g2;
-            cosine1 = g * A1 + g3 * A3 + g2 * g3 * A5;
+            cosine1 = g * PAFA1 + g3 * PAFA3 + g2 * g3 * PAFA5;
 
             if (fcarphase2 > 0.5f)  g = fcarphase2 - 0.75f;
             else g = 0.25f - fcarphase2;
             g2 = g * g;
             g3 = g * g2;
-            cosine2 = g * A1 + g3 * A3 + g2 * g3 * A5;
+            cosine2 = g * PAFA1 + g3 * PAFA3 + g2 * g3 * PAFA5;
         
             carrier = cosine1 + held_fraccar * (cosine2-cosine1);
     
-            ampval += ampinc;
+            // ampval += ampinc;
             bwquotient += bwqincr;
     
             /* printf("bwquotient %f\n", bwquotient); */
     
             halfsine = held_bwquotient * (1.0f - fphase * fphase);
-            if (halfsine >= (float)(0.997 * TABRANGE))
-                halfsine = (float)(0.997 * TABRANGE);
+            if (halfsine >= HALFSINELIM)
+                halfsine = HALFSINELIM;
     
     #if 0
             shape = halfsine * halfsine;
@@ -347,7 +347,7 @@ public:
         mod = ampval * carrier *
             exp(-shape);
     #endif
-            halfsine *= (float)(1.f/TABRANGE);
+            halfsine *= TABRANGERCPR;
     
                 /* Get table index for "halfsine".  Bash upper
                 32 bits to get fractional part (plus "ub32").  Also grab
@@ -362,10 +362,11 @@ public:
                 a floating point number from 0 to 1. */
             *phasehackp = halfsine + TABFRACSHIFT;
             *hackptr = hackval;
-                tabfrac = *phasehackp - ub32;
+            const float tabfrac = *phasehackp - ub32;
     
-                p = paf_table + (lowbits >> (32 - LOGTABSIZE));
-            mod = ampval * carrier * (p->p_y + tabfrac * p->p_diff);
+            p = paf_table + (lowbits >> LOGTABSIZEINV);
+            // const float mod = ampval * carrier * (p->p_y + tabfrac * p->p_diff);
+            const float mod = carrier * (p->p_y + tabfrac * p->p_diff);
             
             *out1++ = mod;
         }
@@ -401,7 +402,7 @@ private:
     double x_shiftphase;
     double x_vibphase;
     int x_triggerme;
-    int x_cauchy;
+    // int x_cauchy;
 
 
 };

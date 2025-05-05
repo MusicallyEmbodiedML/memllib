@@ -15,7 +15,7 @@ public:
     using LoopCallback = std::function<void(void)>;
 
 private:
-    static MEMLNaut* instance;
+    static MEMLNaut* __not_in_flash("memlnaut") instance;
     static constexpr size_t NUM_ADCS = 7;
     static constexpr uint16_t DEFAULT_THRESHOLD = 100;
     static constexpr size_t FILTER_SIZE = 5;

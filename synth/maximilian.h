@@ -158,10 +158,6 @@ public:
         phase += constant_by_one_over_sr_*frequency;
         if ( phase >= 511.f ) phase -=512.f;
 
-        // size_t phase_int = static_cast<size_t>(phase);
-        // float remainder = phase - static_cast<float>(phase_int);
-        // output = (float) ((1-remainder) * sineBuffer[1+ phase_int] + remainder * sineBuffer[2+phase_int]);
-        // return output;
         const size_t phase_int = static_cast<size_t>(phase);
         const float remainder = phase - static_cast<float>(phase_int);
     
