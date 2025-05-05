@@ -225,7 +225,7 @@ void maxiOsc::phaseReset(float phaseIn) {
 float maxiOsc::sinewave(float frequency) {
 	//This is a sinewave oscillator
 	output=sinf (phase*(TWOPI));
-	phase += maxiSettings::one_over_samplerate * frequency;
+	phase += maxiSettings::one_over_sampleRate * frequency;
 	if ( phase >= 1.0 ) phase -= 1.0;
 	return(output);
 
