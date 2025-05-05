@@ -260,17 +260,6 @@ float maxiOsc::sinebuf4(float frequency) {
 	return(output);
 }
 
-float maxiOsc::sinebuf(float frequency) { //specify the frequency of the oscillator in Hz / cps etc.
-											//This is a sinewave oscillator that uses linear interpolation on a 514 point buffer
-	float remainder;
-	phase += constant_by_one_over_sr_*frequency;
-
-	if ( phase >= 511 ) phase -=512;
-	size_t phase_int = static_cast<size_t>(phase);
-	remainder = phase - static_cast<float>(phase_int);
-	output = (float) ((1-remainder) * sineBuffer[1+ phase_int] + remainder * sineBuffer[2+phase_int]);
-	return(output);
-}
 
 float maxiOsc::coswave(float frequency) {
 	//This is a cosine oscillator

@@ -151,9 +151,26 @@ public:
     float pulse(float frequency, float duty);
     /*!Impulse generator \param frequency in Hz */
     float impulse(float frequency);
+
     /*!Fast sine wave oscillator, generated from a wavetable with linear interpolation \param frequency in Hz */
-    float sinebuf(float frequency);
-    /*!White noise generator*/
+    inline __attribute__((always_inline)) float sinebuf(float frequency) { //specify the frequency of the oscillator in Hz / cps etc.
+        //This is a sinewave oscillator that uses linear interpolation on a 514 point buffer
+        phase += constant_by_one_over_sr_*frequency;
+        if ( phase >= 511.f ) phase -=512.f;
+
+        // size_t phase_int = static_cast<size_t>(phase);
+        // float remainder = phase - static_cast<float>(phase_int);
+        // output = (float) ((1-remainder) * sineBuffer[1+ phase_int] + remainder * sineBuffer[2+phase_int]);
+        // return output;
+        const size_t phase_int = static_cast<size_t>(phase);
+        const float remainder = phase - static_cast<float>(phase_int);
+    
+        // Use local pointer to avoid repeated array dereferencing and index calculation
+        const float* buf = &sineBuffer[phase_int + 1];
+        return (1.0f - remainder) * buf[0] + remainder * buf[1];
+    }
+
+/*!White noise generator*/
     float noise();
     /*!Fast sine wave oscillator, generated from a wavetable with quadratic interpolation \param frequency in Hz */
     float sinebuf4(float frequency);

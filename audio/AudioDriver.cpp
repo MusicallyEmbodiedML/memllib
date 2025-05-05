@@ -14,16 +14,16 @@
 #define PASSTHROUGH   0
 
 
-static const int AUDIO_MEM sampleRate = kSampleRate; // minimum for many i2s DACs
-static const int AUDIO_MEM bitsPerSample = 32;
+constexpr int sampleRate = kSampleRate; // minimum for many i2s DACs
+constexpr int bitsPerSample = 32;
 
-static const float AUDIO_MEM amplitude = 1 << (bitsPerSample - 2); // amplitude of square wave = 1/2 of maximum
-static const float AUDIO_MEM neg_amplitude = -amplitude; // amplitude of square wave = 1/2 of maximum
-static const float AUDIO_MEM one_over_amplitude = 1.f / amplitude;
+constexpr float amplitude = 1 << (bitsPerSample - 2); // amplitude of square wave = 1/2 of maximum
+constexpr float neg_amplitude = -amplitude; // amplitude of square wave = 1/2 of maximum
+constexpr float one_over_amplitude = 1.f / amplitude;
 
 static int32_t AUDIO_MEM_2 sample = amplitude; // current sample value
 
-static AudioControlSGTL5000 codecCtl;
+static AUDIO_MEM_2 AudioControlSGTL5000 codecCtl;
 
 audiocallback_fptr_t audio_callback_ = nullptr;
 
@@ -56,11 +56,14 @@ static void AUDIO_FUNC(process_audio)(const int32_t* input, int32_t* output, siz
     auto ts = micros();
 
     for (size_t i = 0; i < num_frames; i++) {
-    
-    stereosample_t y { 
-        _scale_down(static_cast<float>(input[i*2])),
-        _scale_down(static_cast<float>(input[i*2 + 1]))
-    };
+        
+        const size_t indexL = i << 1;
+        const size_t indexR = indexL + 1;
+
+        stereosample_t y { 
+            _scale_down(static_cast<float>(input[indexL])),
+            _scale_down(static_cast<float>(input[indexR]))
+        };
 
 #if !(TEST_TONES)
 
@@ -71,8 +74,9 @@ static void AUDIO_FUNC(process_audio)(const int32_t* input, int32_t* output, siz
             _scale_and_saturate(y.L),
             _scale_and_saturate(y.R),
         };
-        output[i*2] = static_cast<int32_t>(y_scaled.L);
-        output[(i*2) + 1] = static_cast<int32_t>(y_scaled.R);
+        output[indexL] = static_cast<int32_t>(y_scaled.L);
+        output[indexR] = static_cast<int32_t>(y_scaled.R);
+
 #else
 
         // output[i] = input[i];
@@ -102,10 +106,10 @@ static void AUDIO_FUNC(process_audio)(const int32_t* input, int32_t* output, siz
     static constexpr float quantumLength = 1.f/
             ((static_cast<float>(kBufferSize)/static_cast<float>(kSampleRate))
             * 1000000.f);
-    float dspload = elapsed * quantumLength;
+    const float dspload = elapsed * quantumLength;
     // Serial.println(dspload);
     // Report DSP overload if needed
-    static volatile bool dsp_overload = false;
+    static volatile bool AUDIO_MEM dsp_overload = false;
     if (dspload > 0.95 and !dsp_overload) {
         dsp_overload = true;
     } else if (dspload < 0.9) {
