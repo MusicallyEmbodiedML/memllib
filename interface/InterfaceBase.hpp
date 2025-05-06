@@ -14,8 +14,14 @@ protected:
     size_t n_inputs_;
     size_t n_outputs_;
     size_t n_directparams_;
+    size_t n_audioanalysisparams_;
     queue_t queue_audioparam_;
     queue_t queue_directparam_;
+    queue_t queue_analysisparam_;
+
+private:
+    void SendToQueue(const std::vector<float>& data, queue_t& queue, size_t expected_size, const char* method_name);
+    bool ReceiveFromQueue(std::vector<float>& data, queue_t& queue, size_t expected_size, const char* method_name);
 
 public:
     ~InterfaceBase();
@@ -30,14 +36,15 @@ public:
 
     // Virtual functions with default implementations
     virtual void setup(size_t n_inputs, size_t n_outputs,
-        size_t n_directparams);
-    virtual void setup(size_t n_inputs, size_t n_outputs);
+        size_t n_directparams, size_t n_audioanalysisparams);
 
     // Queue management
     void SendParamsToQueue(const std::vector<float>& data);
     bool ReceiveParamsFromQueue(std::vector<float>& data);
     void SendDirectParamsToQueue(const std::vector<float>& data);
     bool ReceiveDirectParamsFromQueue(std::vector<float>& data);
+    void SendAnalysisParamsToQueue(const std::vector<float>& data);
+    bool ReceiveAnalysisParamsFromQueue(std::vector<float>& data);
 };
 
 #endif// __INTERFACE_BASE_HPP__
