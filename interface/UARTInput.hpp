@@ -1,5 +1,5 @@
-#ifndef __PIOUART_HPP__
-#define __PIOUART_HPP__
+#ifndef __UART_INPUT_HPP__
+#define __UART_INPUT_HPP__
 
 
 #include <Arduino.h>
@@ -8,21 +8,30 @@
 #include <vector>
 
 
-class PIOUART {
+class UARTInput {
 
- public:
-    PIOUART(size_t n_extra_sensors,
+public:
+
+    // Change to trigger debugging of single channel
+    static constexpr size_t kObservedChan = 9999;
+
+    using uart_in_callback_t = void (*)(const std::vector<float> &);
+    UARTInput(size_t n_extra_sensors,
             size_t sensor_rx,
             size_t sensor_tx,
             size_t baud_rate = 115200);
     void Poll();
+    inline void SetCallback(uart_in_callback_t callback) {
+        callback_ = callback;
+    }
 
- protected:
+protected:
     static const size_t kSlipBufferSize_ = 64;
     const size_t kNExtraSensors;
     uint8_t slipBuffer[kSlipBufferSize_];
     std::vector<MedianFilter<float>> filters_;
     std::vector<float> value_states_;
+    uart_in_callback_t callback_ = nullptr;
 
     struct spiMessage {
     uint8_t msg;
@@ -36,4 +45,4 @@ class PIOUART {
 };
 
 
-#endif  // __PIOUART_HPP__
+#endif  // __UART_INPUT_HPP__

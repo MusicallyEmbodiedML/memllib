@@ -1,21 +1,18 @@
-#include "PIOUART.hpp"
+#include "UARTInput.hpp"
 #include "../utils/SLIP.hpp"
 
 
-PIOUART::PIOUART(size_t n_extra_sensors,
+UARTInput::UARTInput(size_t n_extra_sensors,
                  size_t sensor_rx,
                  size_t sensor_tx,
                  size_t baud_rate) :
     kNExtraSensors(n_extra_sensors),
     slipBuffer{ 0 },
     filters_(),
-#if USE_SERIAL_ADCS
     value_states_{ 0 },
-#else
-    value_states_{},
-#endif
     spiState(SPISTATES::WAITFOREND),
-    spiIdx(0)
+    spiIdx(0),
+    callback_(nullptr)
 {
     filters_.resize(kNExtraSensors);
     value_states_.resize(kNExtraSensors);
@@ -29,11 +26,10 @@ PIOUART::PIOUART(size_t n_extra_sensors,
     }
 }
 
-void PIOUART::Poll()
+void UARTInput::Poll()
 {
     uint8_t spiByte = 32;
 
- 
     while (Serial2.available()) {
         spiByte = Serial2.read();
 
@@ -85,14 +81,13 @@ void PIOUART::Poll()
     }  // Serial2.available()
 
     if (spiIdx >= static_cast<int>(kSlipBufferSize_)) {
-        Serial.println("PIOUART- Buffer overrun!!!");
+        Serial.println("UARTInput- Buffer overrun!!!");
     }
 }
 
-void PIOUART::Parse_(spiMessage msg)
+void UARTInput::Parse_(spiMessage msg)
 {
     static const float kEventThresh = 0.01;
-    static const size_t kObservedChan = 9999;
 
     if (msg.msg < value_states_.size()) {
         // Protect against infs and nans
@@ -101,12 +96,11 @@ void PIOUART::Parse_(spiMessage msg)
         }
         float filtered_value = filters_[msg.msg].process(msg.value);
         float prev_value = value_states_[msg.msg];
+        // Trigger callback whenever any value has changed
         if (std::abs(filtered_value - prev_value) > kEventThresh) {
-            //meml_interface.SetPot(kNJoystickParams + msg.msg, filtered_value);
-            // TODO add callback!!!
-            // Trigger param update (or NN inference)
-            //gTriggerParamUpdate = true;
+            callback_(value_states_);
         }
+        // Print the value (Arduino scope) if it's the observed channel
         if (kObservedChan == msg.msg) {
             Serial.print("Low:0.00,High:1.00,Value:");
             Serial.print(msg.value, 8);
