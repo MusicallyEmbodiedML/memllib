@@ -48,7 +48,7 @@
 //				0x3 = Rate is 1/6 of the SYS_FS rate
 // 3:2	SYS_FS		Sets the internal system sample rate (default=2)
 //				0x0 = 32 kHz
-//				0x1 = 44.1 kHz
+//				0x1 = 44.1 kHz     
 //				0x2 = 48 kHz
 //				0x3 = 96 kHz                  
 // 1:0	MCLK_FREQ	Identifies incoming SYS_MCLK frequency and if the PLL should be used    
@@ -583,6 +583,7 @@ bool AudioControlSGTL5000::enable(const unsigned extMCLK, const uint32_t pllFreq
 		// write(CHIP_CLK_CTRL, 0b01001);  // 48 kHz, 384*Fs
 		// write(CHIP_CLK_CTRL, 0b01010);  // 48 kHz, 512*Fs
 		write(CHIP_CLK_CTRL, 0b001000);  // 48 kHz, 256*Fs
+		// write(CHIP_CLK_CTRL, 0b011000);  // 24 kHz, 256*Fs
     
     
 

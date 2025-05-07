@@ -7,4 +7,10 @@
 #define AUDIO_MEM    __not_in_flash("audio")  ///< Macro to make variable load from mem
 #define AUDIO_MEM_2  __not_in_flash("audio2")
 
+#define PERIODIC_DEBUG(COUNT, FUNC) \
+        static size_t ct=0; \
+        if (ct++ % COUNT == 0) { \
+            FUNC         \
+        }
+        
 #endif  // __MEML_PICO_HPP__
