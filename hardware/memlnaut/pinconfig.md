@@ -39,3 +39,4 @@
 |-----------|--------|--------|-------------|
 | DaisyPIO | 33 | N/A | One-way communication to Daisy |
 | SensorUART | 36 | 37 | Bidirectional sensor communication |
+| MIDI | 4 | 5 | MIDI in/out |

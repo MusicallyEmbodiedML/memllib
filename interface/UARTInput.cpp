@@ -2,11 +2,11 @@
 #include "../utils/SLIP.hpp"
 
 
-UARTInput::UARTInput(size_t n_extra_sensors,
+UARTInput::UARTInput(const std::vector<size_t>& sensor_indexes,
                  size_t sensor_rx,
                  size_t sensor_tx,
                  size_t baud_rate) :
-    kNExtraSensors(n_extra_sensors),
+    sensor_indexes_(sensor_indexes),
     slipBuffer{ 0 },
     filters_(),
     value_states_{ 0 },
@@ -14,8 +14,8 @@ UARTInput::UARTInput(size_t n_extra_sensors,
     spiIdx(0),
     callback_(nullptr)
 {
-    filters_.resize(kNExtraSensors);
-    value_states_.resize(kNExtraSensors);
+    filters_.resize(sensor_indexes.size());
+    value_states_.resize(sensor_indexes.size());
     Serial2.setRX(sensor_rx);
     Serial2.setTX(sensor_tx);
     Serial2.begin(baud_rate);
@@ -24,6 +24,19 @@ UARTInput::UARTInput(size_t n_extra_sensors,
     for (auto &v : value_states_) {
         v = 0.5f;
     }
+}
+
+void UARTInput::ListenToSensorIndexes(const std::vector<size_t>& indexes)
+{
+    sensor_indexes_ = indexes;
+
+    // Clear and recreate filters
+    filters_.clear();
+    filters_.resize(indexes.size());
+
+    // Clear and reset value states
+    value_states_.clear();
+    value_states_.resize(indexes.size(), 0.5f);
 }
 
 void UARTInput::Poll()
@@ -89,17 +102,24 @@ void UARTInput::Parse_(spiMessage msg)
 {
     static const float kEventThresh = 0.01;
 
-    if (msg.msg < value_states_.size()) {
+    // Find if this message's index is in our tracked indexes
+    auto it = std::find(sensor_indexes_.begin(), sensor_indexes_.end(), msg.msg);
+    if (it != sensor_indexes_.end()) {
+        size_t index = std::distance(sensor_indexes_.begin(), it);
+
         // Protect against infs and nans
         if (std::isnan(msg.value) || std::isinf(msg.value)) {
-            msg.value = value_states_[msg.msg];
+            msg.value = value_states_[index];
         }
-        float filtered_value = filters_[msg.msg].process(msg.value);
-        float prev_value = value_states_[msg.msg];
+
+        float filtered_value = filters_[index].process(msg.value);
+        float prev_value = value_states_[index];
+
         // Trigger callback whenever any value has changed
         if (std::abs(filtered_value - prev_value) > kEventThresh) {
             callback_(value_states_);
         }
+
         // Print the value (Arduino scope) if it's the observed channel
         if (kObservedChan == msg.msg) {
             Serial.print("Low:0.00,High:1.00,Value:");
@@ -107,6 +127,7 @@ void UARTInput::Parse_(spiMessage msg)
             Serial.print(",FilteredValue:");
             Serial.println(filtered_value, 8);
         }
-        value_states_[msg.msg] = filtered_value;
+
+        value_states_[index] = filtered_value;
     }
 }

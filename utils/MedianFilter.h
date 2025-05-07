@@ -23,7 +23,13 @@ public:
         filterSize_ = fSize;
         circularBuffer_ = std::vector<T>(filterSize_, 0);
         centreIndex = static_cast<size_t>(fSize / 2);
-    } 
+        reset();
+    }
+
+    void reset() {
+        std::fill(circularBuffer_.begin(), circularBuffer_.end(), 0);
+        currentIndex_ = 0;
+    }
 
     T process(T inputValue)
     {
