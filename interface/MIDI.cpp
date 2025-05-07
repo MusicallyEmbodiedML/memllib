@@ -9,16 +9,18 @@ MIDI::MIDI() : midi_(nullptr), n_outputs_(0), cc_callback_(nullptr), note_callba
 void MIDI::Setup(size_t n_outputs, uint8_t midi_tx, uint8_t midi_rx) {
     n_outputs_ = n_outputs;
     cc_numbers_.resize(n_outputs);
+    // Initialize CC numbers to default values [0 .. (n_outputs-1)]
+    static const size_t cc_start = 14;
     for (size_t i = 0; i < n_outputs; i++) {
-        cc_numbers_[i] = i;
+        cc_numbers_[i] = static_cast<uint8_t>(i + cc_start);
     }
 
-    // Setup Serial1 for MIDI
-    Serial1.setTX(midi_tx);
-    Serial1.setRX(midi_rx);
+    // Setup Serial2 for MIDI
+    Serial2.setTX(midi_tx);
+    Serial2.setRX(midi_rx);
 
     // Create SerialMIDI object first
-    serial_midi_ = std::make_unique<MIDI_NAMESPACE::SerialMIDI<HardwareSerial>>(Serial1);
+    serial_midi_ = std::make_unique<MIDI_NAMESPACE::SerialMIDI<HardwareSerial>>(Serial2);
     if (!serial_midi_) {
         Serial.println("Warning: Failed to create SerialMIDI interface");
         return;

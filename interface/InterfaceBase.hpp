@@ -3,6 +3,9 @@
 
 #include "pico/util/queue.h"
 #include <vector>
+#include "UARTOutput.hpp"
+#include "MIDI.hpp"
+#include <memory>
 
 class InterfaceBase
 {
@@ -14,6 +17,8 @@ protected:
     size_t n_inputs_;
     size_t n_outputs_;
     queue_t queue_audioparam_;
+    std::unique_ptr<UARTOutput> uart_output_;
+    std::shared_ptr<MIDI> midi_;
 
 public:
     ~InterfaceBase();
@@ -28,6 +33,10 @@ public:
 
     // Virtual functions with default implementations
     virtual void setup(size_t n_inputs, size_t n_outputs);
+
+    void SetMIDIInterface(std::shared_ptr<MIDI> midi) {
+        midi_ = midi;
+    }
 
     // Queue management
     void SendParamsToQueue(const std::vector<float>& data);

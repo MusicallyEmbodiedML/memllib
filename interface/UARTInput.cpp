@@ -3,10 +3,11 @@
 
 
 UARTInput::UARTInput(const std::vector<size_t>& sensor_indexes,
-                 size_t sensor_rx,
-                 size_t sensor_tx,
-                 size_t baud_rate) :
+                     size_t sensor_rx,
+                     size_t sensor_tx,
+                     size_t baud_rate) :
     sensor_indexes_(sensor_indexes),
+    pioSerial_(sensor_tx, sensor_rx),
     slipBuffer{ 0 },
     filters_(),
     value_states_{ 0 },
@@ -16,9 +17,7 @@ UARTInput::UARTInput(const std::vector<size_t>& sensor_indexes,
 {
     filters_.resize(sensor_indexes.size());
     value_states_.resize(sensor_indexes.size());
-    Serial2.setRX(sensor_rx);
-    Serial2.setTX(sensor_tx);
-    Serial2.begin(baud_rate);
+    pioSerial_.begin(baud_rate);
 
     // Put all values in the middle
     for (auto &v : value_states_) {
@@ -43,27 +42,22 @@ void UARTInput::Poll()
 {
     uint8_t spiByte = 32;
 
-    while (Serial2.available()) {
-        spiByte = Serial2.read();
+    while (pioSerial_.available()) {
+        spiByte = pioSerial_.read();
 
         switch(spiState) {
             case SPISTATES::WAITFOREND:
-            //spiByte = Serial2.read();
             if (spiByte != -1) {
                 if (spiByte == SLIP::END) {
-                    // Serial.println("end");
                     slipBuffer[0] = SLIP::END;
                     spiState = SPISTATES::ENDORBYTES;
                 }else{
-                  // Serial.println(spiByte);
                 }
             }
             break;
             case ENDORBYTES:
-            //spiByte = Serial2.read();
             if (spiByte != -1) {
                 if (spiByte == SLIP::END) {
-                    //this is the message start
                     spiIdx = 1;
 
                 }else{
@@ -74,7 +68,6 @@ void UARTInput::Poll()
             }
             break;
             case READBYTES:
-            //spiByte = Serial2.read();
             if (spiByte != -1) {
 
                 slipBuffer[spiIdx++] = spiByte;
@@ -91,7 +84,7 @@ void UARTInput::Poll()
             break;
         }  // switch(spiState)
 
-    }  // Serial2.available()
+    }  // pioSerial_.available()
 
     if (spiIdx >= static_cast<int>(kSlipBufferSize_)) {
         Serial.println("UARTInput- Buffer overrun!!!");

@@ -44,7 +44,6 @@ private:
     static constexpr uint8_t SLIP_ESC_ESC = 0xDD;  ///< Escaped ESC
 };
 
-const size_t kN_synthparams = 3;
 
 #endif  // __UART_OUTPUT_HPP__
 

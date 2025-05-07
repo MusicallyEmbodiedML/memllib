@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include "../utils/MedianFilter.h"
 #include "../hardware/memlnaut/Pins.hpp"
+#include <SerialPIO.h>
 
 #include <vector>
 
@@ -70,6 +71,9 @@ protected:
     int spiIdx;
 
     void Parse_(spiMessage msg);
+
+private:
+    SerialPIO pioSerial_;
 };
 
 #endif // __UART_INPUT_HPP__

@@ -5,7 +5,9 @@
 InterfaceBase::InterfaceBase() :
     init_done_(false),
     n_inputs_(0),
-    n_outputs_(0)
+    n_outputs_(0),
+    uart_output_(nullptr),
+    midi_(nullptr)
 {
 }
 
@@ -18,18 +20,35 @@ void InterfaceBase::setup(size_t n_inputs, size_t n_outputs)
     queue_init(&queue_audioparam_, sizeof(float)*n_outputs, 1);
     n_inputs_ = n_inputs;
     n_outputs_ = n_outputs;
+    uart_output_ = std::make_unique<UARTOutput>();
+
+    init_done_ = true;
 }
 
 void InterfaceBase::SendParamsToQueue(const std::vector<float>& data) {
+    if (!init_done_) {
+        Serial.println("InterfaceBase::SendParamsToQueue - Error: Interface not initialized");
+        return;
+    }
     if (data.size() != n_outputs_) {
         Serial.println("InterfaceBase::SendParamsToQueue - Error: data size mismatch");
         Serial.printf("Expected: %zu, Received: %zu\n", n_outputs_, data.size());
         return;
     }
     queue_try_add(&queue_audioparam_, data.data());
+    if (midi_) {
+        midi_->SendParamsAsMIDICC(data);
+    }
+    if (uart_output_) {
+        uart_output_->SendParams(data);
+    }
 }
 
 bool InterfaceBase::ReceiveParamsFromQueue(std::vector<float>& data) {
+    if (!init_done_) {
+        Serial.println("InterfaceBase::ReceiveParamsFromQueue - Error: Interface not initialized");
+        return false;
+    }
     if (data.size() != n_outputs_) {
         data.resize(n_outputs_);
     }
