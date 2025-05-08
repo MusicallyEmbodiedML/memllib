@@ -1,5 +1,5 @@
-#ifndef __MIDI_HPP__
-#define __MIDI_HPP__
+#ifndef __MIDI_IN_OUT_HPP__
+#define __MIDI_IN_OUT_HPP__
 
 
 #include <Arduino.h>
@@ -8,13 +8,13 @@
 #include "../hardware/memlnaut/Pins.hpp"
 
 
-class MIDI
+class MIDIInOut
 {
 public:
     /**
      * @brief Constructor (only instantiates memory and member variables).     *
      */
-    MIDI();
+    MIDIInOut();
     /**
      * @brief Sets up the MIDI interface on the required pins.
      * The CC numbers are set to the default values [0 .. (n_outputs-1)].
@@ -97,14 +97,12 @@ public:
     void SetNoteCallback(midi_note_callback_t callback);
 
 protected:
-    std::unique_ptr<MIDI_NAMESPACE::SerialMIDI<HardwareSerial>> serial_midi_;  // Add this line
-    std::unique_ptr<MIDI_NAMESPACE::MidiInterface<MIDI_NAMESPACE::SerialMIDI<HardwareSerial>>> midi_;
     std::vector<uint8_t> cc_numbers_;
     size_t n_outputs_;
     midi_cc_callback_t cc_callback_;
     midi_note_callback_t note_callback_;
     uint8_t send_channel_;  // Store the MIDI send channel (1-16)
-    static MIDI* instance_;  // Add static instance pointer
+    static MIDIInOut* instance_;  // Add static instance pointer
 
 private:
     // Static callback handlers
@@ -113,4 +111,4 @@ private:
     static void handleNoteOff(byte channel, byte note, byte velocity);
 };
 
-#endif  // __MIDI_HPP__
+#endif  // __MIDI_IN_OUT_HPP__
