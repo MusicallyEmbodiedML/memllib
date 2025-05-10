@@ -582,8 +582,8 @@ bool AudioControlSGTL5000::enable(const unsigned extMCLK, const uint32_t pllFreq
 		// write(CHIP_CLK_CTRL, 0x0004);  // 44.1 kHz, 256*Fs
 		// write(CHIP_CLK_CTRL, 0b01001);  // 48 kHz, 384*Fs
 		// write(CHIP_CLK_CTRL, 0b01010);  // 48 kHz, 512*Fs
-		write(CHIP_CLK_CTRL, 0b001000);  // 48 kHz, 256*Fs
-		// write(CHIP_CLK_CTRL, 0b011000);  // 24 kHz, 256*Fs
+		// write(CHIP_CLK_CTRL, 0b001000);  // 48 kHz, 256*Fs
+		write(CHIP_CLK_CTRL, 0b011000);  // 24 kHz, 256*Fs
     
     
 

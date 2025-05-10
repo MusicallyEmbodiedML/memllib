@@ -291,8 +291,7 @@ public:
         {
             double newphase = phase + held_freq;
             double carphase1, carphase2, fracnewphase;
-            float fphase, fcarphase1, fcarphase2, carrier;
-            float g, g2, g3, cosine1, cosine2, halfsine;
+            float g,halfsine;
             t_tabpoint *p;
                 /* put new phase into 64-bit memory location.  Bash upper
                 32 bits to get fractional part (plus "ub32").  */
@@ -301,7 +300,7 @@ public:
             *hackptr = hackval;
             newphase = *phasehackp;
             fracnewphase = newphase-UNITBIT32;
-            fphase = 2.0f * ((float)(fracnewphase)) - 1.0f;
+            const float fphase = 2.0f * ((float)(fracnewphase)) - 1.0f;
             if (newphase < phase)
             {
                 float cf_over_freq = cfval/freqval;
@@ -314,27 +313,27 @@ public:
             *phasehackp = fracnewphase * held_intcar + shiftphase;
             *hackptr = hackval;
             carphase1 = *phasehackp;
-            fcarphase1 = carphase1 - UNITBIT32;
+            const float fcarphase1 = carphase1 - UNITBIT32;
             *phasehackp = carphase1 + fracnewphase;
             *hackptr = hackval;
             carphase2 = *phasehackp;
-            fcarphase2 = carphase2 - UNITBIT32;
+            const float fcarphase2 = carphase2 - UNITBIT32;
                 
             shiftphase += shiftval;
         
             if (fcarphase1 > 0.5f)  g = fcarphase1 - 0.75f;
             else g = 0.25f - fcarphase1;
-            g2 = g * g;
-            g3 = g * g2;
-            cosine1 = g * PAFA1 + g3 * PAFA3 + g2 * g3 * PAFA5;
+            const float g2a = g * g;
+            const float g3a = g * g2a;
+            const float cosine1 = g * PAFA1 + g3a * PAFA3 + g2a * g3a * PAFA5;
 
             if (fcarphase2 > 0.5f)  g = fcarphase2 - 0.75f;
             else g = 0.25f - fcarphase2;
-            g2 = g * g;
-            g3 = g * g2;
-            cosine2 = g * PAFA1 + g3 * PAFA3 + g2 * g3 * PAFA5;
+            const float g2b = g * g;
+            const float g3b = g * g2b;
+            const float cosine2 = g * PAFA1 + g3b * PAFA3 + g2b * g3b * PAFA5;
         
-            carrier = cosine1 + held_fraccar * (cosine2-cosine1);
+            const float carrier = cosine1 + held_fraccar * (cosine2-cosine1);
     
             // ampval += abwqincrmpinc;
             // bwquotient += bwqincr;
@@ -368,7 +367,7 @@ public:
                     /* now shift again so that the fractional table address
                 appears in the low 32 bits, bash again, and extract this as
                 a floating point number from 0 to 1. */
-            *phasehackp = halfsine + TABFRACSHIFT;
+                *phasehackp = halfsine + TABFRACSHIFT;
             *hackptr = hackval;
             const float tabfrac = *phasehackp - UNITBIT32;
     

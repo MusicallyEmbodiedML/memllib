@@ -47,7 +47,7 @@ float chandiv= 1;
 maxiSettings::maxiSettings() {}
 
 size_t maxiSettings::sampleRate = 44100;
-float maxiSettings::one_over_sampleRate = 1.f / static_cast<float>(maxiSettings::sampleRate);
+float __not_in_flash("maxisettings") maxiSettings::one_over_sampleRate = 1.f / static_cast<float>(maxiSettings::sampleRate);
 size_t maxiSettings::channels = 2;
 size_t maxiSettings::bufferSize = 1024;
 
@@ -270,22 +270,14 @@ float maxiOsc::coswave(float frequency) {
 
 }
 
-float maxiOsc::phasor(float frequency) {
-	//This produces a floating point linear ramp between 0 and 1 at the desired frequency
-	output=phase;
-	if ( phase >= 1.0 ) phase -= 1.0;
-	phase += (1./(maxiSettings::sampleRate/(frequency)));
-	return(output);
-}
+// float maxiOsc::phasor(float frequency) {
+// 	//This produces a floating point linear ramp between 0 and 1 at the desired frequency
+// 	output=phase;
+// 	if ( phase >= 1.0 ) phase -= 1.0;
+// 	phase += (1./(maxiSettings::sampleRate/(frequency)));
+// 	return(output);
+// }
 
-float maxiOsc::square(float frequency) {
-	//This is a square wave
-	if (phase<0.5) output=-1;
-	if (phase>0.5) output=1;
-	if ( phase >= 1.0 ) phase -= 1.0;
-	phase += (1./(maxiSettings::sampleRate/(frequency)));
-	return(output);
-}
 
 float maxiOsc::pulse(float frequency, float duty) {
 	//This is a pulse generator that creates a signal between -1 and 1.

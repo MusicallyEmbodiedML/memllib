@@ -129,8 +129,16 @@ public:
     void UpdateParams(void);
     /*!Square wave oscillator
     \param frequency in Hz */
-    float square(float frequency);
-    /*!Sine wave oscillator
+    float __force_inline square(const float frequency) {
+        //This is a square wave
+        if (phase<0.5) output=-1;
+        if (phase>0.5) output=1;
+        if ( phase >= 1.0 ) phase -= 1.0;
+        // phase += (1./(maxiSettings::sampleRate/(frequency)));
+        phase += maxiSettings::one_over_sampleRate * frequency; // (1./(maxiSettings::sampleRate/(frequency)));
+        return output ;
+    }
+        /*!Sine wave oscillator
     \param frequency in Hz */
     float sinewave(float frequency);
     /*!Cosine wave oscillator
@@ -139,8 +147,14 @@ public:
     /*!Saw wave oscillator \param frequency in Hz */
     float saw(float frequency);
     /*!A ramp rising from 0 to 1 \param frequency in Hz */
-    float phasor(float frequency);
-    /*!A ramp rising from 0 to 1 \param frequency in Hz 
+    float __force_inline phasor(float frequency) {
+        //This produces a floating point linear ramp between 0 and 1 at the desired frequency
+        output=phase;
+        if ( phase >= 1.0 ) phase -= 1.0;
+        phase += maxiSettings::one_over_sampleRate * frequency;
+        return output ;
+    }
+        /*!A ramp rising from 0 to 1 \param frequency in Hz 
     \param startPhase the start point of the phasor (0-1)
     \param endPhase the end point of the phasor (0-1)
     */
@@ -200,18 +214,17 @@ maxiDelayline<DELAYTIME>::maxiDelayline() {
 };
 
 template<size_t DELAYTIME>
-inline float maxiDelayline<DELAYTIME>::play(const float input, const size_t size, const float feedback)  {
+float __force_inline maxiDelayline<DELAYTIME>::play(const float input, const size_t size, const float feedback)  {
 	if (size >= DELAYTIME) {
 		return 0;
 	}
-	if ( phase >= static_cast<int>(size) ) {
+	if ( phase >= size ) {
 		phase = 0;
 	}
 	float output=memory[phase];
 	memory[phase]=(memory[phase] * feedback) + input;
-	phase+=1;
-	return(output);
-
+	phase+=1.f;
+	return output;
 }
 
 /**
@@ -497,7 +510,7 @@ class maxiTrigger
 public:
     maxiTrigger();
     /*! Generate a trigger when a signal transitions from <=0 to above 0 \param input A signal*/
-    float onZX(float input)
+    float __force_inline onZX(float input)
     {
         float isZX = 0.0;
         if ((previousValue <= 0.0 || firstTrigger) && input > 0)
@@ -510,7 +523,7 @@ public:
     }
 
     /*! Generate a trigger when a signal changes beyond a certain amount \param input A signal \param tolerance The amount of chance allowed before a trigger is generated*/
-    float onChanged(float input, float tolerance)
+    float __force_inline onChanged(float input, float tolerance)
     {
         float changed = 0;
         if (abs(input - previousValue) > tolerance)
@@ -717,7 +730,7 @@ public:
      * \param outMax the highest value in the new range of the signal
      * \returns a signal
      */
-    static float inline linlin(float val, float inMin, float inMax, float outMin, float outMax)
+    static float __force_inline linlin(float val, float inMin, float inMax, float outMin, float outMax)
     {
         val = max(min(val, inMax), inMin);
         return ((val - inMin) / (inMax - inMin) * (outMax - outMin)) + outMin;
@@ -731,7 +744,7 @@ public:
      * \param outMax the highest value in the new range of the signal
      * \returns a signal
      */
-    static float inline linexp(float val, float inMin, float inMax, float outMin, float outMax)
+    static float __force_inline linexp(float val, float inMin, float inMax, float outMin, float outMax)
     {
         //clipping
         val = max(min(val, inMax), inMin);
@@ -746,7 +759,7 @@ public:
      * \param outMax the highest value in the new range of the signal
      * \returns a signal
      */
-    static float inline explin(float val, float inMin, float inMax, float outMin, float outMax)
+    static float __force_inline explin(float val, float inMin, float inMax, float outMin, float outMax)
     {
         //clipping
         val = max(min(val, inMax), inMin);
@@ -759,7 +772,7 @@ public:
      * \param high the highest value
      * \returns a signal
      */
-    static float inline clamp(float v, const float low, const float high)
+    static float __force_inline clamp(float v, const float low, const float high)
     {
         if (v > high)
         {
@@ -1462,7 +1475,7 @@ class maxiLine
 public:
     maxiLine() {}
     /*! Generate a line, when a trigger is received \param trigger a signal*/
-    inline float play(float trigger)
+    float __force_inline play(float trigger)
     {
         if (!lineComplete)
         {
@@ -2090,7 +2103,7 @@ public:
      * \param times a list of time ratios.  The phasor will be divided up into these ratios, and a trigger will be returned at the start of each period\n
      * \returns a trigger at the start of each period\n
      */
-    float playTrig(float phase, DOUBLEARRAY times)
+    float __force_inline playTrig(float phase, DOUBLEARRAY times)
     {
         if (first) {
             first=false;
@@ -2201,7 +2214,7 @@ class maxiEnvGen {
         maxiEnvGen();
 
         /*! Get the latest value of the envelope \param trigger A positive zero crossing (or constant 1) starts the envelope*/
-        float play(float trigger) {
+        float __force_inline play(float trigger) {
             switch(state) {
                 case WAITING:
                 {
