@@ -375,7 +375,7 @@ public:
         F64_ARRAY_FILL(buf,0);
     }
     /*!Add the latest value to the buffer \param x A value*/
-    void push(float x) {
+    void __force_inline push(const float x) {
         buf[idx] = x;
         idx++;
         if (idx==F64_ARRAY_SIZE(buf)) {
@@ -384,13 +384,13 @@ public:
     }
     
     /*! \returns The size of the buffer*/
-    size_t size() {return F64_ARRAY_SIZE(buf);}
+    size_t __force_inline size() {return F64_ARRAY_SIZE(buf);}
 
     /*! \returns the value at the front of the buffer*/
-    float head() {return idx == 0 ? buf[F64_ARRAY_SIZE(buf)-1] : buf[idx-1];}
+    float __force_inline head() {return idx == 0 ? buf[F64_ARRAY_SIZE(buf)-1] : buf[idx-1];}
 
     /*! \returns the oldest value in the buffer, for a particular window size \param N The size of the window, N < the size of the buffer*/
-    float tail(size_t N) {
+    float __force_inline tail(const size_t N) {
         float val=0;
         if (idx >= N) {
             val = buf[idx-N];
@@ -411,7 +411,7 @@ public:
      * Example: this function will sum the values in the window: 
      *     auto sumfunc = [](float val, float n) {return val + n;};
      */
-    float reduce(size_t N, reduceFunction func, float initval) {
+    float __force_inline reduce(const size_t N, reduceFunction func, float initval) {
         float val=0;
         if (idx >= N) {
             for(size_t i=idx-N; i < idx; i++) {
@@ -786,82 +786,6 @@ public:
     }
 };
 
-// /* The class is deprecated, use maxiDynamics instead */
-// class maxiDyn
-// {
-
-// public:
-//     //	float gate(float input, float threshold=0.9, long holdtime=1, float attack=1, float release=0.9995);
-//     //	float compressor(float input, float ratio, float threshold=0.9, float attack=1, float release=0.9995);
-//     float gate(float input, float threshold = 0.9, long holdtime = 1, float attack = 1, float release = 0.9995);
-//     float compressor(float input, float ratio, float threshold = 0.9, float attack = 1, float release = 0.9995);
-//     float compress(float input);
-
-//     float input;
-//     float ratio;
-//     float currentRatio;
-//     float threshold;
-//     float output;
-//     float attack;
-//     float release;
-//     float amplitude;
-
-//     void setAttack(float attackMS);
-//     void setRelease(float releaseMS);
-//     void setThreshold(float thresholdI);
-//     void setRatio(float ratioF);
-//     long holdtime;
-//     long holdcount;
-//     int attackphase, holdphase, releasephase;
-// };
-
-// /* The class is deprecated, use maxiEnvGen instead */
-
-// class maxiEnv
-// {
-
-// public:
-//     float ar(float input, float attack = 1, float release = 0.9, long holdtime = 1, int trigger = 0);
-//     float adsr(float input, float attack = 1, float decay = 0.99, float sustain = 0.125, float release = 0.9, long holdtime = 1, int trigger = 0);
-//     float adsr(float input, int trigger);
-//     float input;
-//     float output;
-//     float attack;
-//     float decay;
-//     float sustain;
-//     float release;
-//     float amplitude;
-
-//     void setRelease(float releaseMS);
-//     void setDecay(float decayMS);
-
-//     //old method - not actually in MS
-//     void setAttack(float attackMS);
-//     //new methods: these are in MS
-//     void setAttackMS(float attackMS);
-
-//     void setSustain(float sustainL);
-
-//     int trigger;
-
-//     long holdtime = 1;
-//     long holdcount;
-//     int attackphase, decayphase, sustainphase, holdphase, releasephase;
-
-//     // ------------------------------------------------
-//     // getters/setters
-//     int getTrigger() const
-//     {
-//         return trigger;
-//     }
-
-//     void setTrigger(int trigger)
-//     {
-//         this->trigger = trigger;
-//     }
-
-//     // ------------------------------------------------
-// };
 
 /**
 Conversion functions
@@ -870,26 +794,30 @@ class maxiConvert
 {
 public:
     /*!Convert from MIDI note number to frequency (Hz) \param midinote A MIDI note number*/
-    static float mtof(int midinote);
+    static float __force_inline mtof(int midinote);
 
     /*!Convert from milliseconds to samples \param timeMs The number of milliseconds*/
-    static size_t msToSamps(float timeMs)
+    static size_t __force_inline msToSamps(float timeMs)
     {
         return static_cast<size_t>(timeMs / 1000.0 * maxiSettings::sampleRate);
     }
     /*!Convert from samples to milliseconds \param samples The number of samples*/
-    static float sampsToMs(size_t samples)
+    static float __force_inline sampsToMs(size_t samples)
     {
         return samples / maxiSettings::sampleRate * 1000.0;
     }
 
     /*!Convert from amplitude to decibels \param amp Amplitude*/
-    static float ampToDbs(float amp) {
+    static float __force_inline ampToDbs(float amp) {
         return std::log10(amp) * 20.0;
     }
     /*!Convert from decibels to amplitude \param dbs Decibels*/
-    static float dbsToAmp(float dbs) {
+    static float __force_inline dbsToAmp(float dbs) {
         return std::pow(10.0, dbs * 0.05);
+    }
+
+    static float __force_inline dbsToAmpReciprocal(float dbs) {
+        return std::pow(10.0f, -dbs * 0.05f);
     }
 };
 
@@ -2534,25 +2462,28 @@ class maxiRMS {
                 windowSize = windowSizeInSamples;
             }
             runningRMS = 0;
+            windowSizeRcpr = 1.f/windowSize;
         }
 
         /*!Find out the size of the analysis window (in ms)*/
-        float getWindowSize() {
+        float __force_inline getWindowSize() {
             return maxiConvert::sampsToMs(windowSize);
         }
 
         /*Analyse the signal \param signal a signal \returns RMS*/
-        float play(float signal) {
-            float sigPow2 = (signal * signal);
+        float __force_inline play(float const signal) {
+            const float sigPow2 = (signal * signal);
             buf.push(sigPow2);
             runningRMS += sigPow2;
             runningRMS -= buf.tail(windowSize);
-            return sqrt(runningRMS/windowSize);
+            return sqrtf(runningRMS * windowSizeRcpr);
+            // return sqrt(runningRMS/windowSize);
         }
 
     private:
         maxiRingBuf buf;
         size_t windowSize=0; // in samples
+        float windowSizeRcpr=0;
         float runningRMS=0;
 };
 
@@ -2589,7 +2520,7 @@ class maxiDynamics {
             arEnvLow.setupASR(10,10);
             arEnvLow.setRetrigger(false);
 
-            lookAheadDelay.setup(maxiSettings::sampleRate * 1); //max 1s
+            lookAheadDelay.setup(maxiSettings::sampleRate * 0.1f); //max 0.1s
         }
 
 
@@ -2606,32 +2537,33 @@ class maxiDynamics {
          * \param kneeLow The size of the knee for companding below the low threshold (in Dbs)
          * \returns a companded signal
          */
-        float play(float sig, float control, 
-            float thresholdHigh, float ratioHigh, float kneeHigh,
-            float thresholdLow, float ratioLow, float kneeLow
+        float __force_inline play(const float sig, const float control, 
+            const float thresholdHigh, const float ratioHigh, const float kneeHigh,
+            const float thresholdLow, const float ratioLow, const float kneeLow
         ) {
-            float controlDB = maxiConvert::ampToDbs(inputAnalyser(control));
-            float outDB = maxiConvert::ampToDbs(sig);
+            const float controlDB = maxiConvert::ampToDbs(inputAnalyser(control));
+            const float outDB = maxiConvert::ampToDbs(sig);
+            const float halfKneeHigh = kneeHigh * 0.5f;
             //companding above the high threshold
-            if (ratioHigh > 0) {
-                if (kneeHigh > 0) {
-                    float lowerKnee = thresholdHigh - (kneeHigh/2.0);
-                    float higherKnee = thresholdHigh  +(kneeHigh/2.0);
+            if (ratioHigh > 0.f) {
+                if (kneeHigh > 0.f) {
+                    const float lowerKnee = thresholdHigh - halfKneeHigh;
+                    const float higherKnee = thresholdHigh  + halfKneeHigh;
                     //attack/release
-                    float envRatio = 1;
+                    float envRatio = 1.f;
                     if (controlDB >= lowerKnee) {
-                        float envVal = arEnvHigh.play(1);
+                        const float envVal = arEnvHigh.play(1.f);
                         envRatio = envToRatio(envVal, ratioHigh);
                     }else {
-                        float envVal = arEnvHigh.play(-1);
+                        const float envVal = arEnvHigh.play(-1.f);
                     }
                     if ((controlDB >= lowerKnee) && (controlDB < higherKnee)) {
-                        float kneeHighOut = ((higherKnee - thresholdHigh) / envRatio) + thresholdHigh;
-                        float kneeRange = (kneeHighOut - lowerKnee);
-                        float t = (controlDB - lowerKnee) / kneeHigh;
+                        const float kneeHighOut = ((higherKnee - thresholdHigh) / envRatio) + thresholdHigh;
+                        const float kneeRange = (kneeHighOut - lowerKnee);
+                        const float t = (controlDB - lowerKnee) / kneeHigh;
                         //bezier on x only
-                        float curve =  ratioHigh > 1 ? 0.8 : 0.2;
-                        float kneex = (2 * (1-t) * t * curve) + (t*t);
+                        const float curve =  ratioHigh > 1.f ? 0.8f : 0.2f;
+                        const float kneex = (2.f * (1.f-t) * t * curve) + (t*t);
                         outDB = lowerKnee + (kneex * kneeRange);
                     }
                     else if (controlDB >= higherKnee) {
@@ -2641,34 +2573,34 @@ class maxiDynamics {
                 else {
                     //no knee
                     if (controlDB > thresholdHigh) {
-                        float envVal = arEnvHigh.play(1);
-                        float envRatio = envToRatio(envVal, ratioHigh);
+                        const float envVal = arEnvHigh.play(1.f);
+                        const float envRatio = envToRatio(envVal, ratioHigh);
                         outDB = ((controlDB - thresholdHigh) / envRatio) + thresholdHigh;  
                     }else {
-                        float envVal = arEnvHigh.play(-1);
+                        const float envVal = arEnvHigh.play(-1.f);
                     }
                 }
             }  
             //companding below the low threshold
-            if (ratioLow > 0) {
-                if (kneeLow > 0) {
-                    float lowerKnee = thresholdLow - (kneeLow/2.0);
-                    float higherKnee = thresholdLow  +(kneeLow/2.0);
+            if (ratioLow > 0.f) {
+                if (kneeLow > 0.f) {
+                    float lowerKnee = thresholdLow - halfKneeHigh;
+                    float higherKnee = thresholdLow  + halfKneeHigh;
                     //attack/release
-                    float envRatio = 1;
+                    float envRatio = 1.f;
                     if (controlDB < lowerKnee) {
-                        float envVal = arEnvLow.play(1);
+                        float envVal = arEnvLow.play(1.f);
                         envRatio = envToRatio(envVal, ratioLow);
                     }else {
-                        float envVal = arEnvLow.play(-1);
+                        float envVal = arEnvLow.play(-1.f);
                     }
                     if ((controlDB >= lowerKnee) && (controlDB < higherKnee)) {
-                        float kneeLowOut = thresholdLow - ((thresholdLow-lowerKnee) / ratioLow);
-                        float kneeRange = (higherKnee - kneeLowOut);
-                        float t = (controlDB - lowerKnee) / kneeLow;
+                        const float kneeLowOut = thresholdLow - ((thresholdLow-lowerKnee) / ratioLow);
+                        const float kneeRange = (higherKnee - kneeLowOut);
+                        const float t = (controlDB - lowerKnee) / kneeLow;
                         //bezier on x only
-                        float curve =  ratioLow > 1 ? 0.2 : 0.8;
-                        float kneex = (2 * (1-t) * t * curve) + (t*t);
+                        const float curve =  ratioLow > 1.f ? 0.2f : 0.8f;
+                        float kneex = (2.f * (1.f-t) * t * curve) + (t*t);
                         outDB = kneeLowOut + (kneex * kneeRange);
                     }
                     else if (controlDB < lowerKnee) {
@@ -2678,19 +2610,21 @@ class maxiDynamics {
                 else {
                     //no knee
                     if (controlDB < thresholdLow) {
-                        float envVal = arEnvLow.play(1);
+                        const float envVal = arEnvLow.play(1);
                         float envRatio = envToRatio(envVal, ratioLow);
-                        outDB = thresholdLow - ((thresholdLow-controlDB) / ratioLow);
+                        // outDB = thresholdLow - ((thresholdLow-controlDB) / ratioLow);
+                        outDB = thresholdLow - ((thresholdLow-controlDB) / envRatio);
                     }else {
                         float envVal = arEnvLow.play(-1);
                     }
                 }
             }  
             //scale the signal according to the amount of compansion on the control signal
-            float outAmp = maxiConvert::dbsToAmp(outDB);
-            float sigOut = 0;
-            if (outAmp > 0) {
-                if (lookAheadSize > 0) {
+            //todo: get reciprocal instead
+            const float outAmp = maxiConvert::dbsToAmp(outDB);
+            float sigOut = 0.f;
+            if (outAmp > 0.f) {
+                if (lookAheadSize > 0.f) {
                     lookAheadDelay.push(sig);
                     sigOut = lookAheadDelay.tail(lookAheadSize);
                 }else{
@@ -2709,7 +2643,7 @@ class maxiDynamics {
          * \param knee The size of the knee (in Dbs)
          * \returns a compressed signal
          */
-        float compress(float sig, float threshold, float ratio, float knee) {
+        float __force_inline compress(const float sig, const float threshold, const float ratio, const float knee) {
             return play(sig, sig, threshold, ratio, knee, 0, 0, 0);
         }
         /**
@@ -2782,7 +2716,7 @@ class maxiDynamics {
          * The look ahead creates a delay on the input signal, meaning that that the signal is compressed according to event that have already happened in the control signal.  This can be useful for limiting and catching fast transients.
          * \param length The amount of time the compressor looks ahead (in milliseconds)
          */
-        void setLookAhead(float length) {
+        void setLookAhead(const float length) {
             lookAheadSize = maxiConvert::msToSamps(length);
             lookAheadSize = min(lookAheadSize, lookAheadDelay.size());
         }
@@ -2825,12 +2759,12 @@ class maxiDynamics {
         maxiPoll poll;
 
         //mapping from attack/release envelope to ratio
-        float envToRatio(float envVal, float ratio) {
-            float envRatio = 1;
-            if (ratio > 1) {
-                envRatio = 1 + ((ratio-1) * envVal);
+        float __force_inline envToRatio(const float envVal, const float ratio) {
+            float envRatio = 1.f;
+            if (ratio > 1.f) {
+                envRatio = 1.f + ((ratio-1.f) * envVal);
             }else {
-                envRatio = 1 - ((1-ratio) * envVal);
+                envRatio = 1.f - ((1.f-ratio) * envVal);
             }
             return envRatio;
         }
