@@ -5,6 +5,7 @@
 #include "../utils/MedianFilter.h"
 #include "../hardware/memlnaut/Pins.hpp"
 #include <SerialPIO.h>
+#include <functional>
 
 #include <vector>
 
@@ -15,7 +16,7 @@ public:
     // Change to trigger debugging of single channel
     static constexpr size_t kObservedChan = 9999;
 
-    using uart_in_callback_t = void (*)(const std::vector<float> &);
+    using uart_in_callback_t = std::function<void(const std::vector<float>&)>;
     /**
      * @brief Construct a new UARTInput object for communication
      * with the MEML Sensor Board.
@@ -55,6 +56,8 @@ protected:
     std::vector<MedianFilter<float>> filters_;
     std::vector<float> value_states_;
     uart_in_callback_t callback_ = nullptr;
+    bool refresh_uart_;
+    size_t baud_rate_;
 
     struct spiMessage
     {

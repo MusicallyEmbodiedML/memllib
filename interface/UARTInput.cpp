@@ -13,11 +13,13 @@ UARTInput::UARTInput(const std::vector<size_t>& sensor_indexes,
     value_states_{ 0 },
     spiState(SPISTATES::WAITFOREND),
     spiIdx(0),
-    callback_(nullptr)
+    callback_(nullptr),
+    refresh_uart_(false),
+    baud_rate_(baud_rate)
 {
     filters_.resize(sensor_indexes.size());
     value_states_.resize(sensor_indexes.size());
-    pioSerial_.begin(baud_rate);
+    //pioSerial_.begin(baud_rate);
 
     // Put all values in the middle
     for (auto &v : value_states_) {
@@ -42,8 +44,24 @@ void UARTInput::Poll()
 {
     uint8_t spiByte = 32;
 
+    if (!refresh_uart_) {
+        // What baud rate is the UART running at?
+        // Print debug info about PIO Serial state
+        Serial.print("PIO Serial Status - Initialized: ");
+        Serial.print(pioSerial_ ? "Yes" : "No");
+        Serial.print(", Target Baud Rate: ");
+        Serial.println(baud_rate_);
+        // Start at current baud rate
+        pioSerial_.begin(baud_rate_);
+        Serial.println("PIO_UART refreshed.");
+        Serial.print("Serial available: ");
+        Serial.println(pioSerial_.available());
+        refresh_uart_ = true;
+    }
+
     while (pioSerial_.available()) {
         spiByte = pioSerial_.read();
+        //Serial.printf("0x%02X ", spiByte);
 
         switch(spiState) {
             case SPISTATES::WAITFOREND:

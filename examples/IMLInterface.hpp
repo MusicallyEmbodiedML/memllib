@@ -60,6 +60,12 @@ public:
     {
         // Check if input is updated
         if (perform_inference_ && input_updated_) {
+            Serial.print("Input state: ");
+            for (auto val : input_state_) {
+                Serial.print(val);
+                Serial.print(" ");
+            }
+            Serial.println();
             MLInference_(input_state_);
             input_updated_ = false;
         }
