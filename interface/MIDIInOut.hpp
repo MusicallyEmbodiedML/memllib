@@ -6,6 +6,7 @@
 #include <MIDI.h>
 #include <memory>
 #include "../hardware/memlnaut/Pins.hpp"
+#include <functional>
 
 
 class MIDIInOut
@@ -65,7 +66,7 @@ public:
      * The function takes two parameters: the CC number and its corresponding value,
      * both in the MIDI standard range of 0-127.
      */
-    using midi_cc_callback_t = void (*)(const uint8_t, const uint8_t);
+    using midi_cc_callback_t = std::function<void(const uint8_t, const uint8_t)>;
 
     /**
      * @typedef midi_note_callback_t
@@ -80,7 +81,7 @@ public:
      * the note number, and velocity. Note number and velocity follow the MIDI
      * standard range of 0-127.
      */
-    using midi_note_callback_t = void (*)(bool, const uint8_t, const uint8_t);
+    using midi_note_callback_t = std::function<void(const bool, const uint8_t, const uint8_t)>;
 
     /**
      * @brief Set the callback to be called when a MIDI CC message is received.
@@ -102,6 +103,7 @@ protected:
     midi_cc_callback_t cc_callback_;
     midi_note_callback_t note_callback_;
     uint8_t send_channel_;  // Store the MIDI send channel (1-16)
+    bool refresh_uart_;
     static MIDIInOut* instance_;  // Add static instance pointer
 
 private:
@@ -109,6 +111,7 @@ private:
     static void handleControlChange(byte channel, byte number, byte value);
     static void handleNoteOn(byte channel, byte note, byte velocity);
     static void handleNoteOff(byte channel, byte note, byte velocity);
+    void RefreshUART_(void);
 };
 
 #endif  // __MIDI_IN_OUT_HPP__

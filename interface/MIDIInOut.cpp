@@ -13,7 +13,11 @@ MIDI_CREATE_CUSTOM_INSTANCE(HardwareSerial, Serial2, MIDI, CustomMIDISettings);
 
 MIDIInOut* MIDIInOut::instance_ = nullptr;
 
-MIDIInOut::MIDIInOut() : n_outputs_(0), cc_callback_(nullptr), note_callback_(nullptr), send_channel_(1) {
+MIDIInOut::MIDIInOut() : n_outputs_(0),
+                         cc_callback_(nullptr),
+                         note_callback_(nullptr),
+                         send_channel_(1),
+                         refresh_uart_(false) {
     instance_ = this;
 }
 
@@ -67,6 +71,8 @@ void MIDIInOut::Setup(size_t n_outputs, uint8_t midi_tx, uint8_t midi_rx) {
 
 void MIDIInOut::Poll()
 {
+    RefreshUART_(); // Refresh UART if needed
+
     MIDI.read();
 }
 
@@ -87,13 +93,8 @@ void MIDIInOut::SendParamsAsMIDICC(const std::vector<float>& params) {
         return;
     }
 
-    MEMORY_BARRIER();
-    static bool serial2_workaround = true;
-    if (serial2_workaround) {
-        Serial2.flush(); // Ensure the message is sent completely
-        Serial2.begin(31250); // Start MIDI baud rate
-        serial2_workaround = false;
-    }
+    RefreshUART_(); // Refresh UART if needed
+
     while(!Serial2) { delay(1); } // Wait for Serial2
     for (size_t i = 0; i < n_outputs_; i++) {
         float clamped = std::max(0.0f, std::min(1.0f, params[i]));
@@ -141,5 +142,20 @@ void MIDIInOut::handleNoteOn(byte channel, byte note, byte velocity) {
 void MIDIInOut::handleNoteOff(byte channel, byte note, byte velocity) {
     if (instance_ && instance_->note_callback_) {
         instance_->note_callback_(false, note, velocity);
+    }
+}
+
+void MIDIInOut::RefreshUART_(void) {
+    if (!READ_VOLATILE(refresh_uart_)) {
+        Serial2.end(); // Reset Serial2 state
+        //delay(10);
+        Serial2.setFIFOSize(32); // Set larger FIFO
+        Serial2.setTX(Pins::MIDI_TX);
+        Serial2.setRX(Pins::MIDI_RX);
+        Serial2.begin(31250); // Start MIDI baud rate
+        while(!Serial2) {} // Wait for Serial2
+        WRITE_VOLATILE(refresh_uart_, true);
+
+        Serial.println("MIDI UART refreshed.");
     }
 }
