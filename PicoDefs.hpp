@@ -12,4 +12,10 @@
 #define WRITE_VOLATILE(var, val) do { MEMORY_BARRIER(); (var) = (val); MEMORY_BARRIER(); } while (0)
 #define READ_VOLATILE(var) ({ MEMORY_BARRIER(); typeof(var) __temp = (var); MEMORY_BARRIER(); __temp; })
 
+#define PERIODIC_DEBUG(COUNT, FUNC) \
+        static size_t ct=0; \
+        if (ct++ % COUNT == 0) { \
+            FUNC         \
+        }
+
 #endif  // __MEML_PICO_HPP__

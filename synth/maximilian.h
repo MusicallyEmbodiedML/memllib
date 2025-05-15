@@ -50,7 +50,7 @@ using namespace std;
 
 #define MAXITYPE float
 
-#define LOG(x) 
+#define LOG(x)
 
 #define USE_STRINGS
 
@@ -61,7 +61,7 @@ using namespace std;
 
 
 #define DOUBLEARRAY_REF vector<MAXITYPE> &
-#define DOUBLEARRAY vector<MAXITYPE> 
+#define DOUBLEARRAY vector<MAXITYPE>
 #define NORMALISE_ARRAY_TYPE(invar, outvar) vector<MAXITYPE> outvar = vector<MAXITYPE>(invar.begin(), invar.end()); //emplace into new variable
 #define DECLARE_F64_ARRAY(x) std::vector<MAXITYPE> x;
 #define F64_ARRAY_SIZE(x) x.size()
@@ -112,7 +112,7 @@ public:
 /**
  * \class A variety of oscillators
  */
- 
+
 class maxiOsc
 {
 public:
@@ -129,8 +129,16 @@ public:
     void UpdateParams(void);
     /*!Square wave oscillator
     \param frequency in Hz */
-    float square(float frequency);
-    /*!Sine wave oscillator
+    float __force_inline square(const float frequency) {
+        //This is a square wave
+        if (phase<0.5) output=-1;
+        if (phase>0.5) output=1;
+        if ( phase >= 1.0 ) phase -= 1.0;
+        // phase += (1./(maxiSettings::sampleRate/(frequency)));
+        phase += maxiSettings::one_over_sampleRate * frequency; // (1./(maxiSettings::sampleRate/(frequency)));
+        return output ;
+    }
+        /*!Sine wave oscillator
     \param frequency in Hz */
     float sinewave(float frequency);
     /*!Cosine wave oscillator
@@ -139,8 +147,14 @@ public:
     /*!Saw wave oscillator \param frequency in Hz */
     float saw(float frequency);
     /*!A ramp rising from 0 to 1 \param frequency in Hz */
-    float phasor(float frequency);
-    /*!A ramp rising from 0 to 1 \param frequency in Hz 
+    float __force_inline phasor(float frequency) {
+        //This produces a floating point linear ramp between 0 and 1 at the desired frequency
+        output=phase;
+        if ( phase >= 1.0 ) phase -= 1.0;
+        phase += maxiSettings::one_over_sampleRate * frequency;
+        return output ;
+    }
+        /*!A ramp rising from 0 to 1 \param frequency in Hz
     \param startPhase the start point of the phasor (0-1)
     \param endPhase the end point of the phasor (0-1)
     */
@@ -160,7 +174,7 @@ public:
 
         const size_t phase_int = static_cast<size_t>(phase);
         const float remainder = phase - static_cast<float>(phase_int);
-    
+
         // Use local pointer to avoid repeated array dereferencing and index calculation
         const float* buf = &sineBuffer[phase_int + 1];
         return (1.0f - remainder) * buf[0] + remainder * buf[1];
@@ -197,7 +211,7 @@ public:
 template<size_t DELAYTIME>
 maxiDelayline<DELAYTIME>::maxiDelayline() :
         phase(0) {
-	memset( memory, 0, DELAYTIME * sizeof(float) );        
+	memset( memory, 0, DELAYTIME * sizeof(float) );
 };
 
 
@@ -205,18 +219,17 @@ maxiDelayline<DELAYTIME>::maxiDelayline() :
 #pragma GCC optimize ("O0")
 
 template<size_t DELAYTIME>
-/*inline*/ float maxiDelayline<DELAYTIME>::play(const float &input, const size_t size, const float feedback)  {
+float __force_inline maxiDelayline<DELAYTIME>::play(const float input, const size_t size, const float feedback)  {
 	if (size >= DELAYTIME) {
 		return 0;
 	}
-	if ( phase >= static_cast<int>(size) ) {
+	if ( phase >= size ) {
 		phase = 0;
 	}
 	float output=memory[phase];
 	memory[phase]=(memory[phase] * feedback) + input;
-	phase+=1;
-	return(output);
-
+	phase+=1.f;
+	return output;
 }
 
 #pragma GCC pop_options
@@ -305,7 +318,7 @@ public:
 
 
 /**
- * Functions for multichannel panning 
+ * Functions for multichannel panning
  */
 class maxiMix
 {
@@ -369,22 +382,22 @@ public:
         F64_ARRAY_FILL(buf,0);
     }
     /*!Add the latest value to the buffer \param x A value*/
-    void push(float x) {
+    void __force_inline push(const float x) {
         buf[idx] = x;
         idx++;
         if (idx==F64_ARRAY_SIZE(buf)) {
             idx=0;
         }
     }
-    
+
     /*! \returns The size of the buffer*/
-    size_t size() {return F64_ARRAY_SIZE(buf);}
+    size_t __force_inline size() {return F64_ARRAY_SIZE(buf);}
 
     /*! \returns the value at the front of the buffer*/
-    float head() {return idx == 0 ? buf[F64_ARRAY_SIZE(buf)-1] : buf[idx-1];}
+    float __force_inline head() {return idx == 0 ? buf[F64_ARRAY_SIZE(buf)-1] : buf[idx-1];}
 
     /*! \returns the oldest value in the buffer, for a particular window size \param N The size of the window, N < the size of the buffer*/
-    float tail(size_t N) {
+    float __force_inline tail(const size_t N) {
         float val=0;
         if (idx >= N) {
             val = buf[idx-N];
@@ -402,10 +415,10 @@ public:
      * \param func A function in the form float func(float previousResult, float nextValue)
      * \param initval The initial value to pass into the function (usually 0)
      * \returns The last result of the function, after passing in all values from the window
-     * Example: this function will sum the values in the window: 
+     * Example: this function will sum the values in the window:
      *     auto sumfunc = [](float val, float n) {return val + n;};
      */
-    float reduce(size_t N, reduceFunction func, float initval) {
+    float __force_inline reduce(const size_t N, reduceFunction func, float initval) {
         float val=0;
         if (idx >= N) {
             for(size_t i=idx-N; i < idx; i++) {
@@ -424,8 +437,8 @@ public:
         return val;
     }
 
-    
-    
+
+
 private:
     DOUBLEARRAY buf;
     size_t idx=0;
@@ -504,7 +517,7 @@ class maxiTrigger
 public:
     maxiTrigger();
     /*! Generate a trigger when a signal transitions from <=0 to above 0 \param input A signal*/
-    float onZX(float input)
+    float __force_inline onZX(float input)
     {
         float isZX = 0.0;
         if ((previousValue <= 0.0 || firstTrigger) && input > 0)
@@ -517,7 +530,7 @@ public:
     }
 
     /*! Generate a trigger when a signal changes beyond a certain amount \param input A signal \param tolerance The amount of chance allowed before a trigger is generated*/
-    float onChanged(float input, float tolerance)
+    float __force_inline onChanged(float input, float tolerance)
     {
         float changed = 0;
         if (abs(input - previousValue) > tolerance)
@@ -601,7 +614,7 @@ public:
         position = F64_ARRAY_SIZE(amplitudes) - 1;
     }
 
-    /*! Set the sample from an external array, and set the sample rate 
+    /*! Set the sample from an external array, and set the sample rate
      * \param _sampleData An float array (JS) or vector (C++) of data
      * \param sampleRate the sample rate
      */
@@ -684,7 +697,7 @@ public:
 
     /*! Play from the start to a specific position \param end the end point (0-1)*/
     float playUntil(float end);
-    /*! Play from the start to a specific position, at a modified speed \param end the end point (0-1) \param speed a speed multiplier*/    
+    /*! Play from the start to a specific position, at a modified speed \param end the end point (0-1) \param speed a speed multiplier*/
     float playUntilAtSpeed(float end, float speed);
 
     /*! Play at a modified speed \param speed a speed multiplier*/
@@ -702,7 +715,7 @@ public:
 
 
     /*! Normalise the sample buffer \param maxLevel the maximum absolute level*/
-    void normalise(float maxLevel);                                            
+    void normalise(float maxLevel);
 
     /*! Trim the sample buffer to remove silence from the ends \param alpha the sensitivity \param threshold the value above which to start trimming \param trimStart true if the start should be trimmed \param trimEnd true if the end should be trimmed */
     void autoTrim(float alpha, float threshold, bool trimStart, bool trimEnd); //alpha of lag filter (lower == slower reaction), threshold to mark start and end, < 32767
@@ -724,7 +737,7 @@ public:
      * \param outMax the highest value in the new range of the signal
      * \returns a signal
      */
-    static float inline linlin(float val, float inMin, float inMax, float outMin, float outMax)
+    static float __force_inline linlin(float val, float inMin, float inMax, float outMin, float outMax)
     {
         val = max(min(val, inMax), inMin);
         return ((val - inMin) / (inMax - inMin) * (outMax - outMin)) + outMin;
@@ -738,7 +751,7 @@ public:
      * \param outMax the highest value in the new range of the signal
      * \returns a signal
      */
-    static float inline linexp(float val, float inMin, float inMax, float outMin, float outMax)
+    static float __force_inline linexp(float val, float inMin, float inMax, float outMin, float outMax)
     {
         //clipping
         val = max(min(val, inMax), inMin);
@@ -753,20 +766,20 @@ public:
      * \param outMax the highest value in the new range of the signal
      * \returns a signal
      */
-    static float inline explin(float val, float inMin, float inMax, float outMin, float outMax)
+    static float __force_inline explin(float val, float inMin, float inMax, float outMin, float outMax)
     {
         //clipping
         val = max(min(val, inMax), inMin);
         return (log(val / inMin) / log(inMax / inMin) * (outMax - outMin)) + outMin;
     }
 
-    /** Restrict a signal to upper and lower bounds 
+    /** Restrict a signal to upper and lower bounds
      * \param v a signal
      * \param low the lowest value
      * \param high the highest value
      * \returns a signal
      */
-    static float inline clamp(float v, const float low, const float high)
+    static float __force_inline clamp(float v, const float low, const float high)
     {
         if (v > high)
         {
@@ -780,82 +793,6 @@ public:
     }
 };
 
-// /* The class is deprecated, use maxiDynamics instead */
-// class maxiDyn
-// {
-
-// public:
-//     //	float gate(float input, float threshold=0.9, long holdtime=1, float attack=1, float release=0.9995);
-//     //	float compressor(float input, float ratio, float threshold=0.9, float attack=1, float release=0.9995);
-//     float gate(float input, float threshold = 0.9, long holdtime = 1, float attack = 1, float release = 0.9995);
-//     float compressor(float input, float ratio, float threshold = 0.9, float attack = 1, float release = 0.9995);
-//     float compress(float input);
-
-//     float input;
-//     float ratio;
-//     float currentRatio;
-//     float threshold;
-//     float output;
-//     float attack;
-//     float release;
-//     float amplitude;
-
-//     void setAttack(float attackMS);
-//     void setRelease(float releaseMS);
-//     void setThreshold(float thresholdI);
-//     void setRatio(float ratioF);
-//     long holdtime;
-//     long holdcount;
-//     int attackphase, holdphase, releasephase;
-// };
-
-// /* The class is deprecated, use maxiEnvGen instead */
-
-// class maxiEnv
-// {
-
-// public:
-//     float ar(float input, float attack = 1, float release = 0.9, long holdtime = 1, int trigger = 0);
-//     float adsr(float input, float attack = 1, float decay = 0.99, float sustain = 0.125, float release = 0.9, long holdtime = 1, int trigger = 0);
-//     float adsr(float input, int trigger);
-//     float input;
-//     float output;
-//     float attack;
-//     float decay;
-//     float sustain;
-//     float release;
-//     float amplitude;
-
-//     void setRelease(float releaseMS);
-//     void setDecay(float decayMS);
-
-//     //old method - not actually in MS
-//     void setAttack(float attackMS);
-//     //new methods: these are in MS
-//     void setAttackMS(float attackMS);
-
-//     void setSustain(float sustainL);
-
-//     int trigger;
-
-//     long holdtime = 1;
-//     long holdcount;
-//     int attackphase, decayphase, sustainphase, holdphase, releasephase;
-
-//     // ------------------------------------------------
-//     // getters/setters
-//     int getTrigger() const
-//     {
-//         return trigger;
-//     }
-
-//     void setTrigger(int trigger)
-//     {
-//         this->trigger = trigger;
-//     }
-
-//     // ------------------------------------------------
-// };
 
 /**
 Conversion functions
@@ -864,26 +801,30 @@ class maxiConvert
 {
 public:
     /*!Convert from MIDI note number to frequency (Hz) \param midinote A MIDI note number*/
-    static float mtof(int midinote);
+    static float __force_inline mtof(int midinote);
 
     /*!Convert from milliseconds to samples \param timeMs The number of milliseconds*/
-    static size_t msToSamps(float timeMs)
+    static size_t __force_inline msToSamps(float timeMs)
     {
         return static_cast<size_t>(timeMs / 1000.0 * maxiSettings::sampleRate);
     }
     /*!Convert from samples to milliseconds \param samples The number of samples*/
-    static float sampsToMs(size_t samples)
+    static float __force_inline sampsToMs(size_t samples)
     {
         return samples / maxiSettings::sampleRate * 1000.0;
     }
 
     /*!Convert from amplitude to decibels \param amp Amplitude*/
-    static float ampToDbs(float amp) {
+    static float __force_inline ampToDbs(float amp) {
         return std::log10(amp) * 20.0;
     }
     /*!Convert from decibels to amplitude \param dbs Decibels*/
-    static float dbsToAmp(float dbs) {
+    static float __force_inline dbsToAmp(float dbs) {
         return std::pow(10.0, dbs * 0.05);
+    }
+
+    static float __force_inline dbsToAmpReciprocal(float dbs) {
+        return std::pow(10.0f, -dbs * 0.05f);
     }
 };
 
@@ -974,7 +915,7 @@ public:
     /** atan distortion, see http://www.musicdsp.org/showArchiveComment.php?ArchiveID=104
     * \param in A signal
     * \param shape from 1 (soft clipping) to infinity (hard clipping)
-    */ 
+    */
     float atanDist(const float in, const float shape);
     /** Faster but 'lower quality' version of atan distortion
      * \param in A signal
@@ -1105,7 +1046,7 @@ inline float maxiFlanger<DELAYTIME>::flange(const float input, const unsigned in
 
 /**
  * A chorus effect
- */ 
+ */
 
 template<size_t DELAYTIME>
 class maxiChorus
@@ -1197,7 +1138,7 @@ public:
         ym1 = input - xm1 + R * ym1;
         xm1 = input;
         return ym1;
-    }   
+    }
 };
 
 /**
@@ -1231,10 +1172,10 @@ public:
 
     /**run the filter, and get a mixture of lowpass, bandpass, highpass and notch outputs
      *\param w The signal to be filtered
-     \param lpmix the amount of low pass filtering (0-1) 
-     \param bpmix the amount of bandpass pass filtering (0-1) 
-     \param hpmix the amount of high pass filtering (0-1) 
-     \param notchmix the amount of notch filtering (0-1) 
+     \param lpmix the amount of low pass filtering (0-1)
+     \param bpmix the amount of bandpass pass filtering (0-1)
+     \param hpmix the amount of high pass filtering (0-1)
+     \param notchmix the amount of notch filtering (0-1)
     */
     inline float play(float w, float lpmix, float bpmix, float hpmix, float notchmix)
     {
@@ -1430,8 +1371,8 @@ public:
 
     /**
      * Cross-fade between stereo signals
-     * \param ch1 a vector containing left and right components of channel 1 
-     * \param ch2 a vector containing left and right components of channel 2 
+     * \param ch1 a vector containing left and right components of channel 1
+     * \param ch2 a vector containing left and right components of channel 2
      * \param xfader the cross-fader position, -1=100% ch1, 1=100% ch2, 0=an equal mix of both channels
      */
     static vector<float> xfade(vector<float> &ch1, vector<float> &ch2, float xfader)
@@ -1450,7 +1391,7 @@ public:
     /**
      * Cross-fade between mono signals
      * \param ch1 the signal for channel 1
-     * \param ch2 the signal for channel 2 
+     * \param ch2 the signal for channel 2
      * \param xfader the cross-fader position, -1=100% ch1, 1=100% ch2, 0=an equal mix of both channels
      */
     static float xfade(float ch1, float ch2, float xfader)
@@ -1469,7 +1410,7 @@ class maxiLine
 public:
     maxiLine() {}
     /*! Generate a line, when a trigger is received \param trigger a signal*/
-    inline float play(float trigger)
+    float __force_inline play(float trigger)
     {
         if (!lineComplete)
         {
@@ -1502,7 +1443,7 @@ public:
         return lineValue;
     }
 
-    /** Setup the line before it is triggered 
+    /** Setup the line before it is triggered
      * \param start the starting value of the line
      * \param end the ending value of the line
      * \param durationMs the duration of the line (in milliseconds)
@@ -1553,9 +1494,9 @@ private:
 
 // /**
 //  * A kuramoto oscillator
-//  * 
+//  *
 //  * This is an adaptive oscillator that adjusts its own phase in relation to the phases of other kuramoto oscillators
-//  * 
+//  *
 //  * For further info, see
 //  * https://tutorials.siam.org/dsweb/cotutorial/index.php?s=3&p=0
 //  * https://www.complexity-explorables.org/explorables/ride-my-kuramotocycle/
@@ -1670,7 +1611,7 @@ private:
 // /**
 //  * Run a group of kuramoto oscillators with asynchronous updates.  Instead of setting all of the phasors at once, you can set the phases or arbitrary individuals at abritrary times. This class updates the local oscillator according to best guesses of the phase of remote oscillators.
 //  * This is useful if the other oscillators are not running on your computer, but are linked on a network. For example you could use this class for a shared network clock that is robust to timing jitter.
-//  * 
+//  *
 //  */
 // class maxiAsyncKuramotoOscillator : public maxiKuramotoOscillatorSet
 // {
@@ -1688,7 +1629,7 @@ private:
 //         update = 1;
 //     }
 
-//     /*! Set the phases of all of the oscillators \param phases a vector of phases (all 0 - 2PI)*/   
+//     /*! Set the phases of all of the oscillators \param phases a vector of phases (all 0 - 2PI)*/
 //     void setPhases(const std::vector<float> &phases)
 //     {
 //         size_t iOsc = 0;
@@ -1889,7 +1830,7 @@ class maxiCounter
 {
 public:
     /** Increase each time a trigger is received
-     * \param incTrigger a signal that triggers the counter to increment 
+     * \param incTrigger a signal that triggers the counter to increment
      * \param resetTrigger a signal that resets the counter to zero
      * \returns the number of triggers received since the beginning or the last reset
      */
@@ -1961,10 +1902,10 @@ public:
      * \returns an item from the array of values, according to the floor or the index value
      */
     float play(float index, DOUBLEARRAY_REF values, bool normalised) {
-        auto arrayLen = F64_ARRAY_SIZE(values); 
+        auto arrayLen = F64_ARRAY_SIZE(values);
 
         if (normalised) {
-            index *= (arrayLen - 1e-9); 
+            index *= (arrayLen - 1e-9);
         }else{
             //assume index is direct mapping to array element
         }
@@ -1996,10 +1937,10 @@ public:
      * e.g if values = {2,3} and normalised index = 0.5, then 2.5 will be returns
      */
     float play(float index, DOUBLEARRAY_REF values, bool normalised) {
-        auto arrayLen = F64_ARRAY_SIZE(values); 
+        auto arrayLen = F64_ARRAY_SIZE(values);
 
         if (normalised) {
-            index *= (arrayLen - 1e-9); 
+            index *= (arrayLen - 1e-9);
         }else{
             //assume index is direct mapping to array element
         }
@@ -2014,7 +1955,7 @@ public:
         size_t a2 = a1 + 1;
         if (a2  == arrayLen) a2=0;
         //interpolate
-        float value = (F64_ARRAY_AT(values, a1) * (1.0 -mix)) + 
+        float value = (F64_ARRAY_AT(values, a1) * (1.0 -mix)) +
                         (F64_ARRAY_AT(values, a2) * mix);
         return value;
     }
@@ -2043,7 +1984,7 @@ public:
                 first=false;
                 index = 0;
             }else{
-                auto arrayLen = F64_ARRAY_SIZE(values); 
+                auto arrayLen = F64_ARRAY_SIZE(values);
                 //should this be step % arraylen?  how about -ve vals?
                 if (step > arrayLen) {
                     step = arrayLen;
@@ -2097,7 +2038,7 @@ public:
      * \param times a list of time ratios.  The phasor will be divided up into these ratios, and a trigger will be returned at the start of each period\n
      * \returns a trigger at the start of each period\n
      */
-    float playTrig(float phase, DOUBLEARRAY times)
+    float __force_inline playTrig(float phase, DOUBLEARRAY times)
     {
         if (first) {
             first=false;
@@ -2166,7 +2107,7 @@ private:
 
 /**
  * Extend a trigger into a pulse. This is useful for making basic gates in sequences. Use maxiEnvGen for more advanced gate and envelope generation.
- */ 
+ */
 class maxiZXToPulse
 {
 public:
@@ -2179,7 +2120,7 @@ public:
      */
     float play(float input, float holdTimeInSamples) {
         float output =0;
-        
+
         if (trig.onZX(input)) {
             holdCounter = holdTimeInSamples;
         }
@@ -2198,7 +2139,7 @@ private:
 
 
 /**
- * An envelope generator. 
+ * An envelope generator.
  */
 class maxiEnvGen {
     public:
@@ -2208,7 +2149,7 @@ class maxiEnvGen {
         maxiEnvGen();
 
         /*! Get the latest value of the envelope \param trigger A positive zero crossing (or constant 1) starts the envelope*/
-        float play(float trigger) {
+        float __force_inline play(float trigger) {
             switch(state) {
                 case WAITING:
                 {
@@ -2224,7 +2165,7 @@ class maxiEnvGen {
                         break;
                     }
                 }
-                case TRIGGERED: 
+                case TRIGGERED:
                 {
                     //calculate the current value of the envelope
                     envStage *currStage = &stages[phase];
@@ -2235,8 +2176,8 @@ class maxiEnvGen {
                     if (currStage->hold) {
                         state = playStates::HOLDING;
                     }else{
-                        envval = maxiMap::linlin(pow(currStage->currentlevel,currStage->curve), 0, 1, 
-                            currStage->startlevel, 
+                        envval = maxiMap::linlin(pow(currStage->currentlevel,currStage->curve), 0, 1,
+                            currStage->startlevel,
                             currStage->endlevel);
                         currStage->counter++;
                         // cout << currStage->counter << endl;
@@ -2245,7 +2186,7 @@ class maxiEnvGen {
                             currStage->counter=0;
                             currStage->currentlevel=0;
                             phase++;
-                        
+
                         }else{
                             //calc next bit of current phase
                             currStage->currentlevel += currStage->gradient;
@@ -2419,7 +2360,7 @@ class maxiEnvGen {
          * The envelope will rise from 0 to 1 in the attack segment, then drop to the sustain level before falling to 0.
          * \param attack Rise time in ms
          * \param decay Decay time in ms
-         * \param sustain Sustain level 
+         * \param sustain Sustain level
          * \param release Fall time in ms
          */
         void setupADSR(const float attack, const float decay, const float sustain, const float release) {
@@ -2441,7 +2382,7 @@ class maxiEnvGen {
 
     private:
         size_t phase=0;
-        float envval = 0;        
+        float envval = 0;
         bool loop = false;
         bool retrigger = false;
         enum playStates {WAITING, TRIGGERED, HOLDING} state;
@@ -2475,8 +2416,8 @@ class maxiEnvGen {
                 accumulatedTime = len - stage.length;
                 stage.gradient = 1.0 / stage.length;
                 stage.hold=0;
-            }   
-            return accumulatedTime;         
+            }
+            return accumulatedTime;
         }
 };
 
@@ -2528,25 +2469,28 @@ class maxiRMS {
                 windowSize = windowSizeInSamples;
             }
             runningRMS = 0;
+            windowSizeRcpr = 1.f/windowSize;
         }
 
         /*!Find out the size of the analysis window (in ms)*/
-        float getWindowSize() {
+        float __force_inline getWindowSize() {
             return maxiConvert::sampsToMs(windowSize);
         }
 
         /*Analyse the signal \param signal a signal \returns RMS*/
-        float play(float signal) {
-            float sigPow2 = (signal * signal);
+        float __force_inline play(float const signal) {
+            const float sigPow2 = (signal * signal);
             buf.push(sigPow2);
             runningRMS += sigPow2;
             runningRMS -= buf.tail(windowSize);
-            return sqrt(runningRMS/windowSize);
+            return sqrtf(runningRMS * windowSizeRcpr);
+            // return sqrt(runningRMS/windowSize);
         }
 
     private:
         maxiRingBuf buf;
         size_t windowSize=0; // in samples
+        float windowSizeRcpr=0;
         float runningRMS=0;
 };
 
@@ -2562,7 +2506,7 @@ class maxiDynamics {
     public:
 
         enum ANALYSERS {PEAK, RMS};
-        
+
         maxiDynamics() {
             //define detector functions
             inputPeak = [](float sig) {
@@ -2583,7 +2527,7 @@ class maxiDynamics {
             arEnvLow.setupASR(10,10);
             arEnvLow.setRetrigger(false);
 
-            lookAheadDelay.setup(maxiSettings::sampleRate * 1); //max 1s
+            lookAheadDelay.setup(maxiSettings::sampleRate * 0.1f); //max 0.1s
         }
 
 
@@ -2600,32 +2544,33 @@ class maxiDynamics {
          * \param kneeLow The size of the knee for companding below the low threshold (in Dbs)
          * \returns a companded signal
          */
-        float play(float sig, float control, 
-            float thresholdHigh, float ratioHigh, float kneeHigh,
-            float thresholdLow, float ratioLow, float kneeLow
+        float __force_inline play(const float sig, const float control,
+            const float thresholdHigh, const float ratioHigh, const float kneeHigh,
+            const float thresholdLow, const float ratioLow, const float kneeLow
         ) {
-            float controlDB = maxiConvert::ampToDbs(inputAnalyser(control));
-            float outDB = maxiConvert::ampToDbs(sig);
+            const float controlDB = maxiConvert::ampToDbs(inputAnalyser(control));
+            const float outDB = maxiConvert::ampToDbs(sig);
+            const float halfKneeHigh = kneeHigh * 0.5f;
             //companding above the high threshold
-            if (ratioHigh > 0) {
-                if (kneeHigh > 0) {
-                    float lowerKnee = thresholdHigh - (kneeHigh/2.0);
-                    float higherKnee = thresholdHigh  +(kneeHigh/2.0);
+            if (ratioHigh > 0.f) {
+                if (kneeHigh > 0.f) {
+                    const float lowerKnee = thresholdHigh - halfKneeHigh;
+                    const float higherKnee = thresholdHigh  + halfKneeHigh;
                     //attack/release
-                    float envRatio = 1;
+                    float envRatio = 1.f;
                     if (controlDB >= lowerKnee) {
-                        float envVal = arEnvHigh.play(1);
+                        const float envVal = arEnvHigh.play(1.f);
                         envRatio = envToRatio(envVal, ratioHigh);
                     }else {
-                        float envVal = arEnvHigh.play(-1);
+                        const float envVal = arEnvHigh.play(-1.f);
                     }
                     if ((controlDB >= lowerKnee) && (controlDB < higherKnee)) {
-                        float kneeHighOut = ((higherKnee - thresholdHigh) / envRatio) + thresholdHigh;
-                        float kneeRange = (kneeHighOut - lowerKnee);
-                        float t = (controlDB - lowerKnee) / kneeHigh;
+                        const float kneeHighOut = ((higherKnee - thresholdHigh) / envRatio) + thresholdHigh;
+                        const float kneeRange = (kneeHighOut - lowerKnee);
+                        const float t = (controlDB - lowerKnee) / kneeHigh;
                         //bezier on x only
-                        float curve =  ratioHigh > 1 ? 0.8 : 0.2;
-                        float kneex = (2 * (1-t) * t * curve) + (t*t);
+                        const float curve =  ratioHigh > 1.f ? 0.8f : 0.2f;
+                        const float kneex = (2.f * (1.f-t) * t * curve) + (t*t);
                         outDB = lowerKnee + (kneex * kneeRange);
                     }
                     else if (controlDB >= higherKnee) {
@@ -2635,34 +2580,34 @@ class maxiDynamics {
                 else {
                     //no knee
                     if (controlDB > thresholdHigh) {
-                        float envVal = arEnvHigh.play(1);
-                        float envRatio = envToRatio(envVal, ratioHigh);
-                        outDB = ((controlDB - thresholdHigh) / envRatio) + thresholdHigh;  
+                        const float envVal = arEnvHigh.play(1.f);
+                        const float envRatio = envToRatio(envVal, ratioHigh);
+                        outDB = ((controlDB - thresholdHigh) / envRatio) + thresholdHigh;
                     }else {
-                        float envVal = arEnvHigh.play(-1);
+                        const float envVal = arEnvHigh.play(-1.f);
                     }
                 }
-            }  
+            }
             //companding below the low threshold
-            if (ratioLow > 0) {
-                if (kneeLow > 0) {
-                    float lowerKnee = thresholdLow - (kneeLow/2.0);
-                    float higherKnee = thresholdLow  +(kneeLow/2.0);
+            if (ratioLow > 0.f) {
+                if (kneeLow > 0.f) {
+                    float lowerKnee = thresholdLow - halfKneeHigh;
+                    float higherKnee = thresholdLow  + halfKneeHigh;
                     //attack/release
-                    float envRatio = 1;
+                    float envRatio = 1.f;
                     if (controlDB < lowerKnee) {
-                        float envVal = arEnvLow.play(1);
+                        float envVal = arEnvLow.play(1.f);
                         envRatio = envToRatio(envVal, ratioLow);
                     }else {
-                        float envVal = arEnvLow.play(-1);
+                        float envVal = arEnvLow.play(-1.f);
                     }
                     if ((controlDB >= lowerKnee) && (controlDB < higherKnee)) {
-                        float kneeLowOut = thresholdLow - ((thresholdLow-lowerKnee) / ratioLow);
-                        float kneeRange = (higherKnee - kneeLowOut);
-                        float t = (controlDB - lowerKnee) / kneeLow;
+                        const float kneeLowOut = thresholdLow - ((thresholdLow-lowerKnee) / ratioLow);
+                        const float kneeRange = (higherKnee - kneeLowOut);
+                        const float t = (controlDB - lowerKnee) / kneeLow;
                         //bezier on x only
-                        float curve =  ratioLow > 1 ? 0.2 : 0.8;
-                        float kneex = (2 * (1-t) * t * curve) + (t*t);
+                        const float curve =  ratioLow > 1.f ? 0.2f : 0.8f;
+                        float kneex = (2.f * (1.f-t) * t * curve) + (t*t);
                         outDB = kneeLowOut + (kneex * kneeRange);
                     }
                     else if (controlDB < lowerKnee) {
@@ -2672,19 +2617,21 @@ class maxiDynamics {
                 else {
                     //no knee
                     if (controlDB < thresholdLow) {
-                        float envVal = arEnvLow.play(1);
+                        const float envVal = arEnvLow.play(1);
                         float envRatio = envToRatio(envVal, ratioLow);
-                        outDB = thresholdLow - ((thresholdLow-controlDB) / ratioLow);
+                        // outDB = thresholdLow - ((thresholdLow-controlDB) / ratioLow);
+                        outDB = thresholdLow - ((thresholdLow-controlDB) / envRatio);
                     }else {
                         float envVal = arEnvLow.play(-1);
                     }
                 }
-            }  
+            }
             //scale the signal according to the amount of compansion on the control signal
-            float outAmp = maxiConvert::dbsToAmp(outDB);
-            float sigOut = 0;
-            if (outAmp > 0) {
-                if (lookAheadSize > 0) {
+            //todo: get reciprocal instead
+            const float outAmp = maxiConvert::dbsToAmp(outDB);
+            float sigOut = 0.f;
+            if (outAmp > 0.f) {
+                if (lookAheadSize > 0.f) {
                     lookAheadDelay.push(sig);
                     sigOut = lookAheadDelay.tail(lookAheadSize);
                 }else{
@@ -2703,7 +2650,7 @@ class maxiDynamics {
          * \param knee The size of the knee (in Dbs)
          * \returns a compressed signal
          */
-        float compress(float sig, float threshold, float ratio, float knee) {
+        float __force_inline compress(const float sig, const float threshold, const float ratio, const float knee) {
             return play(sig, sig, threshold, ratio, knee, 0, 0, 0);
         }
         /**
@@ -2776,7 +2723,7 @@ class maxiDynamics {
          * The look ahead creates a delay on the input signal, meaning that that the signal is compressed according to event that have already happened in the control signal.  This can be useful for limiting and catching fast transients.
          * \param length The amount of time the compressor looks ahead (in milliseconds)
          */
-        void setLookAhead(float length) {
+        void setLookAhead(const float length) {
             lookAheadSize = maxiConvert::msToSamps(length);
             lookAheadSize = min(lookAheadSize, lookAheadDelay.size());
         }
@@ -2813,18 +2760,18 @@ class maxiDynamics {
         maxiRingBuf lookAheadDelay;
         size_t lookAheadSize = 0;
         maxiRMS rms;
-        std::function<float(float)> inputPeak;        
-        std::function<float(float)> inputRMS;        
+        std::function<float(float)> inputPeak;
+        std::function<float(float)> inputRMS;
         std::function<float(float)> inputAnalyser;
         maxiPoll poll;
 
         //mapping from attack/release envelope to ratio
-        float envToRatio(float envVal, float ratio) {
-            float envRatio = 1;
-            if (ratio > 1) {
-                envRatio = 1 + ((ratio-1) * envVal);
+        float __force_inline envToRatio(const float envVal, const float ratio) {
+            float envRatio = 1.f;
+            if (ratio > 1.f) {
+                envRatio = 1.f + ((ratio-1.f) * envVal);
             }else {
-                envRatio = 1 - ((1-ratio) * envVal);
+                envRatio = 1.f - ((1.f-ratio) * envVal);
             }
             return envRatio;
         }
