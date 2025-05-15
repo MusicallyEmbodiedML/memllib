@@ -201,7 +201,7 @@ public:
     maxiDelayline();
 
     /*! Apply a delay to a signal \param input a signal, \param size the size of the delay in samples \param feedback the amount of feedback*/
-    float play(const float &input, size_t size, float feedback);
+    float play(const float input, size_t size, float feedback);
 
  protected:
     int phase;
@@ -213,10 +213,6 @@ maxiDelayline<DELAYTIME>::maxiDelayline() :
         phase(0) {
 	memset( memory, 0, DELAYTIME * sizeof(float) );
 };
-
-
-#pragma GCC push_options
-#pragma GCC optimize ("O0")
 
 template<size_t DELAYTIME>
 float __force_inline maxiDelayline<DELAYTIME>::play(const float input, const size_t size, const float feedback)  {
@@ -231,8 +227,6 @@ float __force_inline maxiDelayline<DELAYTIME>::play(const float input, const siz
 	phase+=1.f;
 	return output;
 }
-
-#pragma GCC pop_options
 
 /**
 * A selection of filters
@@ -2549,7 +2543,7 @@ class maxiDynamics {
             const float thresholdLow, const float ratioLow, const float kneeLow
         ) {
             const float controlDB = maxiConvert::ampToDbs(inputAnalyser(control));
-            const float outDB = maxiConvert::ampToDbs(sig);
+            float outDB = maxiConvert::ampToDbs(sig);
             const float halfKneeHigh = kneeHigh * 0.5f;
             //companding above the high threshold
             if (ratioHigh > 0.f) {
