@@ -21,13 +21,13 @@ constexpr float amplitude = 1 << (bitsPerSample - 2); // amplitude of square wav
 constexpr float neg_amplitude = -amplitude; // amplitude of square wave = 1/2 of maximum
 constexpr float one_over_amplitude = 1.f / amplitude;
 
-constexpr int32_t sample = amplitude; // current sample value
+static int32_t AUDIO_MEM_2 sample = amplitude; // current sample value
 
 static AUDIO_MEM_2 AudioControlSGTL5000 codecCtl;
 
 audiocallback_fptr_t audio_callback_ = nullptr;
 
-static __attribute__((aligned(8))) pio_i2s __scratch_y("audio") i2s;
+static __attribute__((aligned(8))) pio_i2s i2s;
 
 
 #if TEST_TONES
@@ -36,7 +36,7 @@ maxiOsc osc, osc2;
 float f1=20, f2=2000;
 #endif  // TEST_TONES
 
-float __force_inline _scale_and_saturate(float x) {
+inline float AUDIO_FUNC(_scale_and_saturate)(float x) {
     x *= amplitude;
     if (x > amplitude) {
         x = amplitude;
@@ -46,12 +46,12 @@ float __force_inline _scale_and_saturate(float x) {
     return x;
 }
 
-float __force_inline _scale_down(float x) {
+inline float AUDIO_FUNC(_scale_down)(float x) {
     return x * one_over_amplitude;
 }
 
 
-void __force_inline process_audio(const int32_t* input, int32_t* output, size_t num_frames) {
+static void AUDIO_FUNC(process_audio)(const int32_t* input, int32_t* output, size_t num_frames) {
     // Timing start
     auto ts = micros();
 
@@ -117,7 +117,7 @@ void __force_inline process_audio(const int32_t* input, int32_t* output, size_t 
     }
 }
 
-void __isr dma_i2s_in_handler(void) {
+static void __isr dma_i2s_in_handler(void) {
     /* We're double buffering using chained TCBs. By checking which buffer the
      * DMA is currently reading from, we can identify which buffer it has just
      * finished reading (the completion of which has triggered this interrupt).
