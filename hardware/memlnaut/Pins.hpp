@@ -69,6 +69,17 @@ public:
     /** @} */
 
     /**
+     * @name SPI Pins
+     * Digital pins used for SPI communication with SD card
+     * @{
+     */
+    static constexpr uint8_t SD_CS = 13;    ///< SD card chip select
+    static constexpr uint8_t SD_SCK = 14;   ///< SD card clock
+    static constexpr uint8_t SD_MISO = 12;  ///< SD card MISO
+    static constexpr uint8_t SD_MOSI = 15;  ///< SD card MOSI
+    /** @} */
+
+    /**
      * @brief Initialize all pins with their respective modes
      */
     static void initializePins() {
