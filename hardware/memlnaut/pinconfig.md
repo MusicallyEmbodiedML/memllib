@@ -40,3 +40,9 @@
 | DaisyPIO | 33 | N/A | One-way communication to Daisy |
 | SensorUART | 36 | 37 | Bidirectional sensor communication |
 | MIDI | 4 | 5 | MIDI in/out |
+
+## SPI:
+
+| SPI Name | CS Pin | SCK Pin | MISO Pin | MOSI Pin | Description |
+|----------|--------|---------|----------|----------|-------------|
+| SDCard | 13 | 14 | 12 | 15 | SPI interface to onboard SD card |
