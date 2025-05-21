@@ -36,71 +36,76 @@ maxiOsc osc, osc2;
 float f1=20, f2=2000;
 #endif  // TEST_TONES
 
-inline float AUDIO_FUNC(_scale_and_saturate)(float x) {
-    x *= amplitude;
-    if (x > amplitude) {
-        x = amplitude;
-    } else if (x < neg_amplitude) {
-        x = neg_amplitude;
-    }
-    return x;
-}
-
 inline float AUDIO_FUNC(_scale_down)(float x) {
-    return x * one_over_amplitude;
+    // Convert from int32 range to [-1.0, 1.0]
+    return x * (1.0f / (float)(1LL << 31));  // Divide by 2^31 for proper scaling
 }
 
+inline float AUDIO_FUNC(_scale_and_saturate)(float x) {
+    // Convert from [-1.0, 1.0] back to int32 range with saturation
+    const float scaled = x * (float)(1LL << 31);
+    if (scaled > INT32_MAX) return INT32_MAX;
+    if (scaled < INT32_MIN) return INT32_MIN;
+    return scaled;
+}
+
+#if TEST_TONES
+static  __attribute__((always_inline)) void AUDIO_FUNC(process_test_tones)(
+    int32_t* output, size_t i) {
+    output[i*2] = osc.sinewave(f1) * sample;
+    output[(i*2) + 1] = osc2.sinewave(f2) * sample;
+    f1 *= 1.00001;
+    f2 *= 1.00001;
+    if (f1 > 15000) {
+        f1 = 20.0;
+    }
+    if (f2 > 15000) {
+        f2 = 20.0;
+    }
+}
+#endif
+
+#if PASSTHROUGH
+static __attribute__((always_inline)) void AUDIO_FUNC(process_passthrough)(
+        const int32_t* input, int32_t* output, size_t i) {
+    output[i*2] = input[i*2];
+    output[(i*2) + 1] = input[(i*2) + 1];
+}
+#endif
+
+static __attribute__((always_inline)) void AUDIO_FUNC(process_normal)(
+        const int32_t* input, int32_t* output, size_t i,
+        const size_t indexL, const size_t indexR) {
+    stereosample_t y {
+        _scale_down(static_cast<float>(input[indexL])),
+        _scale_down(static_cast<float>(input[indexR]))
+    };
+
+    y = audio_callback_(y);  // y should now be in [-1.0, 1.0] range
+
+    output[indexL] = static_cast<int32_t>(_scale_and_saturate(y.L));
+    output[indexR] = static_cast<int32_t>(_scale_and_saturate(y.R));
+}
 
 static void AUDIO_FUNC(process_audio)(const int32_t* input, int32_t* output, size_t num_frames) {
     // Timing start
     auto ts = micros();
 
     for (size_t i = 0; i < num_frames; i++) {
-
         const size_t indexL = i << 1;
         const size_t indexR = indexL + 1;
 
-        stereosample_t y {
-            _scale_down(static_cast<float>(input[indexL])),
-            _scale_down(static_cast<float>(input[indexR]))
-        };
-
-#if !(TEST_TONES)
-
-#if !(PASSTHROUGH)
-        y = audio_callback_(y);
-
-        stereosample_t y_scaled {
-            _scale_and_saturate(y.L),
-            _scale_and_saturate(y.R),
-        };
-        output[indexL] = static_cast<int32_t>(y_scaled.L);
-        output[indexR] = static_cast<int32_t>(y_scaled.R);
-
+#if TEST_TONES
+        process_test_tones(output, i);
 #else
-
-        // output[i] = input[i];
-
-        output[i*2] = input[i*2];
-         output[(i*2) + 1] = input[(i*2) + 1];
-#endif  // PASSTHROUGH
-
-#else
-
-        output[i*2] = osc.sinewave(f1) * sample;
-        output[(i*2) + 1] = osc2.sinewave(f2) * sample;
-        // count++;
-        f1 *= 1.00001;
-        f2 *= 1.00001;
-        if (f1 > 15000) {
-          f1 = 20.0;
-        }
-        if (f2 > 15000) {
-          f2 = 20.0;
-        }
-#endif  // TEST_TONES
-
+    #if PASSTHROUGH
+        process_passthrough(input, output, i);
+    #else
+        process_normal(input, output, i, indexL, indexR);
+    #endif
+#endif
     }
+
     // Timing end
     auto elapsed = micros() - ts;
     static constexpr float quantumLength = 1.f/
