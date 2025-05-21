@@ -208,6 +208,7 @@ bool AudioDriver::Setup(const codec_config_t &config) {
     codecCtl.lineInLevel(config.line_level);
     Serial.printf("config.mic_gain_dB = %d\n", config.mic_gain_dB);
     codecCtl.micGain(config.mic_gain_dB);
+    codecCtl.lineOutLevel(13);
 
     return true;
 }
