@@ -56,11 +56,11 @@ static void AUDIO_FUNC(process_audio)(const int32_t* input, int32_t* output, siz
     auto ts = micros();
 
     for (size_t i = 0; i < num_frames; i++) {
-        
+
         const size_t indexL = i << 1;
         const size_t indexR = indexL + 1;
 
-        stereosample_t y { 
+        stereosample_t y {
             _scale_down(static_cast<float>(input[indexL])),
             _scale_down(static_cast<float>(input[indexR]))
         };
@@ -163,7 +163,7 @@ void __isr AudioDriver::i2sOutputCallback() {
     // }
 }
 
-bool AudioDriver::Setup() {
+bool AudioDriver::Setup(const codec_config_t &config) {
 
     if (nullptr == audio_callback_) {
         audio_callback_ = &silence_;
@@ -194,12 +194,27 @@ bool AudioDriver::Setup() {
 
     // init i2c
     codecCtl.enable();
-    codecCtl.volume(0.8);
-    codecCtl.inputSelect(AUDIO_INPUT_LINEIN);
-    codecCtl.lineInLevel(3);
-
+    Serial.println("AUDIO - Codec enabled");
+    Serial.printf("config.output_volume = %f\n", config.output_volume);
+    codecCtl.volume(config.output_volume > 0.99 ? 0.99 : config.output_volume);
+    Serial.printf("config.mic_input = %d\n", config.mic_input);
+    codecCtl.inputSelect(config.mic_input ? AUDIO_INPUT_MIC : AUDIO_INPUT_LINEIN);
+    Serial.printf("config.line_level = %d\n", config.line_level);
+    codecCtl.lineInLevel(config.line_level);
+    Serial.printf("config.mic_gain_dB = %d\n", config.mic_gain_dB);
+    codecCtl.micGain(config.mic_gain_dB);
 
     return true;
+}
+
+bool AudioDriver::Setup() {
+    codec_config_t config;
+    config.mic_input = false;
+    config.line_level = 3;
+    config.mic_gain_dB = 0;
+    config.output_volume = 0.8;
+
+    return Setup(config);
 }
 
 

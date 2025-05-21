@@ -31,7 +31,7 @@ void AudioAppBase::loop() {
         Serial.println("AudioAppBase::loop - Error: Interface is null");
         return;  // Early return if interface is null
     }
-    
+
     std::vector<float> x;
     if (interface_->ReceiveParamsFromQueue(x)) {
         ProcessParams(x);

@@ -33,7 +33,14 @@ enum PinConfig_i2c {
 
 class AudioDriver {
  public:
+    typedef struct {
+        bool mic_input;
+        size_t line_level;
+        size_t mic_gain_dB;
+        float output_volume;
+    } codec_config_t;
     static bool Setup();
+    static bool Setup(const codec_config_t& config);
     static inline void SetCallback(audiocallback_fptr_t callback) {
         audio_callback_ = callback;
         Serial.print("AUDIO_DRIVER - Callback address: ");

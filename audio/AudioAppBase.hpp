@@ -14,6 +14,15 @@ protected:
     static std::function<stereosample_t(stereosample_t)> callback_;
 
 public:
+    virtual AudioDriver::codec_config_t GetDriverConfig() const {
+        return {
+            .mic_input = false,
+            .line_level = 3,
+            .mic_gain_dB = 0,
+            .output_volume = 0.8f
+        };
+    }
+
     AudioAppBase();
     virtual ~AudioAppBase();
 
