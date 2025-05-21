@@ -7,6 +7,7 @@
 #include <functional>
 #include <cstdint>
 #include "../hardware/memlnaut/Pins.hpp"
+#include "SdFat.h"
 
 
 class SDCard {
@@ -52,7 +53,7 @@ public:
      * @brief Get current card information
      * @return CardInfo struct with card details
      */
-    CardInfo GetCardInfo() const;
+    CardInfo GetCardInfo();  // Remove const
 
     /**
      * @brief Check if card is currently available
@@ -64,20 +65,41 @@ public:
      * @brief Creates directory structure if it doesn't exist
      * @param path Directory path to create
      * @param exist_ok
-     * @return true if successful or already exists
+     * @return true if successful (returns true if file already exists
+     * and exist_ok is true,
+     * false if file already exists and exist_ok is false)
      */
     bool MKDir(const char* path, bool exist_ok = false);
 
     /**
-     * @brief Writes bytes to file path.
+     * @brief Writes bytes to file path. If file exists,
+     * data will be overwritten.
      *
-     * @param filename
-     * @param data
-     * @return true
-     * @return false
+     * @param filename File path to write to
+     * @param data Data to write
+     * @return true Write successful
+     * @return false Write unsuccessful
      */
     bool Write(const char* filename, const std::vector<char> &data);
+    /**
+     * @brief Reads bytes from file path. If file does not exist,
+     * data will be empty and false is returned.
+     *
+     * @param filename File path to read from
+     * @param data Data to read
+     * @param size Size of data to read
+     * @return true Read successful
+     * @return false Read unsuccessful
+     */
     bool Read(const char* filename, std::vector<char> &data, size_t size = 0);
+    /**
+     * @brief Creates empty file if file does not exist. Also recursively
+     * creates directories in the path if they do not exist.
+     *
+     * @param filename File path to create
+     * @return true File created successfully
+     * @return false File already exists or creation failed
+     */
     bool Touch(const char* filename);
 
     /**
@@ -93,6 +115,8 @@ private:
     const int sck_;
     bool cardPresent_;
     CardEventCallback cardEventCb_;
+    mutable SdFs sd_;  // Make sd_ mutable to allow vol() calls in const methods
+    FatFile root_;
 };
 
 #endif  // __SD_CARD_HPP__
