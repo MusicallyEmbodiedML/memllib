@@ -17,7 +17,7 @@ public:
 
     MedianFilter() {
         init(3);
-    }   
+    }
 
     void init(std::size_t fSize) {
         filterSize_ = fSize;
@@ -45,17 +45,17 @@ public:
         //copy
         // auto tmpVector = std::copy(circularBuffer_.begin(), circularBuffer_.end());
         auto tmpVector = circularBuffer_;
-        std::nth_element(tmpVector.begin(), tmpVector.begin()+centreIndex, tmpVector.end());     
+        std::nth_element(tmpVector.begin(), tmpVector.begin()+centreIndex, tmpVector.end());
         // Calculate and return the moving average
         return tmpVector[centreIndex];
     }
 
-    double std() {
-        double sum = std::accumulate(std::begin(circularBuffer_), std::end(circularBuffer_), 0.0);
-        double m =  sum / circularBuffer_.size();
+    float std() {
+        float sum = std::accumulate(std::begin(circularBuffer_), std::end(circularBuffer_), 0.0);
+        float m =  sum / circularBuffer_.size();
 
-        double accum = 0.0;
-        std::for_each (std::begin(circularBuffer_), std::end(circularBuffer_), [&](const double d) {
+        float accum = 0.0;
+        std::for_each (std::begin(circularBuffer_), std::end(circularBuffer_), [&](const float d) {
             accum += (d - m) * (d - m);
         });
 

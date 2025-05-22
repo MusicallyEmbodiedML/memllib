@@ -40,6 +40,8 @@
 #include <functional>
 
 #include "../PicoDefs.hpp"
+#include "../utils/MedianFilter.h"
+#include "../utils/CircularBuffer.hpp"
 
 using namespace std;
 
@@ -50,7 +52,7 @@ using namespace std;
 
 #define MAXITYPE float
 
-#define LOG(x) 
+#define LOG(x)
 
 #define USE_STRINGS
 
@@ -61,7 +63,7 @@ using namespace std;
 
 
 #define DOUBLEARRAY_REF vector<MAXITYPE> &
-#define DOUBLEARRAY vector<MAXITYPE> 
+#define DOUBLEARRAY vector<MAXITYPE>
 #define NORMALISE_ARRAY_TYPE(invar, outvar) vector<MAXITYPE> outvar = vector<MAXITYPE>(invar.begin(), invar.end()); //emplace into new variable
 #define DECLARE_F64_ARRAY(x) std::vector<MAXITYPE> x;
 #define F64_ARRAY_SIZE(x) x.size()
@@ -112,7 +114,7 @@ public:
 /**
  * \class A variety of oscillators
  */
- 
+
 class maxiOsc
 {
 public:
@@ -140,7 +142,7 @@ public:
     float saw(float frequency);
     /*!A ramp rising from 0 to 1 \param frequency in Hz */
     float phasor(float frequency);
-    /*!A ramp rising from 0 to 1 \param frequency in Hz 
+    /*!A ramp rising from 0 to 1 \param frequency in Hz
     \param startPhase the start point of the phasor (0-1)
     \param endPhase the end point of the phasor (0-1)
     */
@@ -160,7 +162,7 @@ public:
 
         const size_t phase_int = static_cast<size_t>(phase);
         const float remainder = phase - static_cast<float>(phase_int);
-    
+
         // Use local pointer to avoid repeated array dereferencing and index calculation
         const float* buf = &sineBuffer[phase_int + 1];
         return (1.0f - remainder) * buf[0] + remainder * buf[1];
@@ -197,7 +199,7 @@ public:
 template<size_t DELAYTIME>
 maxiDelayline<DELAYTIME>::maxiDelayline() :
         phase(0) {
-	memset( memory, 0, DELAYTIME * sizeof(float) );        
+	memset( memory, 0, DELAYTIME * sizeof(float) );
 };
 
 
@@ -305,7 +307,7 @@ public:
 
 
 /**
- * Functions for multichannel panning 
+ * Functions for multichannel panning
  */
 class maxiMix
 {
@@ -376,7 +378,7 @@ public:
             idx=0;
         }
     }
-    
+
     /*! \returns The size of the buffer*/
     size_t size() {return F64_ARRAY_SIZE(buf);}
 
@@ -402,7 +404,7 @@ public:
      * \param func A function in the form float func(float previousResult, float nextValue)
      * \param initval The initial value to pass into the function (usually 0)
      * \returns The last result of the function, after passing in all values from the window
-     * Example: this function will sum the values in the window: 
+     * Example: this function will sum the values in the window:
      *     auto sumfunc = [](float val, float n) {return val + n;};
      */
     float reduce(size_t N, reduceFunction func, float initval) {
@@ -424,8 +426,8 @@ public:
         return val;
     }
 
-    
-    
+
+
 private:
     DOUBLEARRAY buf;
     size_t idx=0;
@@ -601,7 +603,7 @@ public:
         position = F64_ARRAY_SIZE(amplitudes) - 1;
     }
 
-    /*! Set the sample from an external array, and set the sample rate 
+    /*! Set the sample from an external array, and set the sample rate
      * \param _sampleData An float array (JS) or vector (C++) of data
      * \param sampleRate the sample rate
      */
@@ -684,7 +686,7 @@ public:
 
     /*! Play from the start to a specific position \param end the end point (0-1)*/
     float playUntil(float end);
-    /*! Play from the start to a specific position, at a modified speed \param end the end point (0-1) \param speed a speed multiplier*/    
+    /*! Play from the start to a specific position, at a modified speed \param end the end point (0-1) \param speed a speed multiplier*/
     float playUntilAtSpeed(float end, float speed);
 
     /*! Play at a modified speed \param speed a speed multiplier*/
@@ -702,7 +704,7 @@ public:
 
 
     /*! Normalise the sample buffer \param maxLevel the maximum absolute level*/
-    void normalise(float maxLevel);                                            
+    void normalise(float maxLevel);
 
     /*! Trim the sample buffer to remove silence from the ends \param alpha the sensitivity \param threshold the value above which to start trimming \param trimStart true if the start should be trimmed \param trimEnd true if the end should be trimmed */
     void autoTrim(float alpha, float threshold, bool trimStart, bool trimEnd); //alpha of lag filter (lower == slower reaction), threshold to mark start and end, < 32767
@@ -760,7 +762,7 @@ public:
         return (log(val / inMin) / log(inMax / inMin) * (outMax - outMin)) + outMin;
     }
 
-    /** Restrict a signal to upper and lower bounds 
+    /** Restrict a signal to upper and lower bounds
      * \param v a signal
      * \param low the lowest value
      * \param high the highest value
@@ -947,6 +949,9 @@ private:
 class maxiZeroCrossingRate {
     public:
         maxiZeroCrossingRate();
+        void setup() {
+            buf.setup(maxiSettings::sampleRate+1);
+        }
         /*!Calculate the zero cross rate \param signal a signal \returns the zero crossing rate in Hz*/
         float play(float signal) {
             if (zxd.zx(signal)) {
@@ -961,8 +966,68 @@ class maxiZeroCrossingRate {
 
     private:
         maxiRingBuf buf;
-        size_t runningCount=0;
+        float runningCount=0;
         maxiZeroCrossingDetector zxd;
+};
+
+
+class maxiZeroCrossingAvg {
+public:
+    static const size_t kBufferSize = 16;
+
+    maxiZeroCrossingAvg() :
+        elapsed_samples_(0),
+        median_filt_(kBufferSize),
+        cached_value_(0),
+        prev_signal_(0),
+        dc_filter_(0.99f),
+        one_over_sr_(1) {}
+
+    void setup() {
+        elapsed_samples_ = 0;
+        cached_value_ = 0;
+        prev_signal_ = 0;
+        one_over_sr_ = 1.f/static_cast<float>(maxiSettings::getSampleRate());
+    }
+
+    float process(float signal) {
+        // High-pass filter to remove DC
+        signal = signal - prev_signal_ * dc_filter_;
+        prev_signal_ = signal;
+
+        // Add hysteresis to avoid noise triggering
+        if (zxd.zx(signal) && elapsed_samples_ > 10) { // Minimum period check
+            // Add value to buffer
+            size_t median_samples = median_filt_.process(elapsed_samples_);
+
+            // Sanity check on period
+            if (median_samples > 0) {
+                // Convert to period
+                float value = static_cast<float>(median_samples) * one_over_sr_;
+                // Then hz
+                value = 1.f/value;
+
+                // Range check
+                if (value < maxiSettings::getSampleRate()/2.f) {
+                    cached_value_ = value;
+                }
+            }
+
+            elapsed_samples_ = 0;
+        }
+
+        elapsed_samples_++;
+        return cached_value_;
+    }
+
+protected:
+    maxiZeroCrossingDetector zxd;
+    size_t elapsed_samples_;
+    MedianFilter<size_t> median_filt_;
+    float cached_value_;
+    float prev_signal_;
+    float dc_filter_;
+    float one_over_sr_;
 };
 
 // //needs oversampling
@@ -974,7 +1039,7 @@ public:
     /** atan distortion, see http://www.musicdsp.org/showArchiveComment.php?ArchiveID=104
     * \param in A signal
     * \param shape from 1 (soft clipping) to infinity (hard clipping)
-    */ 
+    */
     float atanDist(const float in, const float shape);
     /** Faster but 'lower quality' version of atan distortion
      * \param in A signal
@@ -1105,7 +1170,7 @@ inline float maxiFlanger<DELAYTIME>::flange(const float input, const unsigned in
 
 /**
  * A chorus effect
- */ 
+ */
 
 template<size_t DELAYTIME>
 class maxiChorus
@@ -1197,7 +1262,7 @@ public:
         ym1 = input - xm1 + R * ym1;
         xm1 = input;
         return ym1;
-    }   
+    }
 };
 
 /**
@@ -1231,10 +1296,10 @@ public:
 
     /**run the filter, and get a mixture of lowpass, bandpass, highpass and notch outputs
      *\param w The signal to be filtered
-     \param lpmix the amount of low pass filtering (0-1) 
-     \param bpmix the amount of bandpass pass filtering (0-1) 
-     \param hpmix the amount of high pass filtering (0-1) 
-     \param notchmix the amount of notch filtering (0-1) 
+     \param lpmix the amount of low pass filtering (0-1)
+     \param bpmix the amount of bandpass pass filtering (0-1)
+     \param hpmix the amount of high pass filtering (0-1)
+     \param notchmix the amount of notch filtering (0-1)
     */
     inline float play(float w, float lpmix, float bpmix, float hpmix, float notchmix)
     {
@@ -1292,12 +1357,12 @@ public:
     };
 
     /*! Process a signal through the filter \param input A signal*/
-    inline float play(float input)
+    float __attribute__((always_inline)) play(const float input)
     {
-        v[0] = input - (b1 * v[1]) - (b2 * v[2]);
-        float y = (a0 * v[0]) + (a1 * v[1]) + (a2 * v[2]);
-        v[2] = v[1];
-        v[1] = v[0];
+        v0_ = input - (b1 * v1_) - (b2 * v2_);
+        const float y = (a0 * v0_) + (a1 * v1_) + (a2 * v2_);
+        v2_ = v1_;
+        v1_ = v0_;
         return y;
     }
 
@@ -1417,7 +1482,7 @@ private:
     float a0 = 0, a1 = 0, a2 = 0, b1 = 0, b2 = 0;
     // filterTypes filterType;
     const float SQRT2 = sqrt(2.0);
-    float v[3] = {0, 0, 0};
+    float v0_ = 0, v1_ = 0, v2_ = 0;
 };
 
 /**
@@ -1430,8 +1495,8 @@ public:
 
     /**
      * Cross-fade between stereo signals
-     * \param ch1 a vector containing left and right components of channel 1 
-     * \param ch2 a vector containing left and right components of channel 2 
+     * \param ch1 a vector containing left and right components of channel 1
+     * \param ch2 a vector containing left and right components of channel 2
      * \param xfader the cross-fader position, -1=100% ch1, 1=100% ch2, 0=an equal mix of both channels
      */
     static vector<float> xfade(vector<float> &ch1, vector<float> &ch2, float xfader)
@@ -1450,7 +1515,7 @@ public:
     /**
      * Cross-fade between mono signals
      * \param ch1 the signal for channel 1
-     * \param ch2 the signal for channel 2 
+     * \param ch2 the signal for channel 2
      * \param xfader the cross-fader position, -1=100% ch1, 1=100% ch2, 0=an equal mix of both channels
      */
     static float xfade(float ch1, float ch2, float xfader)
@@ -1502,7 +1567,7 @@ public:
         return lineValue;
     }
 
-    /** Setup the line before it is triggered 
+    /** Setup the line before it is triggered
      * \param start the starting value of the line
      * \param end the ending value of the line
      * \param durationMs the duration of the line (in milliseconds)
@@ -1553,9 +1618,9 @@ private:
 
 // /**
 //  * A kuramoto oscillator
-//  * 
+//  *
 //  * This is an adaptive oscillator that adjusts its own phase in relation to the phases of other kuramoto oscillators
-//  * 
+//  *
 //  * For further info, see
 //  * https://tutorials.siam.org/dsweb/cotutorial/index.php?s=3&p=0
 //  * https://www.complexity-explorables.org/explorables/ride-my-kuramotocycle/
@@ -1670,7 +1735,7 @@ private:
 // /**
 //  * Run a group of kuramoto oscillators with asynchronous updates.  Instead of setting all of the phasors at once, you can set the phases or arbitrary individuals at abritrary times. This class updates the local oscillator according to best guesses of the phase of remote oscillators.
 //  * This is useful if the other oscillators are not running on your computer, but are linked on a network. For example you could use this class for a shared network clock that is robust to timing jitter.
-//  * 
+//  *
 //  */
 // class maxiAsyncKuramotoOscillator : public maxiKuramotoOscillatorSet
 // {
@@ -1688,7 +1753,7 @@ private:
 //         update = 1;
 //     }
 
-//     /*! Set the phases of all of the oscillators \param phases a vector of phases (all 0 - 2PI)*/   
+//     /*! Set the phases of all of the oscillators \param phases a vector of phases (all 0 - 2PI)*/
 //     void setPhases(const std::vector<float> &phases)
 //     {
 //         size_t iOsc = 0;
@@ -1889,7 +1954,7 @@ class maxiCounter
 {
 public:
     /** Increase each time a trigger is received
-     * \param incTrigger a signal that triggers the counter to increment 
+     * \param incTrigger a signal that triggers the counter to increment
      * \param resetTrigger a signal that resets the counter to zero
      * \returns the number of triggers received since the beginning or the last reset
      */
@@ -1961,10 +2026,10 @@ public:
      * \returns an item from the array of values, according to the floor or the index value
      */
     float play(float index, DOUBLEARRAY_REF values, bool normalised) {
-        auto arrayLen = F64_ARRAY_SIZE(values); 
+        auto arrayLen = F64_ARRAY_SIZE(values);
 
         if (normalised) {
-            index *= (arrayLen - 1e-9); 
+            index *= (arrayLen - 1e-9);
         }else{
             //assume index is direct mapping to array element
         }
@@ -1996,10 +2061,10 @@ public:
      * e.g if values = {2,3} and normalised index = 0.5, then 2.5 will be returns
      */
     float play(float index, DOUBLEARRAY_REF values, bool normalised) {
-        auto arrayLen = F64_ARRAY_SIZE(values); 
+        auto arrayLen = F64_ARRAY_SIZE(values);
 
         if (normalised) {
-            index *= (arrayLen - 1e-9); 
+            index *= (arrayLen - 1e-9);
         }else{
             //assume index is direct mapping to array element
         }
@@ -2014,7 +2079,7 @@ public:
         size_t a2 = a1 + 1;
         if (a2  == arrayLen) a2=0;
         //interpolate
-        float value = (F64_ARRAY_AT(values, a1) * (1.0 -mix)) + 
+        float value = (F64_ARRAY_AT(values, a1) * (1.0 -mix)) +
                         (F64_ARRAY_AT(values, a2) * mix);
         return value;
     }
@@ -2043,7 +2108,7 @@ public:
                 first=false;
                 index = 0;
             }else{
-                auto arrayLen = F64_ARRAY_SIZE(values); 
+                auto arrayLen = F64_ARRAY_SIZE(values);
                 //should this be step % arraylen?  how about -ve vals?
                 if (step > arrayLen) {
                     step = arrayLen;
@@ -2166,7 +2231,7 @@ private:
 
 /**
  * Extend a trigger into a pulse. This is useful for making basic gates in sequences. Use maxiEnvGen for more advanced gate and envelope generation.
- */ 
+ */
 class maxiZXToPulse
 {
 public:
@@ -2179,7 +2244,7 @@ public:
      */
     float play(float input, float holdTimeInSamples) {
         float output =0;
-        
+
         if (trig.onZX(input)) {
             holdCounter = holdTimeInSamples;
         }
@@ -2198,7 +2263,7 @@ private:
 
 
 /**
- * An envelope generator. 
+ * An envelope generator.
  */
 class maxiEnvGen {
     public:
@@ -2224,7 +2289,7 @@ class maxiEnvGen {
                         break;
                     }
                 }
-                case TRIGGERED: 
+                case TRIGGERED:
                 {
                     //calculate the current value of the envelope
                     envStage *currStage = &stages[phase];
@@ -2235,8 +2300,8 @@ class maxiEnvGen {
                     if (currStage->hold) {
                         state = playStates::HOLDING;
                     }else{
-                        envval = maxiMap::linlin(pow(currStage->currentlevel,currStage->curve), 0, 1, 
-                            currStage->startlevel, 
+                        envval = maxiMap::linlin(pow(currStage->currentlevel,currStage->curve), 0, 1,
+                            currStage->startlevel,
                             currStage->endlevel);
                         currStage->counter++;
                         // cout << currStage->counter << endl;
@@ -2245,7 +2310,7 @@ class maxiEnvGen {
                             currStage->counter=0;
                             currStage->currentlevel=0;
                             phase++;
-                        
+
                         }else{
                             //calc next bit of current phase
                             currStage->currentlevel += currStage->gradient;
@@ -2419,7 +2484,7 @@ class maxiEnvGen {
          * The envelope will rise from 0 to 1 in the attack segment, then drop to the sustain level before falling to 0.
          * \param attack Rise time in ms
          * \param decay Decay time in ms
-         * \param sustain Sustain level 
+         * \param sustain Sustain level
          * \param release Fall time in ms
          */
         void setupADSR(const float attack, const float decay, const float sustain, const float release) {
@@ -2441,7 +2506,7 @@ class maxiEnvGen {
 
     private:
         size_t phase=0;
-        float envval = 0;        
+        float envval = 0;
         bool loop = false;
         bool retrigger = false;
         enum playStates {WAITING, TRIGGERED, HOLDING} state;
@@ -2475,8 +2540,8 @@ class maxiEnvGen {
                 accumulatedTime = len - stage.length;
                 stage.gradient = 1.0 / stage.length;
                 stage.hold=0;
-            }   
-            return accumulatedTime;         
+            }
+            return accumulatedTime;
         }
 };
 
@@ -2562,7 +2627,7 @@ class maxiDynamics {
     public:
 
         enum ANALYSERS {PEAK, RMS};
-        
+
         maxiDynamics() {
             //define detector functions
             inputPeak = [](float sig) {
@@ -2600,7 +2665,7 @@ class maxiDynamics {
          * \param kneeLow The size of the knee for companding below the low threshold (in Dbs)
          * \returns a companded signal
          */
-        float play(float sig, float control, 
+        float play(float sig, float control,
             float thresholdHigh, float ratioHigh, float kneeHigh,
             float thresholdLow, float ratioLow, float kneeLow
         ) {
@@ -2637,12 +2702,12 @@ class maxiDynamics {
                     if (controlDB > thresholdHigh) {
                         float envVal = arEnvHigh.play(1);
                         float envRatio = envToRatio(envVal, ratioHigh);
-                        outDB = ((controlDB - thresholdHigh) / envRatio) + thresholdHigh;  
+                        outDB = ((controlDB - thresholdHigh) / envRatio) + thresholdHigh;
                     }else {
                         float envVal = arEnvHigh.play(-1);
                     }
                 }
-            }  
+            }
             //companding below the low threshold
             if (ratioLow > 0) {
                 if (kneeLow > 0) {
@@ -2679,7 +2744,7 @@ class maxiDynamics {
                         float envVal = arEnvLow.play(-1);
                     }
                 }
-            }  
+            }
             //scale the signal according to the amount of compansion on the control signal
             float outAmp = maxiConvert::dbsToAmp(outDB);
             float sigOut = 0;
@@ -2813,8 +2878,8 @@ class maxiDynamics {
         maxiRingBuf lookAheadDelay;
         size_t lookAheadSize = 0;
         maxiRMS rms;
-        std::function<float(float)> inputPeak;        
-        std::function<float(float)> inputRMS;        
+        std::function<float(float)> inputPeak;
+        std::function<float(float)> inputRMS;
         std::function<float(float)> inputAnalyser;
         maxiPoll poll;
 
@@ -2830,4 +2895,36 @@ class maxiDynamics {
         }
 
 };
+
+
+class maxiBitQuant
+{
+    public:
+    float play(float w, float quantFactor) {
+        w *= quantFactor;
+        w = std::floorf(w);
+        w /= quantFactor;
+        return w;
+    }
+};
+
+class maxiDownSample
+{
+public:
+    float play(float w, float period) {
+        if (counter == 0) {
+            latchVal = w;
+        }
+        counter += 1;
+        if (counter >= period) {
+            counter = 0;
+        }
+        return latchVal;
+    }
+private:
+    float counter=0.f;
+    float latchVal=0.f;
+};
+
+
 #endif
