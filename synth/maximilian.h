@@ -2542,7 +2542,7 @@ class maxiDynamics {
             const float thresholdLow, const float ratioLow, const float kneeLow
         ) {
             const float controlDB = maxiConvert::ampToDbs(inputAnalyser(control));
-            const float outDB = maxiConvert::ampToDbs(sig);
+            float outDB = maxiConvert::ampToDbs(sig);
             const float halfKneeHigh = kneeHigh * 0.5f;
             //companding above the high threshold
             if (ratioHigh > 0.f) {
