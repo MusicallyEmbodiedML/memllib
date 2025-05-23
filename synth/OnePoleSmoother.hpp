@@ -16,7 +16,7 @@ class OnePoleSmoother {
         //    std::log(0.01) /
         //    time_ms * sample_rate_ * 0.001
         //);
-        b1_ = std::pow(0.1, 1.f/ (time_ms * 0.001 * sample_rate_));
+        b1_ = powf(0.1f, 1.f/ (time_ms * 0.001f * sample_rate_));
     }
     __attribute__((always_inline)) void Process(const float * x_ptr, float *y_ptr) {
         float *y2_ptr = y_;

@@ -269,7 +269,14 @@ public:
     float square(float frequency);
     /*!Sine wave oscillator
     \param frequency in Hz */
-    float sinewave(float frequency);
+    float __force_inline sinewave(float frequency) {
+        //This is a sinewave oscillator
+        output=sinf (phase*(TWOPI));
+        phase += maxiSettings::one_over_sampleRate * frequency;
+        if ( phase >= 1.0 ) phase -= 1.0;
+        return output ;
+
+    }
     /*!Cosine wave oscillator
     \param frequency in Hz */
     float coswave(float frequency);
@@ -1375,22 +1382,22 @@ public:
     }
     void setAttack(T attackMS)
     {
-        attack = pow(0.01, 1.0 / (attackMS * maxiSettings::sampleRate * 0.001));
+        attack = pow(0.01, 1.0 / (attackMS * maxiSettings::sampleRate * 0.001f));
     }
     void setRelease(T releaseMS)
     {
-        release = pow(0.01, 1.0 / (releaseMS * maxiSettings::sampleRate * 0.001));
+        release = powf(0.01f, 1.0f / (releaseMS * maxiSettings::sampleRate * 0.001f));
     }
-    inline T play(T input)
+    T __force_inline play(T input)
     {
-        input = fabs(input);
+        input = fabsf(input);
         if (input > env)
             env = attack * (env - input) + input;
         else
             env = release * (env - input) + input;
         return env;
     }
-    void reset() { env = 0; }
+    void reset() { env = 0.f; }
     inline T getEnv() { return env; }
     inline void setEnv(T val) { env = val; }
 
@@ -1454,12 +1461,12 @@ public:
      \param hpmix the amount of high pass filtering (0-1)
      \param notchmix the amount of notch filtering (0-1)
     */
-    inline float play(float w, float lpmix, float bpmix, float hpmix, float notchmix)
+    float __force_inline play(float w, float lpmix, float bpmix, float hpmix, float notchmix)
     {
         float low, band, high, notch;
         float v1z = v1;
         float v2z = v2;
-        float v3 = w + v0z - 2.0 * v2z;
+        float v3 = w + v0z - 2.0f * v2z;
         v1 += g1 * v3 - g2 * v1z;
         v2 += g3 * v3 + g4 * v1z;
         v0z = w;
@@ -1470,18 +1477,18 @@ public:
         return (low * lpmix) + (band * bpmix) + (high * hpmix) + (notch * notchmix);
     }
 
-    inline void setParams(float _freq, float _res)
+    void __force_inline setParams(const float _freq, const float _res)
     {
         freq = _freq;
         res = _res;
         g = tanf(PI * freq * maxiSettings::one_over_sampleRate);
-        damping = res == 0 ? 0 : 1.0 / res;
+        damping = res == 0.f ? 0.f : 1.0f / res;
         k = damping;
-        ginv = g / (1.0 + g * (g + k));
+        ginv = g / (1.0f + g * (g + k));
         g1 = ginv;
-        g2 = 2.0 * (g + k) * ginv;
+        g2 = 2.0f * (g + k) * ginv;
         g3 = g * ginv;
-        g4 = 2.0 * ginv;
+        g4 = 2.0f * ginv;
     }
 
     private:

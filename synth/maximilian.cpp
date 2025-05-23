@@ -88,14 +88,14 @@ void maxiOsc::phaseReset(float phaseIn) {
 
 }
 
-float maxiOsc::sinewave(float frequency) {
-	//This is a sinewave oscillator
-	output=sinf (phase*(TWOPI));
-	phase += maxiSettings::one_over_sampleRate * frequency;
-	if ( phase >= 1.0 ) phase -= 1.0;
-	return(output);
+// float maxiOsc::sinewave(float frequency) {
+// 	//This is a sinewave oscillator
+// 	output=sinf (phase*(TWOPI));
+// 	phase += maxiSettings::one_over_sampleRate * frequency;
+// 	if ( phase >= 1.0 ) phase -= 1.0;
+// 	return(output);
 
-}
+// }
 
 float maxiOsc::sinebuf4(float frequency) {
 	//This is a sinewave oscillator that uses 4 point interpolation on a 514 point buffer
