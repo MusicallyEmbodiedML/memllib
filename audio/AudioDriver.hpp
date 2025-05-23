@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <Arduino.h>
+#include "../PicoDefs.hpp"
 
 extern "C" {
 
@@ -30,6 +31,8 @@ enum PinConfig_i2c {
     i2s_pWS = 9,
     i2s_pMCLK = 10,
 };
+
+extern volatile bool AUDIO_MEM dsp_overload;
 
 class AudioDriver {
  public:

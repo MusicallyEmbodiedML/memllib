@@ -29,6 +29,7 @@ audiocallback_fptr_t audio_callback_ = nullptr;
 
 static __attribute__((aligned(8))) pio_i2s i2s;
 
+volatile bool AUDIO_MEM dsp_overload;
 
 #if TEST_TONES
 maxiOsc osc, osc2;
@@ -114,7 +115,6 @@ static void AUDIO_FUNC(process_audio)(const int32_t* input, int32_t* output, siz
     const float dspload = elapsed * quantumLength;
     // Serial.println(dspload);
     // Report DSP overload if needed
-    static volatile bool AUDIO_MEM dsp_overload = false;
     if (dspload > 0.95 and !dsp_overload) {
         dsp_overload = true;
     } else if (dspload < 0.9) {
@@ -173,6 +173,8 @@ bool AudioDriver::Setup(const codec_config_t &config) {
     if (nullptr == audio_callback_) {
         audio_callback_ = &silence_;
     }
+
+    dsp_overload = false;
 
     maxiSettings::setup(kSampleRate, 2, kBufferSize);
 

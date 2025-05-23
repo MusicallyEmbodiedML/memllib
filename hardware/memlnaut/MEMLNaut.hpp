@@ -7,6 +7,7 @@
 #include <functional>
 #include <array>
 
+
 class MEMLNaut {
 public:
     using ButtonCallback = std::function<void(void)>;
@@ -69,7 +70,7 @@ private:
     static void handleJoySW();
 
 public:
-    static MEMLNaut* Instance() {
+    static __attribute__((always_inline)) MEMLNaut* Instance() {
         return instance;
     }
 
