@@ -73,7 +73,7 @@ static __attribute__((always_inline)) void AUDIO_FUNC(process_passthrough)(
 }
 #endif
 
-static __attribute__((always_inline)) void AUDIO_FUNC(process_normal)(
+static inline __attribute__((always_inline)) void AUDIO_FUNC(process_normal)(
         const int32_t* input, int32_t* output, size_t i,
         const size_t indexL, const size_t indexR) {
     stereosample_t y {
