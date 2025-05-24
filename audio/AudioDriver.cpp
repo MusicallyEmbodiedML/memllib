@@ -196,7 +196,8 @@ bool AudioDriver::Setup() {
     codecCtl.enable();
     codecCtl.volume(0.8);
     codecCtl.inputSelect(AUDIO_INPUT_LINEIN);
-    codecCtl.lineInLevel(3);
+    codecCtl.lineInLevel(10);
+    codecCtl.lineOutLevel(13);
 
 
     return true;

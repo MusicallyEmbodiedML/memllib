@@ -1,7 +1,7 @@
 /**
  * @file Pins.hpp
  * @brief Pin definitions and initialization for the FM Synth RL project
- * 
+ *
  * @copyright Copyright (c) 2024. This Source Code Form is subject to the terms
  * of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed
  * with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -64,6 +64,19 @@ public:
     static constexpr uint8_t DAISY_TX = 33; ///< One-way TX to Daisy
     static constexpr uint8_t SENSOR_TX = 36; ///< Sensor UART TX
     static constexpr uint8_t SENSOR_RX = 37; ///< Sensor UART RX
+    static constexpr uint8_t MIDI_TX = 4;   ///< MIDI UART TX
+    static constexpr uint8_t MIDI_RX = 5;   ///< MIDI UART RX
+    /** @} */
+
+    /**
+     * @name SPI Pins
+     * Digital pins used for SPI communication with SD card
+     * @{
+     */
+    static constexpr uint8_t SD_CS = 13;    ///< SD card chip select
+    static constexpr uint8_t SD_SCK = 14;   ///< SD card clock
+    static constexpr uint8_t SD_MISO = 12;  ///< SD card MISO
+    static constexpr uint8_t SD_MOSI = 15;  ///< SD card MOSI
     /** @} */
 
     /**
@@ -99,6 +112,8 @@ public:
         pinMode(DAISY_TX, OUTPUT);
         pinMode(SENSOR_TX, OUTPUT);
         pinMode(SENSOR_RX, INPUT);
+        pinMode(MIDI_TX, OUTPUT);
+        pinMode(MIDI_RX, INPUT);
 
         // Set ADC resolution to 12 bits
         analogReadResolution(12);
