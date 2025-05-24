@@ -266,7 +266,14 @@ public:
     void UpdateParams(void);
     /*!Square wave oscillator
     \param frequency in Hz */
-    float square(float frequency);
+    float square(float frequency) {
+        if (phase<0.5) output=-1;
+        if (phase>0.5) output=1;
+        if ( phase >= 1.0 ) phase -= 1.0;
+        phase += maxiSettings::one_over_sampleRate * frequency;
+        return(output);
+
+    }
     /*!Sine wave oscillator
     \param frequency in Hz */
     float __force_inline sinewave(float frequency) {

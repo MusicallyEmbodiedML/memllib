@@ -144,14 +144,14 @@ float maxiOsc::phasor(float frequency) {
 	return(output);
 }
 
-float maxiOsc::square(float frequency) {
-	//This is a square wave
-	if (phase<0.5) output=-1;
-	if (phase>0.5) output=1;
-	if ( phase >= 1.0 ) phase -= 1.0;
-	phase += (1./(maxiSettings::sampleRate/(frequency)));
-	return(output);
-}
+// float maxiOsc::square(float frequency) {
+// 	//This is a square wave
+// 	if (phase<0.5) output=-1;
+// 	if (phase>0.5) output=1;
+// 	if ( phase >= 1.0 ) phase -= 1.0;
+// 	phase += (1./(maxiSettings::sampleRate/(frequency)));
+// 	return(output);
+// }
 
 float maxiOsc::pulse(float frequency, float duty) {
 	//This is a pulse generator that creates a signal between -1 and 1.
