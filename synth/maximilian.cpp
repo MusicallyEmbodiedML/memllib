@@ -88,14 +88,14 @@ void maxiOsc::phaseReset(float phaseIn) {
 
 }
 
-float maxiOsc::sinewave(float frequency) {
-	//This is a sinewave oscillator
-	output=sinf (phase*(TWOPI));
-	phase += maxiSettings::one_over_sampleRate * frequency;
-	if ( phase >= 1.0 ) phase -= 1.0;
-	return(output);
+// float maxiOsc::sinewave(float frequency) {
+// 	//This is a sinewave oscillator
+// 	output=sinf (phase*(TWOPI));
+// 	phase += maxiSettings::one_over_sampleRate * frequency;
+// 	if ( phase >= 1.0 ) phase -= 1.0;
+// 	return(output);
 
-}
+// }
 
 float maxiOsc::sinebuf4(float frequency) {
 	//This is a sinewave oscillator that uses 4 point interpolation on a 514 point buffer
@@ -144,14 +144,14 @@ float maxiOsc::phasor(float frequency) {
 	return(output);
 }
 
-float maxiOsc::square(float frequency) {
-	//This is a square wave
-	if (phase<0.5) output=-1;
-	if (phase>0.5) output=1;
-	if ( phase >= 1.0 ) phase -= 1.0;
-	phase += (1./(maxiSettings::sampleRate/(frequency)));
-	return(output);
-}
+// float maxiOsc::square(float frequency) {
+// 	//This is a square wave
+// 	if (phase<0.5) output=-1;
+// 	if (phase>0.5) output=1;
+// 	if ( phase >= 1.0 ) phase -= 1.0;
+// 	phase += (1./(maxiSettings::sampleRate/(frequency)));
+// 	return(output);
+// }
 
 float maxiOsc::pulse(float frequency, float duty) {
 	//This is a pulse generator that creates a signal between -1 and 1.

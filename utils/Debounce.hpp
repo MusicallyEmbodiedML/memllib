@@ -5,7 +5,7 @@
 
 class ButtonDebounce {
 private:
-    static constexpr unsigned long kHaltTime_ms = 25;
+    static constexpr unsigned long kHaltTime_ms = 120;
     unsigned long lastPressTime_ms = 0;
 
 public:
@@ -21,7 +21,7 @@ public:
 
 class ToggleDebounce {
 private:
-    static constexpr unsigned long kHaltTime_ms = 25;
+    static constexpr unsigned long kHaltTime_ms = 120;
     unsigned long lastChangeTime_ms = 0;
     bool lastState = false;
     bool stateChanged = false;
