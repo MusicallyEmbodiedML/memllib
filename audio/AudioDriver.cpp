@@ -204,10 +204,14 @@ bool AudioDriver::Setup(const codec_config_t &config) {
     codecCtl.volume(config.output_volume > 0.99 ? 0.99 : config.output_volume);
     Serial.printf("config.mic_input = %d\n", config.mic_input);
     codecCtl.inputSelect(config.mic_input ? AUDIO_INPUT_MIC : AUDIO_INPUT_LINEIN);
+    
     Serial.printf("config.line_level = %d\n", config.line_level);
     codecCtl.lineInLevel(config.line_level);
+
     Serial.printf("config.mic_gain_dB = %d\n", config.mic_gain_dB);
     codecCtl.micGain(config.mic_gain_dB);
+    
+    
     codecCtl.lineOutLevel(13);
 
     return true;
@@ -216,10 +220,14 @@ bool AudioDriver::Setup(const codec_config_t &config) {
 bool AudioDriver::Setup() {
     codec_config_t config;
     config.mic_input = false;
-    config.line_level = 3;
+    config.line_level = 10;
     config.mic_gain_dB = 0;
     config.output_volume = 0.8;
 
+
+
+
+    
     return Setup(config);
 }
 

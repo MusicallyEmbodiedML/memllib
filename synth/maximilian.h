@@ -1309,105 +1309,105 @@ public:
      */
     inline void set(filterTypes filtType, float cutoff, float Q, float peakGain)
     {
-        float norm = 0;
-        float V = powf(10.0, abs(peakGain) / 20.0);
+        float norm = 0.f;
+        float V = powf(10.f, fabs(peakGain) * 0.05f);
         float K = tanf(PI * cutoff / maxiSettings::sampleRate);
         switch (filtType)
         {
         case LOWPASS:
-            norm = 1.0 / (1.0 + K / Q + K * K);
+            norm = 1.f / (1.f + K / Q + K * K);
             a0 = K * K * norm;
-            a1 = 2.0 * a0;
+            a1 = 2.f * a0;
             a2 = a0;
-            b1 = 2.0 * (K * K - 1.0) * norm;
-            b2 = (1.0 - K / Q + K * K) * norm;
+            b1 = 2.f * (K * K - 1.f) * norm;
+            b2 = (1.f - K / Q + K * K) * norm;
             break;
 
         case HIGHPASS:
-            norm = 1. / (1. + K / Q + K * K);
-            a0 = 1 * norm;
-            a1 = -2 * a0;
+            norm = 1.f / (1.f + K / Q + K * K);
+            a0 = 1.f * norm;
+            a1 = -2.f * a0;
             a2 = a0;
-            b1 = 2 * (K * K - 1) * norm;
-            b2 = (1 - K / Q + K * K) * norm;
+            b1 = 2.f * (K * K - 1.f) * norm;
+            b2 = (1.f - K / Q + K * K) * norm;
             break;
 
         case BANDPASS:
-            norm = 1. / (1. + K / Q + K * K);
+            norm = 1.f / (1.f + K / Q + K * K);
             a0 = K / Q * norm;
-            a1 = 0.;
+            a1 = 0.f;
             a2 = -a0;
-            b1 = 2. * (K * K - 1.) * norm;
-            b2 = (1. - K / Q + K * K) * norm;
+            b1 = 2.f * (K * K - 1.f) * norm;
+            b2 = (1.f - K / Q + K * K) * norm;
             break;
 
         case NOTCH:
-            norm = 1. / (1. + K / Q + K * K);
-            a0 = (1. + K * K) * norm;
-            a1 = 2. * (K * K - 1.) * norm;
+            norm = 1.f / (1.f + K / Q + K * K);
+            a0 = (1.f + K * K) * norm;
+            a1 = 2.f * (K * K - 1.f) * norm;
             a2 = a0;
             b1 = a1;
-            b2 = (1. - K / Q + K * K) * norm;
+            b2 = (1.f - K / Q + K * K) * norm;
             break;
 
         case PEAK:
             if (peakGain >= 0.0)
             { // boost
-                norm = 1. / (1. + 1. / Q * K + K * K);
-                a0 = (1. + V / Q * K + K * K) * norm;
-                a1 = 2. * (K * K - 1.) * norm;
-                a2 = (1. - V / Q * K + K * K) * norm;
+                norm = 1.f / (1.f + 1.f / Q * K + K * K);
+                a0 = (1.f + V / Q * K + K * K) * norm;
+                a1 = 2.f * (K * K - 1.) * norm;
+                a2 = (1.f - V / Q * K + K * K) * norm;
                 b1 = a1;
-                b2 = (1. - 1. / Q * K + K * K) * norm;
+                b2 = (1.f - 1.f / Q * K + K * K) * norm;
             }
             else
             { // cut
-                norm = 1. / (1. + V / Q * K + K * K);
-                a0 = (1. + 1 / Q * K + K * K) * norm;
-                a1 = 2. * (K * K - 1) * norm;
-                a2 = (1. - 1. / Q * K + K * K) * norm;
+                norm = 1.f / (1.f + V / Q * K + K * K);
+                a0 = (1.f + 1.f / Q * K + K * K) * norm;
+                a1 = 2.f * (K * K - 1) * norm;
+                a2 = (1.f - 1.f / Q * K + K * K) * norm;
                 b1 = a1;
-                b2 = (1. - V / Q * K + K * K) * norm;
+                b2 = (1.f - V / Q * K + K * K) * norm;
             }
             break;
         case LOWSHELF:
             if (peakGain >= 0.)
             { // boost
-                norm = 1. / (1. + SQRT2 * K + K * K);
-                a0 = (1. + sqrt(2. * V) * K + V * K * K) * norm;
-                a1 = 2. * (V * K * K - 1.) * norm;
-                a2 = (1. - sqrt(2. * V) * K + V * K * K) * norm;
-                b1 = 2. * (K * K - 1.) * norm;
-                b2 = (1. - SQRT2 * K + K * K) * norm;
+                norm = 1.f / (1.f + SQRT2 * K + K * K);
+                a0 = (1.f + sqrt(2.f * V) * K + V * K * K) * norm;
+                a1 = 2.f * (V * K * K - 1.) * norm;
+                a2 = (1.f - sqrt(2.f * V) * K + V * K * K) * norm;
+                b1 = 2.f * (K * K - 1.) * norm;
+                b2 = (1.f - SQRT2 * K + K * K) * norm;
             }
             else
             { // cut
-                norm = 1. / (1. + sqrt(2. * V) * K + V * K * K);
-                a0 = (1. + SQRT2 * K + K * K) * norm;
-                a1 = 2. * (K * K - 1.) * norm;
-                a2 = (1. - SQRT2 * K + K * K) * norm;
-                b1 = 2. * (V * K * K - 1.) * norm;
-                b2 = (1. - sqrt(2. * V) * K + V * K * K) * norm;
+                norm = 1.f / (1.f + sqrtf(2.f * V) * K + V * K * K);
+                a0 = (1.f + SQRT2 * K + K * K) * norm;
+                a1 = 2.f * (K * K - 1.f) * norm;
+                a2 = (1.f - SQRT2 * K + K * K) * norm;
+                b1 = 2.f * (V * K * K - 1.f) * norm;
+                b2 = (1.f - sqrtf(2.f * V) * K + V * K * K) * norm;
             }
             break;
         case HIGHSHELF:
             if (peakGain >= 0.)
             { // boost
-                norm = 1. / (1. + SQRT2 * K + K * K);
-                a0 = (V + sqrt(2. * V) * K + K * K) * norm;
-                a1 = 2. * (K * K - V) * norm;
-                a2 = (V - sqrt(2. * V) * K + K * K) * norm;
-                b1 = 2. * (K * K - 1) * norm;
-                b2 = (1. - SQRT2 * K + K * K) * norm;
+                norm = 1.f / (1.f + SQRT2 * K + K * K);
+                a0 = (V + sqrtf(2.f * V) * K + K * K) * norm;
+                a1 = 2.f * (K * K - V) * norm;
+                a2 = (V - sqrtf(2.f * V) * K + K * K) * norm;
+                b1 = 2.f * (K * K - 1.f) * norm;
+                b2 = (1.f - SQRT2 * K + K * K) * norm;
             }
             else
             { // cut
-                norm = 1. / (V + sqrt(2. * V) * K + K * K);
-                a0 = (1. + SQRT2 * K + K * K) * norm;
-                a1 = 2. * (K * K - 1.) * norm;
-                a2 = (1. - SQRT2 * K + K * K) * norm;
-                b1 = 2. * (K * K - V) * norm;
-                b2 = (V - sqrt(2. * V) * K + K * K) * norm;
+                norm = 1.f / (V + sqrtf(2.f * V) * K + K * K);
+                a0 = (1.f + SQRT2 * K + K * K) * norm;
+                a1 = 2.f * (K * K - 1.f) * norm;
+                a2 = (1.f - SQRT2 * K + K * K) * norm;
+                b1 = 2.f * (K * K - V) * norm;
+                b2 = (V - sqrtf(2.f * V) * K + K * K) * norm;
             }
             break;
         }
@@ -1416,7 +1416,7 @@ public:
 private:
     float a0 = 0, a1 = 0, a2 = 0, b1 = 0, b2 = 0;
     // filterTypes filterType;
-    const float SQRT2 = sqrt(2.0);
+    const float SQRT2 = sqrtf(2.0f);
     float v[3] = {0, 0, 0};
 };
 
