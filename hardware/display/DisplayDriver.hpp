@@ -9,7 +9,8 @@
 
 
 #include <TFT_eSPI.h>
-#define DISPLAY_MEM __not_in_flash("display")
+#include <TFT_eWidget.h>
+
 
 class DisplayDriver {
 public:
@@ -20,9 +21,13 @@ public:
         views_.push_back(view);
         view->Setup();
     }
+    void PollTouch();
 
 private:
-    TFT_eSPI DISPLAY_MEM tft_;
+    // Internal TFT hardware instance
+    TFT_eSPI tft_;
+
+    // Views
     std::vector<std::shared_ptr<ViewBase>> views_;
     size_t currentViewIndex_;
 
@@ -31,11 +36,13 @@ private:
 
     // Grid
     static constexpr size_t kGridWidthElements = 4;
-    static constexpr size_t kGridHeightElements = 20;
+    static constexpr size_t kGridHeightElements = 4;
     size_t screenWidth_;
     size_t screenHeight_;
     size_t gridWidthStep_;
     size_t gridHeightStep_;
+
+    bool redraw_internal_{false};
 };
 
 
