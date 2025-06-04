@@ -20,7 +20,9 @@ public:
     {
         views_.push_back(view);
         view->SetGrid(grid_);
-        view->Setup();
+        if (tft_initialized_) {
+            view->Setup(&tft_);
+        }
     }
     void PollTouch();
     unsigned long GetLastTouchTime() const { return lastTouchTime_; }
@@ -47,6 +49,7 @@ private:
     bool redraw_internal_{false};
     unsigned long lastTouchTime_{0};
     unsigned long lastDrawTime_{0};
+    bool tft_initialized_{false};
 };
 
 

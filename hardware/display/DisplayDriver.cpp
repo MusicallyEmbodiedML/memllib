@@ -5,6 +5,7 @@ void DisplayDriver::Setup() {
     tft_.init();
     tft_.setRotation(1);
     tft_.fillScreen(TFT_BLACK);
+    tft_initialized_ = true;
 
     // Set up touch
     tft_.setTouch(calData_);
@@ -21,7 +22,7 @@ void DisplayDriver::Setup() {
     currentViewIndex_ = 0;
     for (auto &view : views_) {
         view->SetGrid(grid_);
-        view->Setup();
+        view->Setup(&tft_);
     }
 
     // Set up internal view
@@ -66,7 +67,7 @@ void DisplayDriver::Draw() {
 
         // Draw current view
         if (currentViewIndex_ < views_.size()) {
-            views_[currentViewIndex_]->Draw(&tft_);
+            views_[currentViewIndex_]->Draw();  // No longer passing tft_
         }
     }
 }
