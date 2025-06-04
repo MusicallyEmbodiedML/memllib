@@ -46,3 +46,9 @@
 | SPI Name | CS Pin | SCK Pin | MISO Pin | MOSI Pin | Description |
 |----------|--------|---------|----------|----------|-------------|
 | SDCard | 13 | 14 | 12 | 15 | SPI interface to onboard SD card |
+
+## Display:
+
+| TFT CS Pin | TFT RST Pin | TFT DC Pin | TFT MOSI Pin | TFT SCK Pin | TFT MISO Pin | Touch CS Pin |
+|------------|-------------|------------|--------------|-------------|--------------|--------------|
+| 20         | 22          | 18         | 3            | 2           | 16           | 21           |

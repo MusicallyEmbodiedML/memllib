@@ -80,6 +80,20 @@ public:
     /** @} */
 
     /**
+     * @name Display Pins
+     * Digital pins used for TFT display communication
+     * @{
+     */
+    static constexpr uint8_t TFT_CS = 20;    ///< TFT chip select
+    static constexpr uint8_t TFT_RST = 22;   ///< TFT reset
+    static constexpr uint8_t TFT_DC = 18;    ///< TFT data/command
+    static constexpr uint8_t TFT_MOSI = 3;   ///< TFT MOSI
+    static constexpr uint8_t TFT_SCK = 2;    ///< TFT clock
+    static constexpr uint8_t TFT_MISO = 16;  ///< TFT MISO
+    static constexpr uint8_t TOUCH_CS = 21;  ///< Touch screen chip select
+    /** @} */
+
+    /**
      * @brief Initialize all pins with their respective modes
      */
     static void initializePins() {

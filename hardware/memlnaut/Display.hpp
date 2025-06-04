@@ -6,41 +6,49 @@
 
 #define DISPLAY_MEM __not_in_flash("display")
 
-TFT_eSPI DISPLAY_MEM tft = TFT_eSPI();  // Invoke custom library
+extern TFT_eSPI DISPLAY_MEM tft;
 
-
+/**
+ * @brief Display class for handling text output on TFT screen
+ *
+ * This class provides a simple text console-like interface for the TFT display.
+ * It maintains a scrolling buffer of text lines and handles automatic redrawing
+ * when content changes.
+ */
 class Display {
 public:
-    void setup() {
-        tft.begin();
-        tft.setRotation(1);
-        tft.fillScreen(TFT_BLACK);
-        tft.setFreeFont(&FreeSans9pt7b);
-        tft.setTextColor(0xFC9F);
+    /**
+     * @brief Initialize the display
+     *
+     * Sets up the TFT display with default parameters:
+     * - Landscape orientation (rotation 1)
+     * - Black background
+     * - FreeSans9pt7b font
+     * - Orange text color (0xFC9F)
+     */
+    void setup();
 
-    }
+    /**
+     * @brief Add a new line of text to the display
+     *
+     * @param str String to be displayed
+     *
+     * The string will be added to the bottom of the display.
+     * If more than 11 lines are present, the oldest line will be removed.
+     */
+    void post(String str);
 
-    void post(String str) {
-        redraw = true;
-        lines.push_back(str);
-        if(lines.size() > 11) {
-            lines.pop_front();
-        }
-    }
+    /**
+     * @brief Update the display if content has changed
+     *
+     * This method should be called regularly in the main loop.
+     * It will only redraw the display if content has changed.
+     */
+    void update();
 
-    void update() {
-        if (redraw) {
-            redraw = false;
-            tft.fillScreen(TFT_BLACK);
-            constexpr int32_t lineheight = 20;
-            for(size_t i=0; i < lines.size(); i++) {
-                tft.drawString(lines[i].c_str(), 10,i*lineheight);
-            }
-        }
-    }
 private:
-    std::deque<String> lines;
-    bool redraw=false;
+    std::deque<String> lines;  ///< Buffer containing lines of text
+    bool redraw{false};        ///< Flag indicating if display needs updating
 };
 
 #endif
