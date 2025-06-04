@@ -1,7 +1,6 @@
 #ifndef __VIEW_HPP__
 #define __VIEW_HPP__
 
-#include <string>
 #include <TFT_eSPI.h>
 #include "UIElements.hpp"
 
@@ -24,7 +23,7 @@ public:
         needRedraw_ = false;
         return ret;
     }
-    inline const std::string &GetName() const { return name_; } // Get view name
+    inline const char* GetName() const { return name_; } // Changed return type
     virtual void HandleTouch(size_t x, size_t y) = 0; // Handle touch events
     inline void SetGrid(const GridDef &grid)
     {
@@ -32,12 +31,12 @@ public:
     }
 
 protected:
-    explicit ViewBase(const std::string& name)
+    explicit ViewBase(const char* name)  // Changed parameter type
             : name_(name),
             grid_({0, 0, 0, 0}), // Default grid definition
             needRedraw_(true),
             tft_(nullptr) {}  // Initialize TFT pointer
-    const std::string name_;
+    const char* name_;  // Changed member type
     GridDef grid_; // Grid definition for layout
     bool needRedraw_;
     TFT_eSPI* tft_;  // Store TFT pointer

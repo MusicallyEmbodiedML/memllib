@@ -72,37 +72,31 @@ void DisplayDriver::Draw() {
     }
 }
 
-void DisplayDriver::PollTouch()
-{
+void DisplayDriver::PollTouch() {
     lastTouchTime_ = millis();
 
-    // Get touch coordinates
     uint16_t x, y;
-    if (tft_.getTouch(&x, &y)) {
-        // Check if touch is within grid bounds
-        if (x < screenWidth_ && y < screenHeight_) {
-            // Calculate grid position
-            size_t gridX = x / grid_.widthStep;
-            size_t gridY = y / grid_.heightStep;
+    bool pressed = tft_.getTouch(&x, &y);
 
-            // If within first row, handle internally
+    if (currentViewIndex_ < views_.size()) {
+        // Calculate grid position
+        size_t gridX = x / grid_.widthStep;
+        size_t gridY = y / grid_.heightStep;
+
+        if (pressed) {
+            // If within first row, handle navigation
             if (gridY == 0) {
-                // If first column, switch to previous view
                 if (gridX == 0 && currentViewIndex_ > 0) {
                     currentViewIndex_--;
+                    redraw_internal_ = true;
                 }
-                // If last column, switch to next view
                 else if (gridX == kGridWidthElements - 1 && currentViewIndex_ < views_.size() - 1) {
                     currentViewIndex_++;
+                    redraw_internal_ = true;
                 }
-                redraw_internal_ = true;
-                return; // Exit early to avoid handling touch in the current view
+                return;
             }
-
-            // Handle touch event for the current view
-            if (currentViewIndex_ < views_.size()) {
-                views_[currentViewIndex_]->HandleTouch(gridX, gridY);
-            }
+            views_[currentViewIndex_]->HandleTouch(x, y); // Pass raw coordinates for precise detection
         }
     }
 }
