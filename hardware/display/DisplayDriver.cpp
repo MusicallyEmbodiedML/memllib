@@ -12,12 +12,15 @@ void DisplayDriver::Setup() {
     // Set up grid dimensions
     screenWidth_ = tft_.width();
     screenHeight_ = tft_.height();
-    gridWidthStep_ = screenWidth_ / kGridWidthElements;
-    gridHeightStep_ = screenHeight_ / kGridHeightElements;
+    grid_.widthElements = kGridWidthElements;
+    grid_.heightElements = kGridHeightElements;
+    grid_.widthStep = screenWidth_ / grid_.widthElements;
+    grid_.heightStep = screenHeight_ / grid_.heightElements;
 
     // Set up views
     currentViewIndex_ = 0;
     for (auto &view : views_) {
+        view->SetGrid(grid_);
         view->Setup();
     }
 
@@ -28,6 +31,8 @@ void DisplayDriver::Setup() {
 }
 
 void DisplayDriver::Draw() {
+    lastDrawTime_ = millis();
+
     // Check if any of the views need redrawing
     bool needRedraw = false;
     for (const auto &view : views_) {
@@ -41,21 +46,22 @@ void DisplayDriver::Draw() {
 
         // Clear screen
         tft_.fillScreen(TFT_BLACK);
+        tft_.setTextColor(TFT_WHITE);
 
         // Draw back arrow in first column of first row if not on first view
         if (currentViewIndex_ > 0) {
-            tft_.drawString("<", gridWidthStep_ / 2, gridHeightStep_ / 2, 2);
+            tft_.drawString("<", grid_.widthStep / 2, grid_.heightStep / 2, 2);
         }
         // Draw forward arrow in last column of first row if not on last view
         if (currentViewIndex_ < views_.size() - 1) {
-            tft_.drawString(">", (kGridWidthElements - 1) * gridWidthStep_ + gridWidthStep_ / 2, gridHeightStep_ / 2, 2);
+            tft_.drawString(">", (grid_.widthElements - 1) * grid_.widthStep + grid_.widthStep / 2, grid_.heightStep / 2, 2);
         }
         // Draw title of current view between arrows
         if (currentViewIndex_ < views_.size()) {
             const std::string &viewName = views_[currentViewIndex_]->GetName();
-            tft_.drawString(viewName.c_str(), gridWidthStep_, gridHeightStep_ / 2, 2);
+            tft_.drawString(viewName.c_str(), grid_.widthStep, grid_.heightStep / 2, 2);
         } else {
-            tft_.drawString("No View", gridWidthStep_, gridHeightStep_ / 2, 2);
+            tft_.drawString("No View", grid_.widthStep, grid_.heightStep / 2, 2);
         }
 
         // Draw current view
@@ -67,14 +73,16 @@ void DisplayDriver::Draw() {
 
 void DisplayDriver::PollTouch()
 {
+    lastTouchTime_ = millis();
+
     // Get touch coordinates
     uint16_t x, y;
     if (tft_.getTouch(&x, &y)) {
         // Check if touch is within grid bounds
         if (x < screenWidth_ && y < screenHeight_) {
             // Calculate grid position
-            size_t gridX = x / gridWidthStep_;
-            size_t gridY = y / gridHeightStep_;
+            size_t gridX = x / grid_.widthStep;
+            size_t gridY = y / grid_.heightStep;
 
             // If within first row, handle internally
             if (gridY == 0) {
@@ -86,6 +94,7 @@ void DisplayDriver::PollTouch()
                 else if (gridX == kGridWidthElements - 1 && currentViewIndex_ < views_.size() - 1) {
                     currentViewIndex_++;
                 }
+                redraw_internal_ = true;
                 return; // Exit early to avoid handling touch in the current view
             }
 

@@ -16,12 +16,15 @@ class DisplayDriver {
 public:
     void Setup();
     void Draw();
-    inline void AddView(std::shared_ptr<ViewBase> &view)
+    inline void AddView(const std::shared_ptr<ViewBase> &view)
     {
         views_.push_back(view);
+        view->SetGrid(grid_);
         view->Setup();
     }
     void PollTouch();
+    unsigned long GetLastTouchTime() const { return lastTouchTime_; }
+    unsigned long GetLastDrawTime() const { return lastDrawTime_; }
 
 private:
     // Internal TFT hardware instance
@@ -39,10 +42,11 @@ private:
     static constexpr size_t kGridHeightElements = 4;
     size_t screenWidth_;
     size_t screenHeight_;
-    size_t gridWidthStep_;
-    size_t gridHeightStep_;
+    GridDef grid_;
 
     bool redraw_internal_{false};
+    unsigned long lastTouchTime_{0};
+    unsigned long lastDrawTime_{0};
 };
 
 
