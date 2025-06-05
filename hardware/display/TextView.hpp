@@ -22,8 +22,8 @@ private:
         Serial.print("Toggle pressed: ");
         Serial.println(state ? "TRUE" : "FALSE");
     }
-    const char* content_;
-    uint16_t color_;
+    const char* content_;    // 1st initialized
+    uint16_t color_;        // 2nd initialized
     Button button_{"Press Me", 0x041F, false};  // Navy blue to deep blue, non-toggle
     Button toggle_{"Toggle Me", 0x041F, true};  // Navy blue to deep blue, toggle
 };

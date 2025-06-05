@@ -1,11 +1,11 @@
 #include "TextView.hpp"
 
-TextView::TextView(const char* name,    // Changed parameter type
-                   const char* content,   // Changed parameter type
-                   uint16_t color)
-    : ViewBase(name), content_(content),
-      color_(color),
-      button_("Press Me", 0x041f)  // Initialize button with label and color
+TextView::TextView(const char* name, const char* content, uint16_t color)
+    : ViewBase(name)
+    , content_(content)
+    , color_(color)
+    , button_("Press Me", 0x041f, false)
+    , toggle_("Toggle Me", 0x041f, true)
 {}
 
 void TextView::OnSetup() {
@@ -32,17 +32,17 @@ void TextView::Draw() {
 }
 
 void TextView::HandleTouch(size_t x, size_t y) {
-    Serial.print("TextView HandleTouch at: ");
-    Serial.print(x);
-    Serial.print(", ");
-    Serial.println(y);
+    // Serial.print("TextView HandleTouch at: ");
+    // Serial.print(x);
+    // Serial.print(", ");
+    // Serial.println(y);
     // Pass touch coordinates to the button for interaction
     button_.Interact(x, y);
     toggle_.Interact(x, y);
 }
 
 void TextView::HandleRelease() {
-    Serial.println("TextView HandleRelease");
+    // Serial.println("TextView HandleRelease");
     // Handle release events for the button
     //button_.Interact(0, 0); // Pass dummy coordinates since release doesn't need them
     button_.Release();
