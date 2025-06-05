@@ -7,8 +7,6 @@ void onMomA2() { Serial.println("MOM_A2 pressed"); }
 void onMomB1() { Serial.println("MOM_B1 pressed"); }
 void onMomB2() { Serial.println("MOM_B2 pressed"); }
 void onReSW() { Serial.println("RE_SW pressed"); }
-void onReA() { Serial.println("RE_A triggered"); }
-void onReB() { Serial.println("RE_B triggered"); }
 
 // Toggle callback functions
 void onTogA1(bool state) { Serial.printf("TOG_A1: %s\n", state ? "ON" : "OFF"); }
@@ -26,6 +24,15 @@ void onRVZ1(float value) { Serial.printf("RV_Z1: %.3f\n", value); }
 void onRVY1(float value) { Serial.printf("RV_Y1: %.3f\n", value); }
 void onRVX1(float value) { Serial.printf("RV_X1: %.3f\n", value); }
 
+// Encoder callback function
+void onEncoder(int32_t value) {
+    if (value > 0) {
+        Serial.println("Encoder: Clockwise");
+    } else if (value < 0) {
+        Serial.println("Encoder: Counter-clockwise");
+    }
+}
+
 namespace MEMLNautTest {
     void Setup() {
         Serial.begin(115200);
@@ -38,8 +45,6 @@ namespace MEMLNautTest {
         MEMLNaut::Instance()->setMomB1Callback(onMomB1);
         MEMLNaut::Instance()->setMomB2Callback(onMomB2);
         MEMLNaut::Instance()->setReSWCallback(onReSW);
-        MEMLNaut::Instance()->setReACallback(onReA);
-        MEMLNaut::Instance()->setReBCallback(onReB);
 
         // Set up toggle switch callbacks
         MEMLNaut::Instance()->setTogA1Callback(onTogA1);
@@ -56,6 +61,9 @@ namespace MEMLNautTest {
         MEMLNaut::Instance()->setRVZ1Callback(onRVZ1);
         MEMLNaut::Instance()->setRVY1Callback(onRVY1);
         MEMLNaut::Instance()->setRVX1Callback(onRVX1);
+
+        // Set up encoder callback
+        MEMLNaut::Instance()->setEncoderCallback(onEncoder);
 
         Serial.println("MEMLNaut Test Setup Complete!");
     }

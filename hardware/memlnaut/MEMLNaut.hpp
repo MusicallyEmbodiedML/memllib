@@ -14,6 +14,7 @@ public:
     using ToggleCallback = std::function<void(bool)>;
     using AnalogCallback = std::function<void(float)>;
     using LoopCallback = std::function<void(void)>;
+    using EncoderCallback = std::function<void(int32_t)>;
 
 private:
     static MEMLNaut* __not_in_flash("memlnaut") instance;
@@ -22,7 +23,7 @@ private:
     static constexpr size_t FILTER_SIZE = 5;
     static constexpr float ADC_SCALE = 4128.7f;
 
-    static constexpr size_t NUM_BUTTONS = 7;
+    static constexpr size_t NUM_BUTTONS = 5; // Changed from 7 to 5 (removed RE_A and RE_B)
     static constexpr size_t NUM_TOGGLES = 5;
 
     struct ADCState {
@@ -43,8 +44,7 @@ private:
     ButtonCallback momB1Callback;
     ButtonCallback momB2Callback;
     ButtonCallback reSWCallback;
-    ButtonCallback reACallback;
-    ButtonCallback reBCallback;
+    // Removed reACallback and reBCallback
 
     ToggleCallback togA1Callback;
     ToggleCallback togA2Callback;
@@ -54,14 +54,19 @@ private:
 
     LoopCallback loopCallback;
 
+    EncoderCallback encoderCallback;
+
+    uint8_t prevNextCode;
+    uint16_t encoderStore;
+
     // Static interrupt handlers
     static void handleMomA1();
     static void handleMomA2();
     static void handleMomB1();
     static void handleMomB2();
     static void handleReSW();
-    static void handleReA();
-    static void handleReB();
+    static void handleReA();  // Add back
+    static void handleReB();  // Add back
 
     static void handleTogA1();
     static void handleTogA2();
@@ -92,8 +97,9 @@ public:
     void setMomB1Callback(ButtonCallback cb);
     void setMomB2Callback(ButtonCallback cb);
     void setReSWCallback(ButtonCallback cb);
-    void setReACallback(ButtonCallback cb);
-    void setReBCallback(ButtonCallback cb);
+    // Remove these two declarations
+    // void setReACallback(ButtonCallback cb);
+    // void setReBCallback(ButtonCallback cb);
 
     // Set callbacks for toggle switches
     void setTogA1Callback(ToggleCallback cb);
@@ -114,7 +120,12 @@ public:
     // Main loop callback setter
     void setLoopCallback(LoopCallback cb);
 
+    void setEncoderCallback(EncoderCallback cb);
+
     void loop();
+
+private:
+    int8_t readRotary();
 };
 
 #endif // __MEMLNAUT_HPP__

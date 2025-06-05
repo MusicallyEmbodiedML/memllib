@@ -1,3 +1,4 @@
+#include <iterator>
 #include "MEMLNaut.hpp"
 
 MEMLNaut* MEMLNaut::instance = nullptr;
@@ -28,14 +29,23 @@ void MEMLNaut::handleReSW() {
         instance->reSWCallback();
     }
 }
+
+// Update ReA/B handlers to only handle encoder
 void MEMLNaut::handleReA() {
-    if (instance && instance->debouncers[5].debounce() && instance->reACallback) {
-        instance->reACallback();
+    if (instance && instance->encoderCallback) {
+        int8_t change = instance->readRotary();
+        if (change != 0) {
+            instance->encoderCallback(change);
+        }
     }
 }
+
 void MEMLNaut::handleReB() {
-    if (instance && instance->debouncers[6].debounce() && instance->reBCallback) {
-        instance->reBCallback();
+    if (instance && instance->encoderCallback) {
+        int8_t change = instance->readRotary();
+        if (change != 0) {
+            instance->encoderCallback(change);
+        }
     }
 }
 
@@ -85,6 +95,24 @@ void MEMLNaut::handleJoySW() {
     }
 }
 
+int8_t MEMLNaut::readRotary() {
+    static int8_t rot_enc_table[] = {0,1,1,0,1,0,0,1,1,0,0,1,0,1,1,0};
+
+    prevNextCode <<= 2;
+    if (digitalRead(Pins::RE_B)) prevNextCode |= 0x02;
+    if (digitalRead(Pins::RE_A)) prevNextCode |= 0x01;
+    prevNextCode &= 0x0f;
+    Serial.println(prevNextCode);
+
+    if (rot_enc_table[prevNextCode]) {
+        encoderStore <<= 4;
+        encoderStore |= prevNextCode;
+        if ((encoderStore & 0xff) == 0x2b) return -1;
+        if ((encoderStore & 0xff) == 0x17) return 1;
+    }
+    return 0;
+}
+
 MEMLNaut::MEMLNaut() {
     instance = this;
     loopCallback = nullptr;
@@ -111,6 +139,10 @@ MEMLNaut::MEMLNaut() {
     attachInterrupt(digitalPinToInterrupt(Pins::TOG_B1), handleTogB1, CHANGE);
     attachInterrupt(digitalPinToInterrupt(Pins::TOG_B2), handleTogB2, CHANGE);
     attachInterrupt(digitalPinToInterrupt(Pins::JOY_SW), handleJoySW, CHANGE);
+
+    prevNextCode = 0;
+    encoderStore = 0;
+    encoderCallback = nullptr;
 }
 
 // Momentary switch callback setters
@@ -119,8 +151,6 @@ void MEMLNaut::setMomA2Callback(ButtonCallback cb) { momA2Callback = cb; }
 void MEMLNaut::setMomB1Callback(ButtonCallback cb) { momB1Callback = cb; }
 void MEMLNaut::setMomB2Callback(ButtonCallback cb) { momB2Callback = cb; }
 void MEMLNaut::setReSWCallback(ButtonCallback cb) { reSWCallback = cb; }
-void MEMLNaut::setReACallback(ButtonCallback cb) { reACallback = cb; }
-void MEMLNaut::setReBCallback(ButtonCallback cb) { reBCallback = cb; }
 
 // Toggle switch callback setters
 void MEMLNaut::setTogA1Callback(ToggleCallback cb) { togA1Callback = cb; }
@@ -154,6 +184,10 @@ void MEMLNaut::setRVX1Callback(AnalogCallback cb, uint16_t threshold) {
 
 void MEMLNaut::setLoopCallback(LoopCallback cb) {
     loopCallback = cb;
+}
+
+void MEMLNaut::setEncoderCallback(EncoderCallback cb) {
+    encoderCallback = cb;
 }
 
 void MEMLNaut::loop() {
