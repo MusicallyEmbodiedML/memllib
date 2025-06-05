@@ -25,6 +25,7 @@ public:
     }
     inline const char* GetName() const { return name_; } // Changed return type
     virtual void HandleTouch(size_t x, size_t y) = 0; // Handle touch events
+    virtual void HandleRelease() = 0; // Handle release events
     inline void SetGrid(const GridDef &grid)
     {
         grid_ = grid;

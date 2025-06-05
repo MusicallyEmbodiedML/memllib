@@ -25,6 +25,7 @@ public:
     virtual void OnSetup() = 0;  // New virtual setup hook
     virtual void Draw() = 0; // No longer needs TFT parameter
     virtual void Interact(size_t x, size_t y) = 0; // Handle interaction events
+    virtual void Release() = 0; // Handle release events
     void SetGrid(const GridDef &grid, size_t pos_x, size_t pos_y) {
         grid_ = grid;
         pos_x_ = pos_x;
@@ -42,74 +43,24 @@ protected:
 
 class Button : public UIElementBase {
 public:
-    Button(const char* label, uint16_t color, uint16_t alt_color = TFT_BLACK, bool is_toggle = false)
-        : UIElementBase(label), color_(color), alt_color_(alt_color),
-          is_toggle_(is_toggle), pressed_(false) {
+
+    static constexpr size_t kBorder = 3;
+    static constexpr size_t kTextSize = 1;
+
+    Button(const char* label, uint16_t color, bool is_toggle = false)
+        : UIElementBase(label), color_(color),
+          is_toggle_(is_toggle), pressed_(false),
+          toggleState_(false) {
+        // Initialize the label buffer with the provided label
         strncpy(labelBuffer_, label, sizeof(labelBuffer_) - 1);
         labelBuffer_[sizeof(labelBuffer_) - 1] = '\0';
     }
 
-    ~Button() {
+    ~Button() {}
+
+    void Draw() override {
         if (button_) {
-            activeButtons_.erase(button_.get());
-        }
-    }
-
-    static void staticPressAction() {
-        Serial.println("Button pressed");
-        for (const auto& pair : activeButtons_) {
-            ButtonWidget* widget = pair.first;
-            Button* btn = pair.second;
-            if (widget->justPressed()) {
-                if (btn->is_toggle_) {
-                    btn->pressed_ = !btn->pressed_;
-                    btn->button_->initButtonUL(btn->current_x_, btn->current_y_,
-                                             btn->current_w_, btn->current_h_,
-                                             TFT_WHITE,
-                                             btn->pressed_ ? btn->alt_color_ : btn->color_,
-                                             TFT_BLACK, btn->labelBuffer_, 1);
-                    btn->button_->drawSmoothButton(btn->pressed_, 3, TFT_BLACK);
-                    if (btn->pressedCallback_) {
-                        btn->pressedCallback_(btn->pressed_);
-                    }
-                } else {
-                    btn->pressed_ = true;
-                    btn->button_->initButtonUL(btn->current_x_, btn->current_y_,
-                                             btn->current_w_, btn->current_h_,
-                                             TFT_WHITE, btn->alt_color_, TFT_BLACK,
-                                             btn->labelBuffer_, 1);
-                    btn->button_->drawSmoothButton(true, 3, TFT_BLACK);
-                    if (btn->pressedCallback_) {
-                        btn->pressedCallback_(true);
-                    }
-                }
-                break;
-            }
-        }
-    }
-
-    static void staticReleaseAction() {
-        Serial.println("Button released");
-        for (const auto& pair : activeButtons_) {
-            ButtonWidget* widget = pair.first;
-            Button* btn = pair.second;
-            if (!btn->is_toggle_ && widget->justReleased()) {
-                btn->pressed_ = false;
-                btn->button_->initButtonUL(btn->current_x_, btn->current_y_,
-                                         btn->current_w_, btn->current_h_,
-                                         TFT_WHITE, btn->color_, TFT_BLACK,
-                                         btn->labelBuffer_, 1);
-                btn->button_->drawSmoothButton(false, 3, TFT_BLACK);
-                if (btn->pressedCallback_) {
-                    btn->pressedCallback_(false);
-                }
-            }
-        }
-    }
-
-    void Draw() override {  // Remove TFT parameter
-        if (button_) {
-            button_->drawSmoothButton(pressed_);
+            button_->drawSmoothButton(toggleState_, kBorder, TFT_BLACK);
         }
     }
 
@@ -121,12 +72,8 @@ public:
 
         button_ = std::make_unique<ButtonWidget>(tft_);
         button_->initButtonUL(current_x_, current_y_, current_w_, current_h_,
-                             TFT_WHITE, color_, TFT_BLACK, labelBuffer_, 1);
-
-        activeButtons_[button_.get()] = this;
-        button_->setPressAction(staticPressAction);
-        button_->setReleaseAction(staticReleaseAction);
-        button_->drawSmoothButton(pressed_, 3, TFT_BLACK);
+                             TFT_WHITE, color_, TFT_BLACK, labelBuffer_, kTextSize);
+        button_->drawSmoothButton(pressed_, kBorder, TFT_BLACK);
     }
 
     void SetCallback(std::function<void(bool)> callback) {
@@ -134,26 +81,50 @@ public:
     }
 
     void Interact(size_t x, size_t y) override {
+        // Check that the button is initialised
         if (button_) {
+            // Check if the interaction is within the button bounds
             if (button_->contains(x, y)) {
-                button_->press(true);
-                button_->pressAction();
-            } else {
-                button_->press(false);
-                button_->releaseAction();
+                // Sanitise button presses using pressed_ state
+                if (!pressed_) {
+                    pressed_ = true;
+                    if (is_toggle_) {
+                        // Toggle the state if it's a toggle button
+                        toggleState_ = !toggleState_;
+                    } else {
+                        // For non-toggle buttons, just set the pressed state
+                        toggleState_ = true;  // Set to true to indicate pressed
+                    }
+                    button_->drawSmoothButton(toggleState_, kBorder, TFT_BLACK);
+                    // Call the callback with the toggle state
+                    if (pressedCallback_) {
+                        pressedCallback_(toggleState_);
+                    }
+                }
             }
+            // Otherwise ignore the interaction
+        }
+    }
+
+    void Release() override {
+        // Reset pressed state and redraw button
+        if (button_) {
+            pressed_ = false;
+            if (!is_toggle_) {
+                toggleState_ = false;  // Reset toggle state for non-toggle buttons
+            }
+            button_->drawSmoothButton(toggleState_, kBorder, TFT_BLACK);
         }
     }
 
 protected:
     uint16_t color_;
-    uint16_t alt_color_;
     bool is_toggle_;
     std::function<void(bool)> pressedCallback_;  // Changed from bool(bool) to void(bool)
     bool pressed_;
+    bool toggleState_{false};  // Track toggle state
     std::unique_ptr<ButtonWidget> button_;
     char labelBuffer_[32];  // Fixed buffer for button label
-    static std::map<ButtonWidget*, Button*> activeButtons_;
     uint16_t current_x_{0};
     uint16_t current_y_{0};
     uint16_t current_w_{0};

@@ -50,6 +50,7 @@ private:
     unsigned long lastTouchTime_{0};
     unsigned long lastDrawTime_{0};
     bool tft_initialized_{false};
+    bool isTouchPressed_{false};
 };
 
 

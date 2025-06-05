@@ -9,6 +9,7 @@ void DisplayDriver::Setup() {
 
     // Set up touch
     tft_.setTouch(calData_);
+    isTouchPressed_ = false;
 
     // Set up grid dimensions
     screenWidth_ = tft_.width();
@@ -83,7 +84,7 @@ void DisplayDriver::PollTouch() {
         size_t gridX = x / grid_.widthStep;
         size_t gridY = y / grid_.heightStep;
 
-        if (pressed) {
+        if (pressed && !isTouchPressed_) {
             // If within first row, handle navigation
             if (gridY == 0) {
                 if (gridX == 0 && currentViewIndex_ > 0) {
@@ -94,9 +95,18 @@ void DisplayDriver::PollTouch() {
                     currentViewIndex_++;
                     redraw_internal_ = true;
                 }
-                return;
+            } else {
+                // Handle touch in the current view
+                if (gridX < grid_.widthElements && gridY < grid_.heightElements) {
+                    // Pass raw coordinates to the current view for precise detection
+                    views_[currentViewIndex_]->HandleTouch(x, y);
+                }
             }
-            views_[currentViewIndex_]->HandleTouch(x, y); // Pass raw coordinates for precise detection
+        } else if (isTouchPressed_) {
+            // If released, check if any button was released
+            views_[currentViewIndex_]->HandleRelease();
         }
     }
+
+    isTouchPressed_ = pressed;
 }

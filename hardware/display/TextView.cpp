@@ -12,6 +12,10 @@ void TextView::OnSetup() {
     button_.SetGrid(grid_, 0, 3);
     button_.Setup(tft_);
     button_.SetCallback([this](bool state) { OnButtonPressed(state); });
+
+    toggle_.SetGrid(grid_, 3, 3);
+    toggle_.Setup(tft_);
+    toggle_.SetCallback([this](bool state) { OnTogglePressed(state); });
 }
 
 void TextView::Draw() {
@@ -23,6 +27,8 @@ void TextView::Draw() {
     needRedraw_ = false;
     // Draw the button
     button_.Draw();
+    // Draw the toggle button
+    toggle_.Draw();
 }
 
 void TextView::HandleTouch(size_t x, size_t y) {
@@ -32,6 +38,15 @@ void TextView::HandleTouch(size_t x, size_t y) {
     Serial.println(y);
     // Pass touch coordinates to the button for interaction
     button_.Interact(x, y);
+    toggle_.Interact(x, y);
+}
+
+void TextView::HandleRelease() {
+    Serial.println("TextView HandleRelease");
+    // Handle release events for the button
+    //button_.Interact(0, 0); // Pass dummy coordinates since release doesn't need them
+    button_.Release();
+    toggle_.Release();
 }
 
 void TextView::OnButtonPressed(bool state) {
