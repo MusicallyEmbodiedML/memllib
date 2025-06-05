@@ -88,10 +88,18 @@ void DisplayDriver::PollTouch() {
             // If within first row, handle navigation
             if (gridY == 0) {
                 if (gridX == 0 && currentViewIndex_ > 0) {
+                    // Send a handle touch outside the screen and handle release to current view
+                    views_[currentViewIndex_]->HandleTouch(9999,9999);
+                    views_[currentViewIndex_]->HandleRelease();
+                    // Navigate to previous view
                     currentViewIndex_--;
                     redraw_internal_ = true;
                 }
                 else if (gridX == kGridWidthElements - 1 && currentViewIndex_ < views_.size() - 1) {
+                    // Send a handle touch outside the screen and handle release to current view
+                    views_[currentViewIndex_]->HandleTouch(9999,9999);
+                    views_[currentViewIndex_]->HandleRelease();
+                    // Navigate to next view
                     currentViewIndex_++;
                     redraw_internal_ = true;
                 }

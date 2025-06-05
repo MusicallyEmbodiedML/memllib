@@ -5,6 +5,7 @@
 #include <TFT_eWidget.h>
 #include <functional>
 #include <string>
+#include "../../utils/Format.hpp"
 
 
 struct GridDef {
@@ -69,7 +70,7 @@ protected:
     uint16_t current_h_{0};
 };
 
-#if 0
+
 /**
  * @brief Class showing a value (name and value) on the display.
  * It can be incremented or decremented by a step value, e.g. by an
@@ -80,34 +81,121 @@ protected:
 template <typename T>
 class Value : public UIElementBase {
 public:
+
+    static constexpr size_t kTextSize = 1;
+    static constexpr size_t kValueSize = 2;
+    static constexpr size_t kSpacingTop = 16;
+    static constexpr size_t kSpacingBottom = 5;
+
     Value(const char* label, T min, T max, T step)
-        : UIElementBase(label), min_(min), max_(max), step_(step) {
-        snprintf(labelBuffer_, sizeof(labelBuffer_), "%s: %d", label, value_);
+        : UIElementBase(label)
+        , value_(min)
+        , min_(min)
+        , max_(max)
+        , step_(step)
+    {
+        snprintf(labelBuffer_, sizeof(labelBuffer_), "%s", label);
     }
     ~Value() = default;
 
-    void Draw() override;
-    void OnSetup() override;
-    void SetValue(T value);
+    void Draw() override
+    {
+        if (tft_ == nullptr) {
+            return;  // Ensure tft is initialized
+        }
+
+        // Calculate background color
+        uint16_t bgColor = selected_ ? tft_->color565(64, 80, 96) : TFT_BLACK;
+
+        // Fill background
+        tft_->fillRect(current_x_, current_y_, current_w_, current_h_, bgColor);
+
+        // Draw the label with consistent background
+        tft_->setTextSize(kTextSize);
+        tft_->setTextColor(TFT_WHITE, bgColor);
+        tft_->setTextDatum(TC_DATUM); // Center text
+        tft_->drawString(labelBuffer_, current_x_ + (current_w_ >> 1), current_y_ + kSpacingTop);
+        tft_->setTextSize(kValueSize);
+        // Draw the value in the line below
+        char valueBuffer[6];
+        formatNumber(valueBuffer, value_);  // Format the value
+        size_t y = current_y_ + kSpacingTop + kTextSize * 8 + kSpacingBottom;
+        tft_->drawString(valueBuffer, current_x_ + (current_w_ >> 1), y);
+        tft_->setTextSize(1);  // Reset text size
+        tft_->setTextDatum(TL_DATUM); // Reset text datum
+    }
+    void OnSetup() override
+    {
+        value_ = min_;  // Initialize value to min
+        current_x_ = pos_x_ * grid_.widthStep;
+        current_y_ = pos_y_ * grid_.heightStep;
+        current_w_ = grid_.widthStep;
+        current_h_ = grid_.heightStep;
+        selected_ = false;  // Default not selected
+    };
+    void SetValue(T value)
+    {
+        if (value < min_) {
+            value = min_;
+        } else if (value > max_) {
+            value = max_;
+        }
+        if (value == value_) {
+            return;  // No change
+        }
+        // Trigger callback
+        if (valueChangedCallback_) {
+            valueChangedCallback_(value_);
+        }
+        Draw();
+    }
     T GetValue() const { return value_; }
-    void Increment(bool up = true);
-    void SetCallback(std::function<void(T)> callback);
-    void Interact(size_t x, size_t y) override;
-    void Release() override;
+    void Increment(bool up = true)
+    {
+        if (up) {
+            SetValue(value_ + step_);
+        } else {
+            SetValue(value_ - step_);
+        }
+    }
+    void SetCallback(std::function<void(T)> callback)
+    {
+        valueChangedCallback_ = std::move(callback);
+    }
+    void Interact(size_t x, size_t y) override
+    {
+        bool wasSelected = selected_;  // Store previous selection state
+        // Select the value element if within bounds
+        if (x >= current_x_ && x < current_x_ + current_w_ &&
+            y >= current_y_ && y < current_y_ + current_h_) {
+            selected_ = true;  // Mark as selected
+        } else {
+            selected_ = false;  // Deselect if outside bounds
+        }
+        if (selected_ != wasSelected) {
+            // Redraw if selection state changed
+            Draw();
+        }
+    }
+    void Release() override
+    {
+        // Nothing for now
+    }
 
 protected:
 
-    T value_{0};
+    T value_;
     T min_;
     T max_;
     T step_;
-    std::function<void(T)> valueChangedCallback_;
-    char labelBuffer_[32];  // Fixed buffer for value label
+    bool selected_ = false;  // Moved initialization to declaration
+    std::function<void(T)> valueChangedCallback_;  // Default constructor is fine
+    char labelBuffer_[32];
     uint16_t current_x_{0};
     uint16_t current_y_{0};
     uint16_t current_w_{0};
     uint16_t current_h_{0};
 };
-#endif
+
 
 #endif  // __UI_ELEMENTS_HPP__

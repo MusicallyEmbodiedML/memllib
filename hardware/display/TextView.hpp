@@ -26,6 +26,7 @@ private:
     uint16_t color_;        // 2nd initialized
     Button button_{"Press Me", 0x041F, false};  // Navy blue to deep blue, non-toggle
     Button toggle_{"Toggle Me", 0x041F, true};  // Navy blue to deep blue, toggle
+    Value<size_t> val_{"Value", 0, 100, 1};  // Value element with range 0-100 and step 1
 };
 
 #endif // __TEXT_VIEW_HPP__
