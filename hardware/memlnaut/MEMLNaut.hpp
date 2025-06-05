@@ -56,8 +56,8 @@ private:
 
     EncoderCallback encoderCallback;
 
-    uint8_t prevNextCode;
-    uint16_t encoderStore;
+    uint8_t prevNextCode{0};
+    uint16_t encoderStore{0};
 
     // Static interrupt handlers
     static void handleMomA1();

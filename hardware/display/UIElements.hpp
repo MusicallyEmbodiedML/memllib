@@ -143,6 +143,7 @@ public:
         if (value == value_) {
             return;  // No change
         }
+        value_ = value;
         // Trigger callback
         if (valueChangedCallback_) {
             valueChangedCallback_(value_);
@@ -152,9 +153,17 @@ public:
     T GetValue() const { return value_; }
     void Increment(bool up = true)
     {
+        if (!selected_) {
+            return;  // Only increment if selected
+        }
         if (up) {
             SetValue(value_ + step_);
         } else {
+            // Check that decrementing does not go below min
+            // (robust to unsigned types)
+            if (value_ <= min_) {
+                return;  // Do not decrement below min
+            }
             SetValue(value_ - step_);
         }
     }

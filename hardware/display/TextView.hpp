@@ -16,17 +16,19 @@ public:
     void HandleTouch(size_t x, size_t y) override;
     void HandleRelease() override;
 
+    Button button{"Press Me", 0x041F, false};  // Navy blue to deep blue, non-toggle
+    Button toggle{"Toggle Me", 0x041F, true};  // Navy blue to deep blue, toggle
+    Value<size_t> val{"Value", 0, 100, 1};  // Value element with range 0-100 and step 1
+    Value<float> fl{"Float", 0.1, 5.0, 0.01};
+
 private:
-    void OnButtonPressed(bool state);
-    void OnTogglePressed(bool state) {
+    void OnButtonPressed_(bool state);
+    void OnTogglePressed_(bool state) {
         Serial.print("Toggle pressed: ");
         Serial.println(state ? "TRUE" : "FALSE");
     }
     const char* content_;    // 1st initialized
     uint16_t color_;        // 2nd initialized
-    Button button_{"Press Me", 0x041F, false};  // Navy blue to deep blue, non-toggle
-    Button toggle_{"Toggle Me", 0x041F, true};  // Navy blue to deep blue, toggle
-    Value<size_t> val_{"Value", 0, 100, 1};  // Value element with range 0-100 and step 1
 };
 
 #endif // __TEXT_VIEW_HPP__
