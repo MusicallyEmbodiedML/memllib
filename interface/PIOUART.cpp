@@ -9,11 +9,8 @@ PIOUART::PIOUART(size_t n_extra_sensors,
     kNExtraSensors(n_extra_sensors),
     slipBuffer{ 0 },
     filters_(),
-#if USE_SERIAL_ADCS
     value_states_{ 0 },
-#else
-    value_states_{},
-#endif
+    callback_(nullptr),
     spiState(SPISTATES::WAITFOREND),
     spiIdx(0)
 {
@@ -33,9 +30,11 @@ void PIOUART::Poll()
 {
     uint8_t spiByte = 32;
 
- 
+
     while (Serial2.available()) {
         spiByte = Serial2.read();
+        Serial.print(spiByte);
+        Serial.print(" ");
 
         switch(spiState) {
             case SPISTATES::WAITFOREND:
@@ -45,6 +44,7 @@ void PIOUART::Poll()
                     // Serial.println("end");
                     slipBuffer[0] = SLIP::END;
                     spiState = SPISTATES::ENDORBYTES;
+                    Serial.println();
                 }else{
                   // Serial.println(spiByte);
                 }
@@ -92,7 +92,7 @@ void PIOUART::Poll()
 void PIOUART::Parse_(spiMessage msg)
 {
     static const float kEventThresh = 0.01;
-    static const size_t kObservedChan = 9999;
+    static const size_t kObservedChan = 1;
 
     if (msg.msg < value_states_.size()) {
         // Protect against infs and nans
@@ -102,10 +102,9 @@ void PIOUART::Parse_(spiMessage msg)
         float filtered_value = filters_[msg.msg].process(msg.value);
         float prev_value = value_states_[msg.msg];
         if (std::abs(filtered_value - prev_value) > kEventThresh) {
-            //meml_interface.SetPot(kNJoystickParams + msg.msg, filtered_value);
-            // TODO add callback!!!
-            // Trigger param update (or NN inference)
-            //gTriggerParamUpdate = true;
+            if (callback_) {
+                callback_(msg.msg, filtered_value);
+            }
         }
         if (kObservedChan == msg.msg) {
             Serial.print("Low:0.00,High:1.00,Value:");
