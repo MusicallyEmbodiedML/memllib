@@ -14,10 +14,10 @@
 
 /// \brief A Serial Line Internet Protocol (SLIP) Encoder.
 ///
-/// Serial Line Internet Protocol (SLIP) is a packet framing protocol: SLIP 
-/// defines a sequence of characters that frame IP packets on a serial line and 
-/// nothing more. It provides no addressing, packet type identification, error 
-/// detection, correction or compression mechanisms. Because the protocol does 
+/// Serial Line Internet Protocol (SLIP) is a packet framing protocol: SLIP
+/// defines a sequence of characters that frame IP packets on a serial line and
+/// nothing more. It provides no addressing, packet type identification, error
+/// detection, correction or compression mechanisms. Because the protocol does
 /// so little its implementation is trivial and fast.
 ///
 /// \sa http://tools.ietf.org/html/rfc1055
@@ -29,7 +29,7 @@ public:
     /// \param size  The number of bytes in the \p buffer.
     /// \param encodedBuffer The buffer for the encoded bytes.
     /// \returns The number of bytes written to the \p encodedBuffer.
-    /// \warning The encodedBuffer must have at least getEncodedBufferSize() 
+    /// \warning The encodedBuffer must have at least getEncodedBufferSize()
     ///          allocated.
     static size_t encode(const uint8_t* buffer,
                          size_t size,
@@ -41,7 +41,7 @@ public:
         size_t read_index  = 0;
         size_t write_index = 0;
 
-        // Double-ENDed, flush any data that may have accumulated due to line 
+        // Double-ENDed, flush any data that may have accumulated due to line
         // noise.
         encodedBuffer[write_index++] = END;
 
@@ -139,7 +139,7 @@ public:
         /// \brief The decimal END character (octal 0300).
         ///
         /// Indicates the end of a packet.
-        END = 192, 
+        END = 192,
 
         /// \brief The decimal ESC character (octal 0333).
         ///

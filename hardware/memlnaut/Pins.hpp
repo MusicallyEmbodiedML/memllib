@@ -57,15 +57,23 @@ public:
     /** @} */
 
     /**
+     * @name LED Pins
+     * Digital output pins for LEDs
+     * @{
+     */
+    static constexpr uint8_t LED = 33;       ///< Status LED
+    /** @} */
+
+    /**
      * @name UART Pins
      * Digital pins used for UART communication
      * @{
      */
-    static constexpr uint8_t DAISY_TX = 33; ///< One-way TX to Daisy
-    static constexpr uint8_t SENSOR_TX = 36; ///< Sensor UART TX
-    static constexpr uint8_t SENSOR_RX = 37; ///< Sensor UART RX
-    static constexpr uint8_t MIDI_TX = 4;   ///< MIDI UART TX
-    static constexpr uint8_t MIDI_RX = 5;   ///< MIDI UART RX
+    static constexpr uint8_t DAISY_TX = 39; ///< One-way TX to Daisy (PIO software serial)
+    static constexpr uint8_t SENSOR_TX = 34; ///< Sensor UART TX (Serial1)
+    static constexpr uint8_t SENSOR_RX = 35; ///< Sensor UART RX (Serial1)
+    static constexpr uint8_t MIDI_TX = 4;   ///< MIDI UART TX (Serial2)
+    static constexpr uint8_t MIDI_RX = 5;   ///< MIDI UART RX (Serial2)
     /** @} */
 
     /**
@@ -107,6 +115,9 @@ public:
         pinMode(RV_Z1, INPUT);
         pinMode(RV_Y1, INPUT);
         pinMode(RV_X1, INPUT);
+
+        // Initialize LED pins
+        pinMode(LED, OUTPUT);
 
         // Initialize UART pins (just as digital IO)
         pinMode(DAISY_TX, OUTPUT);

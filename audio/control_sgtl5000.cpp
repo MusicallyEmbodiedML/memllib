@@ -48,10 +48,10 @@
 //				0x3 = Rate is 1/6 of the SYS_FS rate
 // 3:2	SYS_FS		Sets the internal system sample rate (default=2)
 //				0x0 = 32 kHz
-//				0x1 = 44.1 kHz     
+//				0x1 = 44.1 kHz
 //				0x2 = 48 kHz
-//				0x3 = 96 kHz                  
-// 1:0	MCLK_FREQ	Identifies incoming SYS_MCLK frequency and if the PLL should be used    
+//				0x3 = 96 kHz
+// 1:0	MCLK_FREQ	Identifies incoming SYS_MCLK frequency and if the PLL should be used
 //				0x0 = 256*Fs
 //				0x1 = 384*Fs
 //				0x2 = 512*Fs
@@ -512,9 +512,9 @@ void AudioControlSGTL5000::setAddress(uint8_t level)
 bool AudioControlSGTL5000::enable(void) {
 #if defined(KINETISL)
 	return enable(16000000); // SGTL as Master with 16MHz MCLK from Teensy LC
-#else	
+#else
 	return enable(0);
-#endif	
+#endif
 }
 
 bool AudioControlSGTL5000::enable(const unsigned extMCLK, const uint32_t pllFreq)
@@ -524,7 +524,7 @@ bool AudioControlSGTL5000::enable(const unsigned extMCLK, const uint32_t pllFreq
     //Wire.setSCL(5);
 	Wire.begin();
 	delay(5);
-	
+
 	//Check if we are in Master Mode and if the Teensy had a reset:
   int n = read(CHIP_I2S_CTRL);
   Serial.printf("chip i2s ctl: %d\n", n);
@@ -549,7 +549,7 @@ bool AudioControlSGTL5000::enable(const unsigned extMCLK, const uint32_t pllFreq
 	write(CHIP_LINE_OUT_CTRL, 0x0F22); // LO_VAGCNTRL=1.65V, OUT_CURRENT=0.54mA
 	write(CHIP_SHORT_CTRL, 0x4446);  // allow up to 125mA
 	write(CHIP_ANA_CTRL, 0x0137);  // enable zero cross detectors
-		
+
 	if (extMCLK > 0) {
 		//SGTL is I2S Master
 		//Datasheet Pg. 14: Using the PLL - Asynchronous SYS_MCLK input
@@ -561,8 +561,8 @@ bool AudioControlSGTL5000::enable(const unsigned extMCLK, const uint32_t pllFreq
 
 		uint32_t int_divisor = (pllFreq / extMCLK) & 0x1f;
 		uint32_t frac_divisor = (uint32_t)((((float)pllFreq / extMCLK) - int_divisor) * 2048.0f) & 0x7ff;
-		
-		write(CHIP_PLL_CTRL, (int_divisor << 11) | frac_divisor);		
+
+		write(CHIP_PLL_CTRL, (int_divisor << 11) | frac_divisor);
 		write(CHIP_ANA_POWER, 0x40FF | (1<<10) | (1<<8) ); // power up: lineout, hp, adc, dac, PLL_POWERUP, VCOAMP_POWERUP
 	} else {
 		//SGTL is I2S Slave
@@ -572,8 +572,8 @@ bool AudioControlSGTL5000::enable(const unsigned extMCLK, const uint32_t pllFreq
 	write(CHIP_DIG_POWER, 0x0073); // power up all digital stuff
 	delay(400);
 	write(CHIP_LINE_OUT_VOL, 0x1D1D); // default approx 1.3 volts peak-to-peak
-	
-	if (extMCLK > 0) { 
+
+	if (extMCLK > 0) {
 		//SGTL is I2S Master
 		write(CHIP_CLK_CTRL, 0x0004 | 0x03);  // 44.1 kHz, 256*Fs, use PLL
 		write(CHIP_I2S_CTRL, 0x0030 | (1<<7)); // SCLK=64*Fs, 16bit, I2S format
@@ -584,14 +584,14 @@ bool AudioControlSGTL5000::enable(const unsigned extMCLK, const uint32_t pllFreq
 		// write(CHIP_CLK_CTRL, 0b01010);  // 48 kHz, 512*Fs
 		// write(CHIP_CLK_CTRL, 0b001000);  // 48 kHz, 256*Fs
 		write(CHIP_CLK_CTRL, 0b011000);  // 24 kHz, 256*Fs
-    
-    
+
+
 
 		// write(CHIP_I2S_CTRL, 0x0030); // SCLK=64*Fs, 16bit, I2S format
 
 		write(CHIP_I2S_CTRL, 0x0000); // SCLK=64*Fs, 32bit, I2S format
 		// write(CHIP_I2S_CTRL, 0b0010); // SCLK=64*Fs, 32bit, I2S format, lralign
-    
+
 	}
 
 	// default signal routing is ok?
@@ -614,7 +614,7 @@ unsigned int AudioControlSGTL5000::read(unsigned int reg)
 	Wire.write(reg);
   int res = Wire.endTransmission(false);
 	if (res != 0) {
-    
+
     return -res;
   }
 	if (Wire.requestFrom((int)i2c_addr, 2) < 2) return -2;
@@ -755,7 +755,7 @@ unsigned short AudioControlSGTL5000::lineOutLevel(uint8_t left, uint8_t right)
 
 unsigned short AudioControlSGTL5000::dacVolume(float n) // set both directly
 {
-  Serial.printf("ADCDAC_CTRL %d\n", read(CHIP_ADCDAC_CTRL));
+    //Serial.printf("ADCDAC_CTRL %d\n", read(CHIP_ADCDAC_CTRL));
 	if ((read(CHIP_ADCDAC_CTRL)&(3<<2)) != ((n>0 ? 0:3)<<2)) {
 		modify(CHIP_ADCDAC_CTRL,(n>0 ? 0:3)<<2,3<<2);
 	}

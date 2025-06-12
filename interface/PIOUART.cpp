@@ -16,9 +16,10 @@ PIOUART::PIOUART(size_t n_extra_sensors,
 {
     filters_.resize(kNExtraSensors);
     value_states_.resize(kNExtraSensors);
-    Serial2.setRX(sensor_rx);
-    Serial2.setTX(sensor_tx);
-    Serial2.begin(baud_rate);
+
+    Serial1.setTX(sensor_tx);
+    Serial1.setRX(sensor_rx);
+    Serial1.begin(baud_rate);
 
     // Put all values in the middle
     for (auto &v : value_states_) {
@@ -26,66 +27,110 @@ PIOUART::PIOUART(size_t n_extra_sensors,
     }
 }
 
+void PIOUART::ResetState_() {
+    spiState = SPISTATES::WAITFOREND;
+    spiIdx = 0;
+    memset(slipBuffer, 0, sizeof(slipBuffer));
+}
+
 void PIOUART::Poll()
 {
-    uint8_t spiByte = 32;
+    size_t bytesProcessed = 0;
 
+    while (Serial1.available() && bytesProcessed < kMaxBytesPerPoll_) {
+        uint8_t spiByte = Serial1.read();
+        Serial.println(spiByte, HEX);
+        bytesProcessed++;
 
-    while (Serial2.available()) {
-        spiByte = Serial2.read();
-        Serial.print(spiByte);
-        Serial.print(" ");
+        // Safety check for buffer overflow
+        if (spiIdx >= kSlipBufferSize_ - 1) {
+            Serial.println("PIOUART- Buffer overflow, resetting");
+            ResetState_();
+            continue;
+        }
+
+        // Debug: Check if we're seeing potential SLIP END characters
+        if (spiByte == SLIP::END) {
+            Serial.println("PIOUART- Saw SLIP END");
+        } else if (spiByte == SLIP::ESC) {
+            Serial.println("PIOUART- Saw SLIP ESC");
+        } else if (spiByte == SLIP::ESC_END) {
+            Serial.println("PIOUART- Saw SLIP ESC_END");
+        } else if (spiByte == SLIP::ESC_ESC) {
+            Serial.println("PIOUART- Saw SLIP ESC_ESC");
+        }
 
         switch(spiState) {
             case SPISTATES::WAITFOREND:
-            //spiByte = Serial2.read();
-            if (spiByte != -1) {
                 if (spiByte == SLIP::END) {
-                    // Serial.println("end");
-                    slipBuffer[0] = SLIP::END;
-                    spiState = SPISTATES::ENDORBYTES;
-                    Serial.println();
-                }else{
-                  // Serial.println(spiByte);
+                    // Start of new frame - don't store the END byte
+                    spiIdx = 0;
+                    spiState = SPISTATES::READBYTES;
+                    Serial.println("PIOUART- Frame start, reading data");
                 }
-            }
-            break;
-            case ENDORBYTES:
-            //spiByte = Serial2.read();
-            if (spiByte != -1) {
+                break;
+
+            case SPISTATES::READBYTES:
                 if (spiByte == SLIP::END) {
-                    //this is the message start
-                    spiIdx = 1;
+                    // End of frame - process if we have data
+                    if (spiIdx > 0) {
+                        Serial.printf("PIOUART- Frame complete with %zu data bytes\n", spiIdx);
 
-                }else{
-                    slipBuffer[1] = spiByte;
-                    spiIdx=2;
+                        // Print raw SLIP frame for debugging (data only, no END markers)
+                        Serial.print("PIOUART- Raw SLIP data: ");
+                        for (size_t i = 0; i < spiIdx; i++) {
+                            Serial.printf("%02X ", slipBuffer[i]);
+                        }
+                        Serial.println();
+
+                        uint8_t decodedBuffer[sizeof(spiMessage) + 4]; // Extra safety bytes
+                        memset(decodedBuffer, 0, sizeof(decodedBuffer));
+
+                        size_t decodedLength = SLIP::decode(slipBuffer, spiIdx, decodedBuffer);
+
+                        Serial.printf("PIOUART- Decoded %zu bytes from %zu SLIP bytes (expected %zu)\n",
+                                     decodedLength, spiIdx, sizeof(spiMessage));
+
+                        if (decodedLength == sizeof(spiMessage)) {
+                            spiMessage decodeMsg;
+                            memcpy(&decodeMsg, decodedBuffer, sizeof(spiMessage));
+
+                            // Validate message before parsing
+                            if (decodeMsg.msg < kNExtraSensors &&
+                                !std::isnan(decodeMsg.value) &&
+                                !std::isinf(decodeMsg.value)) {
+                                Parse_(decodeMsg);
+                            } else {
+                                Serial.printf("PIOUART- Invalid message: channel=%d, value=%f\n",
+                                             decodeMsg.msg, decodeMsg.value);
+                            }
+                        } else {
+                            Serial.printf("PIOUART- Size mismatch: expected %zu, got %zu\n",
+                                         sizeof(spiMessage), decodedLength);
+                            // Print raw decoded bytes for debugging
+                            Serial.print("PIOUART- Raw decoded: ");
+                            for (size_t i = 0; i < decodedLength && i < 16; i++) {
+                                Serial.printf("%02X ", decodedBuffer[i]);
+                            }
+                            Serial.println();
+                        }
+                    } else {
+                        Serial.println("PIOUART- Empty frame, ignoring");
+                    }
+                    ResetState_();
+                } else {
+                    // Data byte - store it
+                    slipBuffer[spiIdx++] = spiByte;
+                    Serial.printf("PIOUART- Data byte[%zu]: %02X\n", spiIdx-1, spiByte);
                 }
-                spiState = SPISTATES::READBYTES;
-            }
-            break;
-            case READBYTES:
-            //spiByte = Serial2.read();
-            if (spiByte != -1) {
+                break;
 
-                slipBuffer[spiIdx++] = spiByte;
-                if (spiByte == SLIP::END) {
-                spiMessage decodeMsg;
-                SLIP::decode(slipBuffer, spiIdx, reinterpret_cast<uint8_t*>(&decodeMsg));
-
-                // Process the decoded message
-                Parse_(decodeMsg);
-
-                spiState = SPISTATES::WAITFOREND;
-                }
-            }
-            break;
-        }  // switch(spiState)
-
-    }  // Serial2.available()
-
-    if (spiIdx >= static_cast<int>(kSlipBufferSize_)) {
-        Serial.println("PIOUART- Buffer overrun!!!");
+            case SPISTATES::ENDORBYTES:
+                // This state is no longer used - should not reach here
+                Serial.println("PIOUART- ERROR: Unexpected ENDORBYTES state");
+                ResetState_();
+                break;
+        }
     }
 }
 
@@ -93,6 +138,12 @@ void PIOUART::Parse_(spiMessage msg)
 {
     static const float kEventThresh = 0.01;
     static const size_t kObservedChan = 1;
+
+    // Additional safety check (should not be needed if validation above works)
+    if (msg.msg >= value_states_.size()) {
+        Serial.printf("PIOUART- Invalid message channel in Parse_: %d\n", msg.msg);
+        return;
+    }
 
     if (msg.msg < value_states_.size()) {
         // Protect against infs and nans
@@ -113,5 +164,7 @@ void PIOUART::Parse_(spiMessage msg)
             Serial.println(filtered_value, 8);
         }
         value_states_[msg.msg] = filtered_value;
+    } else {
+        Serial.printf("PIOUART- Invalid message channel: %d\n", msg.msg);
     }
 }
