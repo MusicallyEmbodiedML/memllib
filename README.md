@@ -15,3 +15,15 @@ Copy the file ```hardware/memlnaut/Setup9999_MEMLNaut.h.renameme``` to the ```Us
 //#include <User_Setup.h>           // Default setup is root library folder
 #include "User_Setups/Setup9999_MEMLNaut.h"
 ```
+
+
+
+## Flashing the Board
+
+Until we make our own board definition, use 'Solder Party RP2350 Stamp XL'
+
+In Tools menu:
+
+Optimisation: O3
+Debug: disabled
+
