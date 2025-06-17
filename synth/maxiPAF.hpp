@@ -35,8 +35,8 @@ constexpr float TABFRACSHIFT = (UNITBIT32/TABSIZE);
 
 
 //little endian
-#define HIOFFSET 1                                                              
-#define LOWOFFSET 0                                                             
+#define HIOFFSET 1
+#define LOWOFFSET 0
 
 #include <sys/types.h>
 #define int32 u_int32_t
@@ -67,6 +67,9 @@ constexpr float CAUCHYSLOPE = ((-2. * TABRANGE) * CAUCHYVAL * CAUCHYVAL);
 constexpr float ADDSQ = (- CAUCHYSLOPE / (2 * TABRANGE));
 constexpr float HALFSINELIM  = (0.997 * TABRANGE);
 constexpr float TABRANGERCPR = 1.f/TABRANGE;
+
+extern t_tabpoint paf_gauss[TABSIZE];
+extern t_tabpoint paf_cauchy[TABSIZE];
 
 class maxiPAFOperator {
 public:
@@ -160,43 +163,43 @@ public:
         }
     }
 
-    inline void freq(float val, const int time)
-    {
-        if (val < 1.f) val = 1.f;
-        if (val > 10000000.f) val = 1000000.f;
-        linenv_set(x_freqenv, val, time);
-    }
-    
-    inline void cf(const float val, const int time)
-    {
-        linenv_set(x_cfenv, val, time);
-    }
-    
-    inline void bw(const float val, const int time)
-    {
-        linenv_set(x_bwenv, val, time);
-    }
-    
-    inline void amp(const float val, const int time)
-    {
-        linenv_set(x_ampenv, val, time);
-    }
-    
-    inline void vib(const float val, const int time)
-    {
-        linenv_set(x_vibenv, val, time);
-    }
-    
-    inline void vfr(const float val, const int time)
-    {
-        linenv_set(x_vfrenv, val, time);
-    }
-    
-    inline void shift(const float val, const int time)
-    {
-        linenv_set(x_shiftenv, val, time);
-    }
-    
+    // inline void freq(float val, const int time)
+    // {
+    //     if (val < 1.f) val = 1.f;
+    //     if (val > 10000000.f) val = 1000000.f;
+    //     linenv_set(x_freqenv, val, time);
+    // }
+
+    // inline void cf(const float val, const int time)
+    // {
+    //     linenv_set(x_cfenv, val, time);
+    // }
+
+    // inline void bw(const float val, const int time)
+    // {
+    //     linenv_set(x_bwenv, val, time);
+    // }
+
+    // inline void amp(const float val, const int time)
+    // {
+    //     linenv_set(x_ampenv, val, time);
+    // }
+
+    // inline void vib(const float val, const int time)
+    // {
+    //     linenv_set(x_vibenv, val, time);
+    // }
+
+    // inline void vfr(const float val, const int time)
+    // {
+    //     linenv_set(x_vfrenv, val, time);
+    // }
+
+    // inline void shift(const float val, const int time)
+    // {
+    //     linenv_set(x_shiftenv, val, time);
+    // }
+
     inline void phase(const float mainphase, const float shiftphase,
         const float vibphase)
     {
@@ -205,8 +208,8 @@ public:
         x_vibphase = vibphase;
         x_triggerme = 1;
     }
-    
-    inline void play(float *out1, int n, float freqval, const float cfval, const float bwval, 
+
+    void __force_inline play(float *out1, int n, float freqval, const float cfval, const float bwval,
         const float vibval,
         const float vfrval,
         const bool x_cauchy=false)
@@ -234,12 +237,12 @@ public:
         t_tabpoint *paf_table = (x_cauchy ? paf_cauchy : paf_gauss);
         *phasehackp = ub32;
         hackval = *hackptr;
-    
+
             /* fractional part of shift phase */
         *phasehackp = shiftphase;
         *hackptr = hackval;
         shiftphase = *phasehackp;
-    
+
         /* propagate line envelopes */
         // LINENV_RUN(x_freqenv, freqval, freqinc);
         // LINENV_RUN(x_cfenv, cfval, cfinc);
@@ -247,27 +250,27 @@ public:
         // LINENV_RUN(x_ampenv, ampval, ampinc);
         // LINENV_RUN(x_vibenv, vibval, vibinc);
         // LINENV_RUN(x_vfrenv, vfrval, vfrinc);
-        LINENV_RUN(x_shiftenv, shiftval, shiftinc);
-    
+        // LINENV_RUN(x_shiftenv, shiftval, shiftinc);
+
         /* fake line envelope for quotient of bw and frequency */
         bwquotient = bwval/freqval;
-        bwqincr = (((float)(x_bwenv.l_current))/
-            ((float)(x_freqenv.l_current)) - bwquotient) *
-            x_freqenv.l_1overn;
-    
+        // bwqincr = (((float)(x_bwenv.l_current))/
+        //     ((float)(x_freqenv.l_current)) - bwquotient) *
+        //     x_freqenv.l_1overn;
+
         /* run the vibrato oscillator */
-        
-        *phasehackp = ub32 + (x_vibphase + n * x_isr * vfrval);
+
+        *phasehackp = UNITBIT32 + (x_vibphase + n * x_isr * vfrval);
         *hackptr = hackval;
         vibphase = (x_vibphase = *phasehackp - ub32);
         if (vibphase > 0.5)
             sinvib = 1.0f - 16.0f * (0.75f-vibphase) * (0.75f - vibphase);
         else sinvib = -1.0f + 16.0f * (0.25f-vibphase) * (0.25f - vibphase);
         freqval = freqval * (1.0f + vibval * sinvib);
-    
+
         shiftval *= x_isr;
         shiftinc *= x_isr;
-        
+
         /* if phase or amplitude is zero, load in new params */
         // if (ampval == 0 || phase == ub32 || x_triggerme)
         if (phase == ub32 || x_triggerme)
@@ -288,7 +291,7 @@ public:
             t_tabpoint *p;
                 /* put new phase into 64-bit memory location.  Bash upper
                 32 bits to get fractional part (plus "ub32").  */
-    
+
             *phasehackp = newphase;
             *hackptr = hackval;
             newphase = *phasehackp;
@@ -310,10 +313,10 @@ public:
             *phasehackp = carphase1 + fracnewphase;
             *hackptr = hackval;
             carphase2 = *phasehackp;
-            fcarphase2 = carphase2 - ub32;
-                
+            const float fcarphase2 = carphase2 - UNITBIT32;
+
             shiftphase += shiftval;
-        
+
             if (fcarphase1 > 0.5f)  g = fcarphase1 - 0.75f;
             else g = 0.25f - fcarphase1;
             g2 = g * g;
@@ -322,21 +325,21 @@ public:
 
             if (fcarphase2 > 0.5f)  g = fcarphase2 - 0.75f;
             else g = 0.25f - fcarphase2;
-            g2 = g * g;
-            g3 = g * g2;
-            cosine2 = g * PAFA1 + g3 * PAFA3 + g2 * g3 * PAFA5;
-        
-            carrier = cosine1 + held_fraccar * (cosine2-cosine1);
-    
-            // ampval += ampinc;
-            bwquotient += bwqincr;
-    
+            const float g2b = g * g;
+            const float g3b = g * g2b;
+            const float cosine2 = g * PAFA1 + g3b * PAFA3 + g2b * g3b * PAFA5;
+
+            const float carrier = cosine1 + held_fraccar * (cosine2-cosine1);
+
+            // ampval += abwqincrmpinc;
+            // bwquotient += bwqincr;
+
             /* printf("bwquotient %f\n", bwquotient); */
-    
+
             halfsine = held_bwquotient * (1.0f - fphase * fphase);
             if (halfsine >= HALFSINELIM)
                 halfsine = HALFSINELIM;
-    
+
     #if 0
             shape = halfsine * halfsine;
         mod = ampval * carrier *
@@ -348,26 +351,26 @@ public:
             exp(-shape);
     #endif
             halfsine *= TABRANGERCPR;
-    
+
                 /* Get table index for "halfsine".  Bash upper
                 32 bits to get fractional part (plus "ub32").  Also grab
                 fractional part as a fixed-point number to use as table
                 address later. */
-    
-            *phasehackp = halfsine + ub32;
+
+            *phasehackp = halfsine + UNITBIT32;
             lowbits = *lowptr;
-    
+
                     /* now shift again so that the fractional table address
                 appears in the low 32 bits, bash again, and extract this as
                 a floating point number from 0 to 1. */
             *phasehackp = halfsine + TABFRACSHIFT;
             *hackptr = hackval;
-            const float tabfrac = *phasehackp - ub32;
-    
+            const float tabfrac = *phasehackp - UNITBIT32;
+
             p = paf_table + (lowbits >> LOGTABSIZEINV);
             // const float mod = ampval * carrier * (p->p_y + tabfrac * p->p_diff);
             const float mod = carrier * (p->p_y + tabfrac * p->p_diff);
-            
+
             *out1++ = mod;
         }
         x_phase = phase - ub32;
@@ -377,7 +380,7 @@ public:
         x_held_fraccar = held_fraccar;
         x_held_bwquotient = held_bwquotient;
     }
-        
+
 
 
 private:
@@ -406,6 +409,6 @@ private:
 
 
 };
-    
+
 
 #endif // MAXIPAF_HPP
