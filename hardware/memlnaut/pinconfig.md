@@ -33,11 +33,17 @@
 | 45 | RV_Y1 | 5 | INPUT | 12-bit |
 | 44 | RV_X1 | 4 | INPUT | 12-bit |
 
+## LED:
+
+| Pin Number | Pin Name | Type | Description |
+|------------|----------|------|-------------|
+| 33 | LED | OUTPUT | Status LED |
+
 ## UART:
 
 | UART Name | TX Pin | RX Pin | Description |
 |-----------|--------|--------|-------------|
-| DaisyPIO | 33 | N/A | One-way communication to Daisy |
+| DaisyPIO | 39 | N/A | One-way communication to Daisy |
 | SensorUART | 36 | 37 | Bidirectional sensor communication |
 | MIDI | 4 | 5 | MIDI in/out |
 

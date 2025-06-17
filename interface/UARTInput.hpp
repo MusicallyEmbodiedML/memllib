@@ -16,7 +16,7 @@ public:
     // Change to trigger debugging of single channel
     static constexpr size_t kObservedChan = 9999;
 
-    using uart_in_callback_t = std::function<void(const std::vector<float>&)>;
+    using uart_in_callback_t = std::function<void(size_t, float)>;
     /**
      * @brief Construct a new UARTInput object for communication
      * with the MEML Sensor Board.
@@ -76,7 +76,7 @@ protected:
     void Parse_(spiMessage msg);
 
 private:
-    SerialPIO pioSerial_;
+    //SerialPIO pioSerial_;
 };
 
 #endif // __UART_INPUT_HPP__

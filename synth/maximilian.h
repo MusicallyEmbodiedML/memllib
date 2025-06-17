@@ -2836,8 +2836,9 @@ class maxiDynamics {
             float thresholdHigh, float ratioHigh, float kneeHigh,
             float thresholdLow, float ratioLow, float kneeLow
         ) {
-            float controlDB = maxiConvert::ampToDbs(inputAnalyser(control));
+            const float controlDB = maxiConvert::ampToDbs(inputAnalyser(control));
             float outDB = maxiConvert::ampToDbs(sig);
+            const float halfKneeHigh = kneeHigh * 0.5f;
             //companding above the high threshold
             if (ratioHigh > 0) {
                 if (kneeHigh > 0) {
@@ -3064,37 +3065,70 @@ class maxiDynamics {
 };
 
 
-class maxiBitQuant
-{
-    public:
-    float play(float w, float quantFactor) {
-        w *= quantFactor;
-        w = std::floorf(w);
-        w /= quantFactor;
-        return w;
-    }
-};
-
-class maxiDownSample
-{
+template<size_t DELAYTIME>
+class maxiReverbFilters{
 public:
-    float play(float w, float period) {
-        float ret = 0;
-        if (counter == 0) {
-            latchVal = w;
-            ret = w;
-        }
-        counter += 1;
-        if (counter >= period) {
-            counter = 0;
-        }
-        return latchVal;
-        //return ret;
+    maxiReverbFilters()
+    {
+        a = 0.0;
+        output = 0.0;
+        delay_index = 0;
+        feedback = 0.8;
+        gain_cof = 0.85;
+        delay_line.resize(DELAYTIME, 0);
     }
+    // float twopoint(float input);
+    float __force_inline comb1(float input, float size) {
+        delay_size = size;
+        output = delay_line[delay_index];
+        delay_line[delay_index] = input + (feedback * output);
+        delay_index != delay_size - 1 ? delay_index++ : delay_index = 0;
+        return output;
+    }
+
+    float __force_inline combfb(float input,float size,float fb) {
+        delay_size = size;
+        output = input + (fb * delay_line[delay_index]);
+        delay_line[delay_index] = output;
+        delay_index != delay_size - 1 ? delay_index++ : delay_index = 0;
+        return output;
+    }
+    // float lpcombfb(float input,float size,float fb, float cutoff);
+
+    float __force_inline allpass(float input,float size,float fb) {
+        delay_size = size;
+        input += delay_line[delay_index] * fb;
+        output = delay_line[delay_index] + (input * (-fb));
+        delay_line[delay_index] = input;
+        delay_index != delay_size - 1 ? delay_index++ : delay_index = 0;
+        return output;
+    }
+    // float allpasstap(float input,float size,int tap);
+    // void setlength(int length);
+    // float onetap(float input,float size);
+    // float tapd(float input,float size, float * taps,int numtaps);
+    // float tapdwgain(float input,float size, float * taps,int numtaps,float * gain);
+    // float tapdpos(float input,int size, int * taps,int numtaps);
+    float gettap(const size_t tap) {
+        size_t t = delay_index + tap;
+        if(t > delay_size -1){
+            t -= delay_size;
+        }
+        output = delay_line[t];
+        return output;
+    }
+
 private:
-    float counter=0.f;
-    float latchVal=0.f;
+    std::vector<float> delay_line;
+    float a;
+    int delay_index;
+    int delay_size;
+    float output;
+    float feedback;
+    float gain_cof;
+
+    maxiFilter mf;
+
+
 };
-
-
 #endif

@@ -7,7 +7,7 @@ UARTInput::UARTInput(const std::vector<size_t>& sensor_indexes,
                      size_t sensor_tx,
                      size_t baud_rate) :
     sensor_indexes_(sensor_indexes),
-    pioSerial_(sensor_tx, sensor_rx),
+    //pioSerial_(sensor_tx, sensor_rx),
     slipBuffer{ 0 },
     filters_(),
     value_states_{ 0 },
@@ -20,6 +20,9 @@ UARTInput::UARTInput(const std::vector<size_t>& sensor_indexes,
     filters_.resize(sensor_indexes.size());
     value_states_.resize(sensor_indexes.size());
     //pioSerial_.begin(baud_rate);
+    Serial1.setTX(sensor_tx);
+    Serial1.setRX(sensor_rx);
+    Serial1.begin(baud_rate);
 
     // Put all values in the middle
     for (auto &v : value_states_) {
@@ -48,19 +51,19 @@ void UARTInput::Poll()
         // What baud rate is the UART running at?
         // Print debug info about PIO Serial state
         Serial.print("PIO Serial Status - Initialized: ");
-        Serial.print(pioSerial_ ? "Yes" : "No");
+        Serial.print(Serial1 ? "Yes" : "No");
         Serial.print(", Target Baud Rate: ");
         Serial.println(baud_rate_);
         // Start at current baud rate
-        pioSerial_.begin(baud_rate_);
+        Serial1.begin(baud_rate_);
         Serial.println("PIO_UART refreshed.");
         Serial.print("Serial available: ");
-        Serial.println(pioSerial_.available());
+        Serial.println(Serial1.available());
         refresh_uart_ = true;
     }
 
-    while (pioSerial_.available()) {
-        spiByte = pioSerial_.read();
+    while (Serial1.available()) {
+        spiByte = Serial1.read();
         //Serial.printf("0x%02X ", spiByte);
 
         switch(spiState) {
@@ -128,7 +131,7 @@ void UARTInput::Parse_(spiMessage msg)
 
         // Trigger callback whenever any value has changed
         if (std::abs(filtered_value - prev_value) > kEventThresh) {
-            callback_(value_states_);
+            if (callback_) callback_(msg.msg, filtered_value);
         }
 
         // Print the value (Arduino scope) if it's the observed channel
