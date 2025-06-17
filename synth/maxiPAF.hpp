@@ -1,6 +1,8 @@
 #ifndef MAXIPAF_HPP
 #define MAXIPAF_HPP
 
+#include "maximilian.h"
+
 constexpr size_t LOGTABSIZE  = 9;
 constexpr size_t LOGTABSIZEINV  = 32 - LOGTABSIZE;
 constexpr size_t TABSIZE = (1 << LOGTABSIZE);
@@ -68,8 +70,10 @@ constexpr float ADDSQ = (- CAUCHYSLOPE / (2 * TABRANGE));
 constexpr float HALFSINELIM  = (0.997 * TABRANGE);
 constexpr float TABRANGERCPR = 1.f/TABRANGE;
 
+//todo: could be static and shared between operators
 extern t_tabpoint paf_gauss[TABSIZE];
 extern t_tabpoint paf_cauchy[TABSIZE];
+
 
 class maxiPAFOperator {
 public:
@@ -109,14 +113,14 @@ public:
             }
         }
 
-        linenv_init(x_freqenv);
-        linenv_init(x_cfenv);
-        linenv_init(x_bwenv);
-        linenv_init(x_ampenv);
-        linenv_init(x_vibenv);
-        linenv_init(x_vfrenv);
-        linenv_init(x_shiftenv);
-        x_freqenv.l_target = x_freqenv.l_current = 1.0;
+        // linenv_init(x_freqenv);
+        // linenv_init(x_cfenv);
+        // linenv_init(x_bwenv);
+        // linenv_init(x_ampenv);
+        // linenv_init(x_vibenv);
+        // linenv_init(x_vfrenv);
+        // linenv_init(x_shiftenv);
+        // x_freqenv.l_target = x_freqenv.l_current = 1.0;
         x_isr = 1.f/44100.f;
         x_held_freq = 1.f;
         x_held_intcar = 0.f;
@@ -137,13 +141,13 @@ public:
     void setsr(const float sr, const int vecsize)
     {
         x_isr = 1.f/sr;
-        linenv_setsr(x_freqenv, sr, vecsize);
-        linenv_setsr(x_cfenv, sr, vecsize);
-        linenv_setsr(x_bwenv, sr, vecsize);
-        linenv_setsr(x_ampenv, sr, vecsize);
-        linenv_setsr(x_vibenv, sr, vecsize);
-        linenv_setsr(x_vfrenv, sr, vecsize);
-        linenv_setsr(x_shiftenv, sr, vecsize);
+        // linenv_setsr(x_freqenv, sr, vecsize);
+        // linenv_setsr(x_cfenv, sr, vecsize);
+        // linenv_setsr(x_bwenv, sr, vecsize);
+        // linenv_setsr(x_ampenv, sr, vecsize);
+        // linenv_setsr(x_vibenv, sr, vecsize);
+        // linenv_setsr(x_vfrenv, sr, vecsize);
+        // linenv_setsr(x_shiftenv, sr, vecsize);
     }
 
     inline void linenv_set(t_linenv &l, const float target, const long timdel)
@@ -212,6 +216,7 @@ public:
     void __force_inline play(float *out1, int n, float freqval, const float cfval, const float bwval,
         const float vibval,
         const float vfrval,
+        float shiftval,
         const bool x_cauchy=false)
     {
         // float freqinc;
@@ -220,13 +225,13 @@ public:
         // float ampval, ampinc;
         // float vibval, vibinc;
         // float vfrval, vfrinc;
-        float shiftval, shiftinc;
+        float shiftinc;
         float bwquotient, bwqincr;
-        double  ub32 = UNITBIT32;
-        double phase = x_phase + ub32;
+        // const double ub32 = UNITBIT32;
+        double phase = x_phase + UNITBIT32;
         double phasehack;
         volatile double *phasehackp = &phasehack;
-        double shiftphase = x_shiftphase + ub32;
+        double shiftphase = x_shiftphase + UNITBIT32;
         volatile int32 *hackptr = ((int32 *)(phasehackp)) + HIOFFSET, hackval;
         volatile int32 *lowptr = ((int32 *)(phasehackp)) + LOWOFFSET, lowbits;
         float held_freq = x_held_freq;
@@ -235,7 +240,7 @@ public:
         float held_bwquotient = x_held_bwquotient;
         float sinvib, vibphase;
         t_tabpoint *paf_table = (x_cauchy ? paf_cauchy : paf_gauss);
-        *phasehackp = ub32;
+        *phasehackp = UNITBIT32;
         hackval = *hackptr;
 
             /* fractional part of shift phase */
@@ -262,7 +267,7 @@ public:
 
         *phasehackp = UNITBIT32 + (x_vibphase + n * x_isr * vfrval);
         *hackptr = hackval;
-        vibphase = (x_vibphase = *phasehackp - ub32);
+        vibphase = (x_vibphase = *phasehackp - UNITBIT32);
         if (vibphase > 0.5)
             sinvib = 1.0f - 16.0f * (0.75f-vibphase) * (0.75f - vibphase);
         else sinvib = -1.0f + 16.0f * (0.25f-vibphase) * (0.25f - vibphase);
@@ -273,7 +278,7 @@ public:
 
         /* if phase or amplitude is zero, load in new params */
         // if (ampval == 0 || phase == ub32 || x_triggerme)
-        if (phase == ub32 || x_triggerme)
+        if (phase == UNITBIT32 || x_triggerme)
         {
             float cf_over_freq = cfval/freqval;
             held_freq = freqval * x_isr;
@@ -286,8 +291,7 @@ public:
         {
             double newphase = phase + held_freq;
             double carphase1, carphase2, fracnewphase;
-            float fphase, fcarphase1, fcarphase2, carrier;
-            float g, g2, g3, cosine1, cosine2, halfsine;
+            float g,halfsine;
             t_tabpoint *p;
                 /* put new phase into 64-bit memory location.  Bash upper
                 32 bits to get fractional part (plus "ub32").  */
@@ -295,8 +299,8 @@ public:
             *phasehackp = newphase;
             *hackptr = hackval;
             newphase = *phasehackp;
-            fracnewphase = newphase-ub32;
-            fphase = 2.0f * ((float)(fracnewphase)) - 1.0f;
+            fracnewphase = newphase-UNITBIT32;
+            const float fphase = 2.0f * ((float)(fracnewphase)) - 1.0f;
             if (newphase < phase)
             {
                 float cf_over_freq = cfval/freqval;
@@ -309,7 +313,7 @@ public:
             *phasehackp = fracnewphase * held_intcar + shiftphase;
             *hackptr = hackval;
             carphase1 = *phasehackp;
-            fcarphase1 = carphase1 - ub32;
+            const float fcarphase1 = carphase1 - UNITBIT32;
             *phasehackp = carphase1 + fracnewphase;
             *hackptr = hackval;
             carphase2 = *phasehackp;
@@ -319,9 +323,9 @@ public:
 
             if (fcarphase1 > 0.5f)  g = fcarphase1 - 0.75f;
             else g = 0.25f - fcarphase1;
-            g2 = g * g;
-            g3 = g * g2;
-            cosine1 = g * PAFA1 + g3 * PAFA3 + g2 * g3 * PAFA5;
+            const float g2a = g * g;
+            const float g3a = g * g2a;
+            const float cosine1 = g * PAFA1 + g3a * PAFA3 + g2a * g3a * PAFA5;
 
             if (fcarphase2 > 0.5f)  g = fcarphase2 - 0.75f;
             else g = 0.25f - fcarphase2;
@@ -363,7 +367,7 @@ public:
                     /* now shift again so that the fractional table address
                 appears in the low 32 bits, bash again, and extract this as
                 a floating point number from 0 to 1. */
-            *phasehackp = halfsine + TABFRACSHIFT;
+                *phasehackp = halfsine + TABFRACSHIFT;
             *hackptr = hackval;
             const float tabfrac = *phasehackp - UNITBIT32;
 
@@ -373,8 +377,8 @@ public:
 
             *out1++ = mod;
         }
-        x_phase = phase - ub32;
-        x_shiftphase = shiftphase - ub32;
+        x_phase = phase - UNITBIT32;
+        x_shiftphase = shiftphase - UNITBIT32;
         x_held_freq = held_freq;
         x_held_intcar = held_intcar;
         x_held_fraccar = held_fraccar;
@@ -385,17 +389,14 @@ public:
 
 private:
 
-    //todo: could be static and shared between operators
-    t_tabpoint paf_gauss[TABSIZE];
-    t_tabpoint paf_cauchy[TABSIZE];
 
-    t_linenv x_freqenv;
-    t_linenv x_cfenv;
-    t_linenv x_bwenv;
-    t_linenv x_ampenv;
-    t_linenv x_vibenv;
-    t_linenv x_vfrenv;
-    t_linenv x_shiftenv;
+    // t_linenv x_freqenv;
+    // t_linenv x_cfenv;
+    // t_linenv x_bwenv;
+    // t_linenv x_ampenv;
+    // t_linenv x_vibenv;
+    // t_linenv x_vfrenv;
+    // t_linenv x_shiftenv;
     float x_isr;
     float x_held_freq;
     float x_held_intcar;
