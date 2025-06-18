@@ -1,7 +1,7 @@
 #ifndef INTERFACERL_HPP
 #define INTERFACERL_HPP
 
-#include "InterfaceBase.hpp"
+#include "../interface/InterfaceBase.hpp"
 
 #include "../../memlp/MLP.h"
 #include "../../memlp/ReplayMemory.hpp"
