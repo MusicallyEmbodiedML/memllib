@@ -217,7 +217,7 @@ void InterfaceRL::optimise() {
         float loss = critic->Train(ts, learningRate, 1);
 
         //TODO: size limit to this log
-        criticLossLog.push_back(loss);
+        //criticLossLog.push_back(loss);
 
         //update the actor
 

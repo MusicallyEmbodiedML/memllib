@@ -120,7 +120,7 @@ private:
     std::vector<float> criticInput;
     std::vector<float> actorControlInput;
 
-    std::vector<float> criticLossLog, actorLossLog, log1;
+    //std::vector<float> criticLossLog, actorLossLog, log1;
 
 
 };

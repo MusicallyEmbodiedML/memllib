@@ -74,19 +74,21 @@ public:
     /// \param encodedBuffer A pointer to the \p encodedBuffer to decode.
     /// \param size The number of bytes in the \p encodedBuffer.
     /// \param decodedBuffer The target buffer for the decoded bytes.
+    /// \param maxOut Maximum bytes to write to decodedBuffer.
     /// \returns The number of bytes written to the \p decodedBuffer.
-    /// \warning decodedBuffer must have a minimum capacity of size.
+    /// \warning decodedBuffer must have a minimum capacity of maxOut.
     static size_t decode(const uint8_t* encodedBuffer,
                          size_t size,
-                         uint8_t* decodedBuffer)
+                         uint8_t* decodedBuffer,
+                         size_t maxOut)
     {
-        if (size == 0)
+        if (size == 0 || maxOut == 0)
             return 0;
 
         size_t read_index  = 0;
         size_t write_index = 0;
 
-        while (read_index < size)
+        while (read_index < size && write_index < maxOut)
         {
             if (encodedBuffer[read_index] == END)
             {
@@ -95,19 +97,28 @@ public:
             }
             else if (encodedBuffer[read_index] == ESC)
             {
-                if (encodedBuffer[read_index+1] == ESC_END)
+                if (read_index + 1 < size)
                 {
-                    decodedBuffer[write_index++] = END;
-                    read_index += 2;
-                }
-                else if (encodedBuffer[read_index+1] == ESC_ESC)
-                {
-                    decodedBuffer[write_index++] = ESC;
-                    read_index += 2;
+                    if (encodedBuffer[read_index+1] == ESC_END)
+                    {
+                        decodedBuffer[write_index++] = END;
+                        read_index += 2;
+                    }
+                    else if (encodedBuffer[read_index+1] == ESC_ESC)
+                    {
+                        decodedBuffer[write_index++] = ESC;
+                        read_index += 2;
+                    }
+                    else
+                    {
+                        // This case is considered a protocol violation.
+                        read_index++;
+                    }
                 }
                 else
                 {
-                    // This case is considered a protocol violation.
+                    // Incomplete escape sequence
+                    break;
                 }
             }
             else
@@ -117,6 +128,14 @@ public:
         }
 
         return write_index;
+    }
+
+    // Keep the old interface for backward compatibility
+    static size_t decode(const uint8_t* encodedBuffer,
+                         size_t size,
+                         uint8_t* decodedBuffer)
+    {
+        return decode(encodedBuffer, size, decodedBuffer, SIZE_MAX);
     }
 
     /// \brief Get the maximum encoded buffer size for an unencoded buffer size.

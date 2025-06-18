@@ -7,7 +7,6 @@ UARTInput::UARTInput(const std::vector<size_t>& sensor_indexes,
                      size_t sensor_tx,
                      size_t baud_rate) :
     sensor_indexes_(sensor_indexes),
-    //pioSerial_(sensor_tx, sensor_rx),
     slipBuffer{ 0 },
     filters_(),
     value_states_{ 0 },
@@ -17,36 +16,36 @@ UARTInput::UARTInput(const std::vector<size_t>& sensor_indexes,
     refresh_uart_(false),
     baud_rate_(baud_rate)
 {
+    // Reserve once to avoid heap fragmentation at runtime
+    filters_.reserve(sensor_indexes.size());
+    value_states_.reserve(sensor_indexes.size());
     filters_.resize(sensor_indexes.size());
-    value_states_.resize(sensor_indexes.size());
-    //pioSerial_.begin(baud_rate);
+    value_states_.resize(sensor_indexes.size(), 0.5f);
+
+    // Tie RX to a known level to avoid floating
+    pinMode(sensor_rx, INPUT_PULLDOWN);
+
     Serial1.setTX(sensor_tx);
     Serial1.setRX(sensor_rx);
     Serial1.begin(baud_rate);
-
-    // Put all values in the middle
-    for (auto &v : value_states_) {
-        v = 0.5f;
-    }
 }
 
 void UARTInput::ListenToSensorIndexes(const std::vector<size_t>& indexes)
 {
     sensor_indexes_ = indexes;
 
-    // Clear and recreate filters
+    // Reserve to avoid repeated reallocs
+    filters_.reserve(indexes.size());
+    value_states_.reserve(indexes.size());
+
     filters_.clear();
     filters_.resize(indexes.size());
-
-    // Clear and reset value states
     value_states_.clear();
     value_states_.resize(indexes.size(), 0.5f);
 }
 
 void UARTInput::Poll()
 {
-    uint8_t spiByte = 32;
-
     if (!refresh_uart_) {
         // What baud rate is the UART running at?
         // Print debug info about PIO Serial state
@@ -62,53 +61,54 @@ void UARTInput::Poll()
         refresh_uart_ = true;
     }
 
-    while (Serial1.available()) {
-        spiByte = Serial1.read();
-        //Serial.printf("0x%02X ", spiByte);
+    while (true) {
+        int raw = Serial1.read();
+        if (raw < 0) break;                           // no more data
+        uint8_t spiByte = static_cast<uint8_t>(raw);
 
         switch(spiState) {
             case SPISTATES::WAITFOREND:
-            if (spiByte != -1) {
                 if (spiByte == SLIP::END) {
                     slipBuffer[0] = SLIP::END;
                     spiState = SPISTATES::ENDORBYTES;
-                }else{
                 }
-            }
-            break;
-            case ENDORBYTES:
-            if (spiByte != -1) {
+                break;
+
+            case SPISTATES::ENDORBYTES:
                 if (spiByte == SLIP::END) {
                     spiIdx = 1;
-
-                }else{
+                } else {
                     slipBuffer[1] = spiByte;
-                    spiIdx=2;
+                    spiIdx = 2;
                 }
                 spiState = SPISTATES::READBYTES;
-            }
-            break;
-            case READBYTES:
-            if (spiByte != -1) {
+                break;
 
-                slipBuffer[spiIdx++] = spiByte;
-                if (spiByte == SLIP::END) {
-                spiMessage decodeMsg;
-                SLIP::decode(slipBuffer, spiIdx, reinterpret_cast<uint8_t*>(&decodeMsg));
+            case SPISTATES::READBYTES:
+                if (spiIdx < static_cast<int>(kSlipBufferSize_)) {
+                    slipBuffer[spiIdx++] = spiByte;
 
-                // Process the decoded message
-                Parse_(decodeMsg);
-
-                spiState = SPISTATES::WAITFOREND;
+                    if (spiByte == SLIP::END) {
+                        // Safe decode into fixed buffer
+                        uint8_t outBuf[sizeof(spiMessage)] = {0};
+                        size_t  maxOut = sizeof(spiMessage);
+                        size_t  got    = SLIP::decode(slipBuffer, spiIdx, outBuf, maxOut);
+                        if (got == maxOut) {
+                            spiMessage msg;
+                            memcpy(&msg, outBuf, maxOut);
+                            Parse_(msg);
+                        }
+                        // Reset for next packet
+                        spiState = SPISTATES::WAITFOREND;
+                        spiIdx   = 0;
+                    }
+                } else {
+                    Serial.println("UARTInput: SLIP buffer overrun, dropping packet");
+                    spiState = SPISTATES::WAITFOREND;
+                    spiIdx   = 0;
                 }
-            }
-            break;
-        }  // switch(spiState)
-
-    }  // pioSerial_.available()
-
-    if (spiIdx >= static_cast<int>(kSlipBufferSize_)) {
-        Serial.println("UARTInput- Buffer overrun!!!");
+                break;
+        }
     }
 }
 
