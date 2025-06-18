@@ -17,6 +17,7 @@ MIDIInOut::MIDIInOut() : n_outputs_(0),
                          cc_callback_(nullptr),
                          note_callback_(nullptr),
                          send_channel_(1),
+                         note_channel_(1),
                          refresh_uart_(false) {
     instance_ = this;
 }
@@ -118,6 +119,15 @@ void MIDIInOut::SetMIDISendChannel(uint8_t channel) {
     send_channel_ = channel;
 }
 
+void MIDIInOut::SetMIDINoteChannel(uint8_t channel) {
+    // Ensure channel is in valid range (1-16)
+    if (channel < 1 || channel > 16) {
+        Serial.printf("Warning: Invalid MIDI note channel %d (must be 1-16)\n", channel);
+        return;
+    }
+    note_channel_ = channel;
+}
+
 void MIDIInOut::SetCCCallback(midi_cc_callback_t callback) {
     cc_callback_ = callback;
 }
@@ -158,4 +168,30 @@ void MIDIInOut::RefreshUART_(void) {
 
         Serial.println("MIDI UART refreshed.");
     }
+}
+
+bool MIDIInOut::sendNoteOn(uint8_t note_number, uint8_t velocity) {
+    if (note_number > 127 || velocity > 127) {
+        return false;
+    }
+
+    RefreshUART_(); // Refresh UART if needed
+
+    while(!Serial2) { delay(1); } // Wait for Serial2
+    MIDI.sendNoteOn(note_number, velocity, note_channel_);
+    MEMORY_BARRIER();
+    return true;
+}
+
+bool MIDIInOut::sendNoteOff(uint8_t note_number, uint8_t velocity) {
+    if (note_number > 127 || velocity > 127) {
+        return false;
+    }
+
+    RefreshUART_(); // Refresh UART if needed
+
+    while(!Serial2) { delay(1); } // Wait for Serial2
+    MIDI.sendNoteOff(note_number, velocity, note_channel_);
+    MEMORY_BARRIER();
+    return true;
 }

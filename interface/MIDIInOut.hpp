@@ -34,6 +34,33 @@ public:
      * @note The channel is set to 1-16, but the library uses 0-15 internally.
      */
     void SetMIDISendChannel(uint8_t channel);
+
+    /**
+     * @brief Set the MIDI channel to send note messages on.
+     *
+     * @param channel MIDI channel (1-16).
+     * @note The channel is set to 1-16, but the library uses 0-15 internally.
+     */
+    void SetMIDINoteChannel(uint8_t channel);
+
+    /**
+     * @brief Send a MIDI Note On message
+     *
+     * @param note_number MIDI note number (0-127)
+     * @param velocity Note velocity (0-127)
+     * @return true if message sent successfully, false otherwise
+     */
+    bool sendNoteOn(uint8_t note_number, uint8_t velocity);
+
+    /**
+     * @brief Send a MIDI Note Off message
+     *
+     * @param note_number MIDI note number (0-127)
+     * @param velocity Note velocity (0-127, typically 0)
+     * @return true if message sent successfully, false otherwise
+     */
+    bool sendNoteOff(uint8_t note_number, uint8_t velocity = 0);
+
     /**
      * @brief Poll input. Put in a regular loop.
      */
@@ -103,6 +130,7 @@ protected:
     midi_cc_callback_t cc_callback_;
     midi_note_callback_t note_callback_;
     uint8_t send_channel_;  // Store the MIDI send channel (1-16)
+    uint8_t note_channel_;  // Store the MIDI note channel (1-16)
     bool refresh_uart_;
     static MIDIInOut* instance_;  // Add static instance pointer
 
