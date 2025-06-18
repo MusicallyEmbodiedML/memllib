@@ -35,21 +35,21 @@ void EuclideanAudioApp::ProcessParams(const std::vector<float>& params) {
 }
 
 
-void EuclideanAudioApp::Process(const stereosample_t x) {
+stereosample_t EuclideanAudioApp::Process(const stereosample_t x) {
     // Process audio with Euclidean rhythms
-    phasor += phase_increment_;
-    if (phasor >= 1.0f) {
-        phasor -= 1.0f;
+    phase_ += phase_increment_;
+    if (phase_ >= 1.0f) {
+        phase_ -= 1.0f;
     }
 
     // Audio is passthrough
     stereosample_t output = x;
 
-    std::vector<float> eucliean_output(kN_Operators);
+    std::vector<float> euclidean_output(kN_Operators);
     for (size_t i = 0; i < kN_Operators; ++i) {
         const auto& op_params = params_t.op_params[i];
-        eucliean_output[i] = static_cast<float>(
-            euclidean(phasor,
+        euclidean_output[i] = static_cast<float>(
+            euclidean(phase_,
                       op_params.n,
                       op_params.k,
                       op_params.offset,
@@ -58,7 +58,7 @@ void EuclideanAudioApp::Process(const stereosample_t x) {
     }
 
     if (euclidean_callback_) {
-        euclidean_callback_(eucliean_output);
+        euclidean_callback_(euclidean_output);
     }
 
     return output;

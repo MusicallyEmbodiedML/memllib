@@ -7,6 +7,10 @@
 #include "../audio/AudioAppBase.hpp"
 
 
+static_assert(sizeof(size_t) == sizeof(float),
+              "size_t and float must have the same size for automatic parameter counting");
+
+
 class EuclideanAudioApp : public AudioAppBase
 {
 public:
@@ -30,14 +34,17 @@ public:
     using euclidean_callback_t = std::function<void(const std::vector<float>&)>;
 
     // API
-    EuclideanAudioApp : public AudioAppBase();
-    ~EuclideanAudioApp : public AudioAppBase();
+    EuclideanAudioApp() : AudioAppBase() {};
 
     stereosample_t Process(const stereosample_t x) override;
     void Setup(float sample_rate, std::shared_ptr<InterfaceBase> interface) override;
     void ProcessParams(const std::vector<float>& params) override;
     inline void SetBPM(float bpm)
     {
+        // Validate BPM range
+        if (bpm <= 0.0f || bpm > 999.0f) {
+            return; // Ignore invalid BPM values
+        }
         static constexpr float kOneOverSixty = 1.0f / 60.0f;
         // Calculate phase increment based on BPM
         phase_increment_ = (bpm * kOneOverSixty) * kSampleRateRcpr;
@@ -69,7 +76,7 @@ protected:
         { 1, 16, 1, 16 } // Operator 7
     };
 
-    float phasor = 0.0f;
+    float phase_ = 0.0f;
     float phase_increment_ = 0.0f;
     euclidean_callback_t euclidean_callback_ = nullptr;
 
@@ -83,6 +90,14 @@ protected:
      */
     inline size_t DiscreteMap_(float x, size_t min, size_t max)
     {
+        // Handle edge cases
+        if (min > max) {
+            return min; // Return min if range is invalid
+        }
+        if (min == max) {
+            return min; // Return the single value
+        }
+
         // Clamp x to [0, 1]
         x = x < 0.0f ? 0.0f : (x > 1.0f ? 1.0f : x);
         // Map to range [min, max] with proper rounding
@@ -100,7 +115,13 @@ protected:
         // Map n, k, offset from params
         op_params.n = DiscreteMap_(params[0], voicing.n_min, voicing.n_max);
         op_params.k = DiscreteMap_(params[1], voicing.k_min, voicing.k_max);
-        op_params.offset = DiscreteMap_(params[2], 0, op_params.n - 1);
+
+        // Ensure n is at least 1 before calculating offset range
+        if (op_params.n > 0) {
+            op_params.offset = DiscreteMap_(params[2], 0, op_params.n - 1);
+        } else {
+            op_params.offset = 0;
+        }
 
         // Ensure k is not greater than n
         if (op_params.k > op_params.n) {
@@ -110,16 +131,24 @@ protected:
 
     static bool __force_inline euclidean(float _phase, const size_t _n, const size_t _k, const size_t _offset, const float _pulseWidth)
     {
-        // Euclidean function
-        const float fi = _phase * _n;
-        int i = static_cast<int>(fi);
-        const float rem = fi - i;
-        if (i == _n)
-        {
-            i--;
+        // Euclidean function with proper size_t arithmetic
+        if (_n == 0 || _k == 0) {
+            return false;
         }
-        const int idx = ((i + _n - _offset) * _k) % _n;
-        return (idx < _k && rem < _pulseWidth) ? 1 : 0;
+
+        const float fi = _phase * static_cast<float>(_n);
+        size_t i = static_cast<size_t>(fi);
+        const float rem = fi - static_cast<float>(i);
+
+        if (i >= _n) {
+            i = _n - 1;
+        }
+
+        // Fix integer overflow by using proper modular arithmetic
+        const size_t adjusted_i = (i + _n - (_offset % _n)) % _n;
+        const size_t idx = (adjusted_i * _k) % _n;
+
+        return (idx < _k && rem < _pulseWidth);
     }
 };
 
