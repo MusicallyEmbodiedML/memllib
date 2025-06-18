@@ -11,6 +11,9 @@
 // Forward declarations
 class Dataset;
 template<typename T> class MLP;
+class UARTInput;
+class MIDIInOut;
+class display;
 
 class IMLInterface : public InterfaceBase
 {
@@ -18,6 +21,7 @@ public:
     IMLInterface() : InterfaceBase() {}
 
     void setup(size_t n_inputs, size_t n_outputs) override;
+    void setup(size_t n_inputs, size_t n_outputs, std::shared_ptr<display> disp);
 
     enum training_mode_t {
         INFERENCE_MODE,
@@ -38,6 +42,11 @@ public:
     void Randomise();
     void SetIterations(size_t iterations);
 
+    // New binding methods
+    void bindInterface();
+    void bindUARTInput(std::shared_ptr<UARTInput> uart_input, const std::vector<size_t>& kUARTListenInputs);
+    void bindMIDI(std::shared_ptr<MIDIInOut> midi_interf);
+
 protected:
     size_t n_inputs_;
     size_t n_outputs_;
@@ -57,6 +66,9 @@ protected:
     std::unique_ptr<MLP<float>> mlp_;
     MLP<float>::mlp_weights mlp_stored_weights_;
     bool randomised_state_;
+
+    // Display reference for binding methods
+    std::shared_ptr<display> disp_;
 
     void MLSetup_();
     void MLInference_(std::vector<float> input);

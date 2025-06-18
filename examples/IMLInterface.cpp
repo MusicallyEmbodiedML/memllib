@@ -1,6 +1,11 @@
 #include "IMLInterface.hpp"
 #include "../../memlp/Dataset.hpp"
 #include "../../memlp/MLP.h"
+#include "../hardware/memlnaut/MEMLNaut.hpp"
+#include "../interface/UARTInput.hpp"
+#include "../interface/MIDIInOut.hpp"
+#include "../hardware/memlnaut/display.hpp"
+#include <algorithm>
 
 void IMLInterface::setup(size_t n_inputs, size_t n_outputs)
 {
@@ -25,6 +30,12 @@ void IMLInterface::setup(size_t n_inputs, size_t n_outputs)
     Serial.print(n_inputs_);
     Serial.print(", Outputs: ");
     Serial.println(n_outputs_);
+}
+
+void IMLInterface::setup(size_t n_inputs, size_t n_outputs, std::shared_ptr<display> disp)
+{
+    setup(n_inputs, n_outputs);
+    disp_ = disp;
 }
 
 void IMLInterface::SetTrainingMode(training_mode_t training_mode)
@@ -242,4 +253,87 @@ void IMLInterface::MLTraining_()
             false);
     Serial.print("Trained, loss = ");
     Serial.println(loss, 10);
+}
+
+void IMLInterface::bindInterface()
+{
+    // Set up momentary switch callbacks
+    MEMLNaut::Instance()->setMomA1Callback([this]() {
+        this->Randomise();
+        if (disp_) {
+            disp_->post("Randomised");
+        }
+    });
+    MEMLNaut::Instance()->setMomA2Callback([this]() {
+        this->ClearData();
+        if (disp_) {
+            disp_->post("Dataset cleared");
+        }
+    });
+
+    // Set up toggle switch callbacks
+    MEMLNaut::Instance()->setTogA1Callback([this](bool state) {
+        if (disp_) {
+            disp_->post(state ? "Training mode" : "Inference mode");
+        }
+        this->SetTrainingMode(state ? TRAINING_MODE : INFERENCE_MODE);
+        if (disp_ && state == false) {
+            disp_->post("Model trained");
+        }
+    });
+    MEMLNaut::Instance()->setJoySWCallback([this](bool state) {
+        this->SaveInput(state ? STORE_VALUE_MODE : STORE_POSITION_MODE);
+        if (disp_) {
+            disp_->post(state ? "Where do you want it?" : "Here!");
+        }
+    });
+
+    // Set up joystick callbacks
+    MEMLNaut::Instance()->setJoyXCallback([this](float value) {
+        this->SetInput(0, value);
+    });
+    MEMLNaut::Instance()->setJoyYCallback([this](float value) {
+        this->SetInput(1, value);
+    });
+    MEMLNaut::Instance()->setJoyZCallback([this](float value) {
+        this->SetInput(2, value);
+    });
+
+    // Set up other ADC callbacks
+    MEMLNaut::Instance()->setRVZ1Callback([this](float value) {
+        // Scale value from 0-1 range to 1-3000
+        value = 1.0f + (value * 2999.0f);
+        this->SetIterations(static_cast<size_t>(value));
+    });
+
+    // Set up loop callback
+    MEMLNaut::Instance()->setLoopCallback([this]() {
+        this->ProcessInput();
+    });
+}
+
+void IMLInterface::bindUARTInput(std::shared_ptr<UARTInput> uart_input, const std::vector<size_t>& kUARTListenInputs)
+{
+    if (uart_input) {
+        uart_input->SetCallback([this, kUARTListenInputs](size_t sensor_index, float value) {
+            // Find param index based on kUARTListenInputs
+            auto it = std::find(kUARTListenInputs.begin(), kUARTListenInputs.end(), sensor_index);
+            if (it != kUARTListenInputs.end()) {
+                size_t param_index = std::distance(kUARTListenInputs.begin(), it);
+                Serial.printf("Sensor %zu: %f\n", sensor_index, value);
+                this->SetInput(param_index, value);
+            } else {
+                Serial.printf("Invalid sensor index: %zu\n", sensor_index);
+            }
+        });
+    }
+}
+
+void IMLInterface::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf)
+{
+    if (midi_interf) {
+        midi_interf->SetCCCallback([this](uint8_t cc_number, uint8_t cc_value) {
+            Serial.printf("MIDI CC %d: %d\n", cc_number, cc_value);
+        });
+    }
 }
