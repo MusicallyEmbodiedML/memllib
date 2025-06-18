@@ -11,7 +11,7 @@
 
 
 #define TEST_TONES    0
-#define PASSTHROUGH   1
+#define PASSTHROUGH   0
 
 
 constexpr int sampleRate = kSampleRate; // minimum for many i2s DACs
