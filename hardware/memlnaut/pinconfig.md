@@ -43,8 +43,8 @@
 
 | UART Name | TX Pin | RX Pin | Description |
 |-----------|--------|--------|-------------|
-| DaisyPIO | 39 | N/A | One-way communication to Daisy |
-| SensorUART | 36 | 37 | Bidirectional sensor communication |
+| DaisyPIO | 36 | N/A | One-way communication to Daisy |
+| SensorUART | 34 | 35 | Bidirectional sensor communication |
 | MIDI | 4 | 5 | MIDI in/out |
 
 ## SPI:
@@ -52,3 +52,9 @@
 | SPI Name | CS Pin | SCK Pin | MISO Pin | MOSI Pin | Description |
 |----------|--------|---------|----------|----------|-------------|
 | SDCard | 13 | 14 | 12 | 15 | SPI interface to onboard SD card |
+
+## I2C:
+
+| I2C Name | SDA Pin | SCL Pin | Description |
+|----------|---------|---------|-------------|
+| USeqI2C | 38 | 39 | USeq output for CV |

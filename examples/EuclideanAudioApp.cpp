@@ -45,7 +45,8 @@ stereosample_t EuclideanAudioApp::Process(const stereosample_t x) {
     // Audio is passthrough
     stereosample_t output = x;
 
-    std::vector<float> euclidean_output(kN_Operators);
+    // Use stack-allocated array instead of vector for efficiency
+    float euclidean_output[kN_Operators];
     for (size_t i = 0; i < kN_Operators; ++i) {
         const auto& op_params = params_t.op_params[i];
         euclidean_output[i] = static_cast<float>(
@@ -57,8 +58,11 @@ stereosample_t EuclideanAudioApp::Process(const stereosample_t x) {
         );
     }
 
-    if (euclidean_callback_) {
-        euclidean_callback_(euclidean_output);
+    // Only call callback if values have changed
+    if (euclidean_callback_ && HasOutputChanged_(euclidean_output)) {
+        // Convert to vector only when callback is actually called
+        std::vector<float> output_vector(euclidean_output, euclidean_output + kN_Operators);
+        euclidean_callback_(output_vector);
     }
 
     return output;

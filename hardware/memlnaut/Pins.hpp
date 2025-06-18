@@ -69,7 +69,7 @@ public:
      * Digital pins used for UART communication
      * @{
      */
-    static constexpr uint8_t DAISY_TX = 39; ///< One-way TX to Daisy (PIO software serial)
+    static constexpr uint8_t DAISY_TX = 36; ///< One-way TX to Daisy (PIO software serial)
     static constexpr uint8_t SENSOR_TX = 34; ///< Sensor UART TX (Serial1)
     static constexpr uint8_t SENSOR_RX = 35; ///< Sensor UART RX (Serial1)
     static constexpr uint8_t MIDI_TX = 4;   ///< MIDI UART TX (Serial2)
@@ -85,6 +85,15 @@ public:
     static constexpr uint8_t SD_SCK = 14;   ///< SD card clock
     static constexpr uint8_t SD_MISO = 12;  ///< SD card MISO
     static constexpr uint8_t SD_MOSI = 15;  ///< SD card MOSI
+    /** @} */
+
+    /**
+     * @name I2C Pins
+     * Digital pins used for I2C communication
+     * @{
+     */
+    static constexpr uint8_t USEQ_SDA = 38; ///< USeq I2C SDA (CV output)
+    static constexpr uint8_t USEQ_SCL = 39; ///< USeq I2C SCL (CV output)
     /** @} */
 
     /**
@@ -125,6 +134,10 @@ public:
         pinMode(SENSOR_RX, INPUT);
         pinMode(MIDI_TX, OUTPUT);
         pinMode(MIDI_RX, INPUT);
+
+        // Initialize I2C pins (just as digital IO)
+        pinMode(USEQ_SDA, OUTPUT);
+        pinMode(USEQ_SCL, OUTPUT);
 
         // Set ADC resolution to 12 bits
         analogReadResolution(12);

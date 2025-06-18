@@ -79,6 +79,7 @@ protected:
     float phase_ = 0.0f;
     float phase_increment_ = 0.0f;
     euclidean_callback_t euclidean_callback_ = nullptr;
+    float previous_euclidean_output_[kN_Operators] = {0.0f}; ///< Previous output values for change detection
 
     /**
      * @brief Map a float value [0..1] to a discrete range
@@ -149,6 +150,23 @@ protected:
         const size_t idx = (adjusted_i * _k) % _n;
 
         return (idx < _k && rem < _pulseWidth);
+    }
+
+    /**
+     * @brief Check if euclidean output has changed since last call
+     * @param current_output Current euclidean output values (fixed-size array)
+     * @return true if any value has changed, false otherwise
+     */
+    inline bool HasOutputChanged_(const float current_output[kN_Operators]) {
+        bool changed = false;
+        // Update all values and check for changes in single pass
+        for (size_t i = 0; i < kN_Operators; ++i) {
+            if (current_output[i] != previous_euclidean_output_[i]) {
+                previous_euclidean_output_[i] = current_output[i];
+                changed = true;
+            }
+        }
+        return changed;
     }
 };
 
