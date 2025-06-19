@@ -12,6 +12,9 @@
 #include "../PicoDefs.hpp"
 #include "../hardware/memlnaut/display.hpp" // Added include
 
+#include "../interface/UARTInput.hpp"
+#include "../interface/MIDIInOut.hpp"
+
 #define RL_MEM __not_in_flash("rlmem")
 
 #define XIASRI    0
@@ -30,6 +33,7 @@ class InterfaceRL : public InterfaceBase
 public:
 
     void setup(size_t n_inputs, size_t n_outputs);
+    void setup(size_t n_inputs, size_t n_outputs, std::shared_ptr<display> disp);
 
     void optimise();
 
@@ -74,6 +78,24 @@ public:
 
     // New methods
     void bind_RL_interface(display& scr_ref); // scr_ref is passed once here
+    void bindInterface()
+    {
+        if (m_scr_ptr) {
+            bind_RL_interface(*m_scr_ptr); // Use the stored pointer to display
+        } else {
+            Serial.println("Display pointer is null, cannot bind interface.");
+        }
+    }
+    void bindUARTInput(std::shared_ptr<UARTInput> uart_input,
+        const std::vector<size_t>& kUARTListenInputs)
+    {
+        Serial.println("bindUARTInput not implemented yet");
+    }
+    void bindMIDI(std::shared_ptr<MIDIInOut> midi_interf)
+    {
+        Serial.println("bindMIDI not implemented yet");
+    }
+
     void trigger_like();
     void trigger_dislike();
     void trigger_randomiseRL();

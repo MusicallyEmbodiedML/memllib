@@ -171,6 +171,11 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
     );
 }
 
+void InterfaceRL::setup(size_t n_inputs, size_t n_outputs, std::shared_ptr<display> disp) {
+    this->setup(n_inputs, n_outputs);
+    m_scr_ptr = disp.get(); // Store the pointer to the display object
+}
+
 void InterfaceRL::optimise() {
     constexpr size_t batchSize = 4;
     std::vector<trainRLItem> sample = replayMem.sample(batchSize);
