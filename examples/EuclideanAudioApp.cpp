@@ -6,7 +6,7 @@ void EuclideanAudioApp::Setup(float sample_rate, std::shared_ptr<InterfaceBase> 
     AudioAppBase::Setup(sample_rate, interface);
     // Additional setup code specific to EuclideanAudioApp
     phase_ = 0.0f;
-    SetBPM(120.0f); // Default BPM
+    SetBPM(10.0f); // Default BPM
 }
 
 
