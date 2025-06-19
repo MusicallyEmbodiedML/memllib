@@ -63,7 +63,7 @@ void InterfaceRL::trigger_randomiseRL() {
     _perform_randomiseRL_action();
 }
 
-void InterfaceRL::bind_RL_interface(display& scr_ref) {
+void InterfaceRL::bind_RL_interface(display& scr_ref, bool disable_joystick) {
     m_scr_ptr = &scr_ref; // Store the pointer to the display object
 
     // Set up momentary switch callbacks
@@ -82,16 +82,18 @@ void InterfaceRL::bind_RL_interface(display& scr_ref) {
         Serial.println("The Critic is confounded");
         if (m_scr_ptr) m_scr_ptr->post("Critic: totally confounded");
     });
-    // Set up ADC callbacks
-    MEMLNaut::Instance()->setJoyXCallback([this](float value) {
-        this->setState(0, value);
-    });
-    MEMLNaut::Instance()->setJoyYCallback([this](float value) {
-        this->setState(1, value);
-    });
-    MEMLNaut::Instance()->setJoyZCallback([this](float value) {
-        this->setState(2, value);
-    });
+    if (!disable_joystick) {
+        // Set up ADC callbacks
+        MEMLNaut::Instance()->setJoyXCallback([this](float value) {
+            this->setState(0, value);
+        });
+        MEMLNaut::Instance()->setJoyYCallback([this](float value) {
+            this->setState(1, value);
+        });
+        MEMLNaut::Instance()->setJoyZCallback([this](float value) {
+            this->setState(2, value);
+        });
+    }
 
     MEMLNaut::Instance()->setRVX1Callback([this](float value) { // scr_ref no longer captured directly
         size_t divisor = 1 + (value * 100);

@@ -77,11 +77,11 @@ public:
     }
 
     // New methods
-    void bind_RL_interface(display& scr_ref); // scr_ref is passed once here
-    void bindInterface()
+    void bind_RL_interface(display& scr_ref, bool disable_joystick = false); // scr_ref is passed once here
+    void bindInterface(bool disable_joystick = false)
     {
         if (m_scr_ptr) {
-            bind_RL_interface(*m_scr_ptr); // Use the stored pointer to display
+            bind_RL_interface(*m_scr_ptr, disable_joystick); // Use the stored pointer to display
         } else {
             Serial.println("Display pointer is null, cannot bind interface.");
         }

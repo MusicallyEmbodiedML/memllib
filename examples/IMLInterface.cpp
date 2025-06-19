@@ -255,7 +255,7 @@ void IMLInterface::MLTraining_()
     Serial.println(loss, 10);
 }
 
-void IMLInterface::bindInterface()
+void IMLInterface::bindInterface(bool disable_joystick)
 {
     // Set up momentary switch callbacks
     MEMLNaut::Instance()->setMomA1Callback([this]() {
@@ -288,16 +288,19 @@ void IMLInterface::bindInterface()
         }
     });
 
-    // Set up joystick callbacks
-    MEMLNaut::Instance()->setJoyXCallback([this](float value) {
-        this->SetInput(0, value);
-    });
-    MEMLNaut::Instance()->setJoyYCallback([this](float value) {
-        this->SetInput(1, value);
-    });
-    MEMLNaut::Instance()->setJoyZCallback([this](float value) {
-        this->SetInput(2, value);
-    });
+    if (!disable_joystick) {
+
+        // Set up joystick callbacks
+        MEMLNaut::Instance()->setJoyXCallback([this](float value) {
+            this->SetInput(0, value);
+        });
+        MEMLNaut::Instance()->setJoyYCallback([this](float value) {
+            this->SetInput(1, value);
+        });
+        MEMLNaut::Instance()->setJoyZCallback([this](float value) {
+            this->SetInput(2, value);
+        });
+    }
 
     // Set up other ADC callbacks
     MEMLNaut::Instance()->setRVZ1Callback([this](float value) {

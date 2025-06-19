@@ -43,7 +43,7 @@ public:
     void SetIterations(size_t iterations);
 
     // New binding methods
-    void bindInterface();
+    void bindInterface(bool disable_joystick = false);
     void bindUARTInput(std::shared_ptr<UARTInput> uart_input, const std::vector<size_t>& kUARTListenInputs);
     void bindMIDI(std::shared_ptr<MIDIInOut> midi_interf);
 
