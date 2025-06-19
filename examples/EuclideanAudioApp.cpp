@@ -21,12 +21,15 @@ void EuclideanAudioApp::ProcessParams(const std::vector<float>& params) {
         return;
     }
 
+    // Calculate the number of parameters per operator based on operator_params_t
+    constexpr size_t params_per_operator = sizeof(operator_params_t) / sizeof(float);
+
     // Process parameters for each operator
     for (size_t i = 0; i < kN_Operators; ++i) {
         // Get the relevant parameters for current operator
         std::vector<float> current_params(
-            params.begin() + i * 3,
-            params.begin() + (i + 1) * 3
+            params.begin() + i * params_per_operator,
+            params.begin() + (i + 1) * params_per_operator
         );
         VoiceOperator_(params_t.op_params[i],
                        current_params,
@@ -49,12 +52,14 @@ stereosample_t EuclideanAudioApp::Process(const stereosample_t x) {
     float euclidean_output[kN_Operators];
     for (size_t i = 0; i < kN_Operators; ++i) {
         const auto& op_params = params_t.op_params[i];
+        // Pulse width: half a step (1/(2*N)), always a submultiple of N
+        float pulse_width = 1.0f / (2.0f * static_cast<float>(op_params.n));
         euclidean_output[i] = static_cast<float>(
             euclidean(phase_,
                       op_params.n,
                       op_params.k,
                       op_params.offset,
-                      kPulseWidth)
+                      pulse_width)
         );
     }
 

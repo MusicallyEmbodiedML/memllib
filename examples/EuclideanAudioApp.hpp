@@ -16,7 +16,6 @@ class EuclideanAudioApp : public AudioAppBase
 public:
 
     // Constant values
-    static constexpr float kPulseWidth = 0.05f;
     static constexpr size_t kN_Operators = 8;
 
     // Parameter definitions
@@ -115,7 +114,8 @@ protected:
     {
         // Map n, k, offset from params
         op_params.n = DiscreteMap_(params[0], voicing.n_min, voicing.n_max);
-        op_params.k = DiscreteMap_(params[1], voicing.k_min, voicing.k_max);
+        size_t local_k_max = std::min(voicing.k_max, op_params.n); // Ensure k does not exceed n
+        op_params.k = DiscreteMap_(params[1], voicing.k_min, local_k_max);
 
         // Ensure n is at least 1 before calculating offset range
         if (op_params.n > 0) {
@@ -128,28 +128,38 @@ protected:
         if (op_params.k > op_params.n) {
             op_params.k = op_params.n;
         }
+
+        // Serial.print("Operator params: n=");
+        // Serial.print(op_params.n);
+        // Serial.print(", k=");
+        // Serial.print(op_params.k);
+        // Serial.print(", offset=");
+        // Serial.println(op_params.offset);
     }
 
     static bool __force_inline euclidean(float _phase, const size_t _n, const size_t _k, const size_t _offset, const float _pulseWidth)
     {
-        // Euclidean function with proper size_t arithmetic
-        if (_n == 0 || _k == 0) {
+        if (_n == 0 || _k == 0 || _k > _n) {
             return false;
         }
 
+        // Convert phase to step index
         const float fi = _phase * static_cast<float>(_n);
-        size_t i = static_cast<size_t>(fi);
-        const float rem = fi - static_cast<float>(i);
+        size_t step = static_cast<size_t>(fi);
+        const float rem = fi - static_cast<float>(step);
 
-        if (i >= _n) {
-            i = _n - 1;
+        if (step >= _n) {
+            step = _n - 1;
         }
 
-        // Fix integer overflow by using proper modular arithmetic
-        const size_t adjusted_i = (i + _n - (_offset % _n)) % _n;
-        const size_t idx = (adjusted_i * _k) % _n;
+        // Apply offset
+        step = (step + _offset) % _n;
 
-        return (idx < _k && rem < _pulseWidth);
+        // Simple Euclidean rhythm using integer arithmetic
+        // This gives the correct Euclidean distribution
+        const bool is_pulse_step = ((step * _k) / _n) != (((step - 1 + _n) % _n) * _k) / _n;
+
+        return (is_pulse_step && rem < _pulseWidth);
     }
 
     /**
