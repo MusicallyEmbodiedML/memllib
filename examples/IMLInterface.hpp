@@ -41,6 +41,7 @@ public:
     bool ClearData();
     bool Randomise();
     void SetIterations(size_t iterations);
+    bool ZoomIn(bool zoom_out = false);
 
     // New binding methods
     void bindInterface(bool disable_joystick = false);
@@ -66,6 +67,8 @@ protected:
     std::unique_ptr<MLP<float>> mlp_;
     MLP<float>::mlp_weights mlp_stored_weights_;
     bool randomised_state_;
+    MLP<float>::mlp_weights mlp_pre_zoom_weights_;
+    bool zoomed_in_state_;
 
     // Display reference for binding methods
     std::shared_ptr<display> disp_;
@@ -74,6 +77,7 @@ protected:
     void MLInference_(std::vector<float> input);
     void MLRandomise_();
     bool MLTraining_();
+    void MLPreTrainCentre_();
 };
 
 #endif  // __IML_INTERFACE_HPP__

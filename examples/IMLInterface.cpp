@@ -22,6 +22,8 @@ void IMLInterface::setup(size_t n_inputs, size_t n_outputs)
     training_mode_ = INFERENCE_MODE;
     perform_inference_ = true;
     input_updated_ = false;
+    randomised_state_ = false;
+    zoomed_in_state_ = false;
 
     Serial.println("IMLInterface setup done");
     Serial.print("Address of n_inputs_: ");
@@ -267,6 +269,32 @@ bool IMLInterface::MLTraining_()
     return true;
 }
 
+bool IMLInterface::ZoomIn(bool zoom_out)
+{
+    if (zoom_out) {
+        // Zoom out
+        if (zoomed_in_state_) {
+            zoomed_in_state_ = false;
+            if (mlp_pre_zoom_weights_.size() > 0) {
+                mlp_->SetWeights(mlp_pre_zoom_weights_);
+            }
+
+            return true;
+        }
+    } else {
+        // Zoom in
+        if (!zoomed_in_state_) {
+            zoomed_in_state_ = true;
+            mlp_pre_zoom_weights_ = mlp_->GetWeights();
+        }
+        MLPreTrainCentre_();
+
+        return true;
+    }
+
+    return false;
+}
+
 void IMLInterface::bindInterface(bool disable_joystick)
 {
     // Set up momentary switch callbacks
@@ -278,6 +306,16 @@ void IMLInterface::bindInterface(bool disable_joystick)
     MEMLNaut::Instance()->setMomA2Callback([this]() {
         if (this->ClearData() && disp_) {
             disp_->post("Dataset cleared");
+        }
+    });
+    MEMLNaut::Instance()->setMomB1Callback([this]() {
+        if (this->ZoomIn(false) && disp_) {
+            disp_->post("Zoomed in");
+        }
+    });
+    MEMLNaut::Instance()->setMomB2Callback([this]() {
+        if (this->ZoomIn(true) && disp_) {
+            disp_->post("Zoomed out");
         }
     });
 
@@ -349,4 +387,19 @@ void IMLInterface::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf)
             Serial.printf("MIDI CC %d: %d\n", cc_number, cc_value);
         });
     }
+}
+
+void IMLInterface::MLPreTrainCentre_()
+{
+    auto pretrain_dataset_ = std::make_unique<Dataset>();
+    std::vector<float> centre_input_(n_inputs_, 0.5f);
+    pretrain_dataset_->Add(centre_input_, output_state_);
+    MLP<float>::training_pair_t dataset(
+            pretrain_dataset_->GetFeatures(),
+            pretrain_dataset_->GetLabels());
+    float loss = mlp_->Train(dataset,
+            1.,
+            n_iterations_,
+            0,
+            false);
 }
