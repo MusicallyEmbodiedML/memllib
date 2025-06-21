@@ -17,6 +17,13 @@ public:
         }
         return false;
     }
+    void setState(bool pressed) {
+        if (pressed) {
+            lastPressTime_ms = millis() - kHaltTime_ms;
+        } else {
+            lastPressTime_ms = millis();
+        }
+    }
 };
 
 class ToggleDebounce {
@@ -31,7 +38,7 @@ public:
         unsigned long currentTime = millis();
         bool shouldUpdate = false;
 
-        if (currentState != lastState && 
+        if (currentState != lastState &&
             currentTime - lastChangeTime_ms >= kHaltTime_ms) {
             lastChangeTime_ms = currentTime;
             lastState = currentState;
@@ -42,6 +49,10 @@ public:
 
     bool getState() const {
         return lastState;
+    }
+    void setState(bool state) {
+        lastState = state;
+        lastChangeTime_ms = millis() - kHaltTime_ms;
     }
 };
 

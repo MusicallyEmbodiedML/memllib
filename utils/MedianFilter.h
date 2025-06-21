@@ -26,8 +26,8 @@ public:
         reset();
     }
 
-    void reset() {
-        std::fill(circularBuffer_.begin(), circularBuffer_.end(), 0);
+    void reset(T value = 0) {
+        std::fill(circularBuffer_.begin(), circularBuffer_.end(), value);
         currentIndex_ = 0;
     }
 

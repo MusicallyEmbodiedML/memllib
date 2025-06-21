@@ -171,6 +171,13 @@ void MEMLNaut::setLoopCallback(LoopCallback cb) {
 }
 
 void MEMLNaut::loop() {
+
+    static bool first_run = true;
+    if (first_run) {
+        first_run = false;
+        SyncOnBoot();
+    }
+
     const uint8_t adcPins[NUM_ADCS] = {
         Pins::JOY_X, Pins::JOY_Y, Pins::JOY_Z,
         Pins::RV_GAIN1, Pins::RV_Z1, Pins::RV_Y1, Pins::RV_X1
@@ -190,5 +197,37 @@ void MEMLNaut::loop() {
 
     if (loopCallback) {
         loopCallback();
+    }
+}
+
+void MEMLNaut::SyncOnBoot() {
+    // Synchronize ADCs
+    const uint8_t adcPins[NUM_ADCS] = {
+        Pins::JOY_X, Pins::JOY_Y, Pins::JOY_Z,
+        Pins::RV_GAIN1, Pins::RV_Z1, Pins::RV_Y1, Pins::RV_X1
+    };
+    for (size_t i = 0; i < NUM_ADCS; i++) {
+        uint16_t rawValue = analogRead(adcPins[i]);
+        adcFilters[i].reset(rawValue); // Reset filter to current value
+        float currentValue = rawValue / ADC_SCALE;
+        adcStates[i].lastValue = currentValue;
+        if (adcStates[i].callback) {
+            adcStates[i].callback(currentValue);
+        }
+    }
+
+    // Synchronize toggle switches
+    const uint8_t togglePins[NUM_TOGGLES] = {
+        Pins::TOG_A1, Pins::TOG_A2, Pins::TOG_B1, Pins::TOG_B2, Pins::JOY_SW
+    };
+    ToggleCallback toggleCallbacks[NUM_TOGGLES] = {
+        togA1Callback, togA2Callback, togB1Callback, togB2Callback, joySWCallback
+    };
+    for (size_t i = 0; i < NUM_TOGGLES; i++) {
+        bool state = (digitalRead(togglePins[i]) == LOW);
+        toggleDebouncers[i].setState(state);
+        if (toggleCallbacks[i]) {
+            toggleCallbacks[i](state);
+        }
     }
 }
