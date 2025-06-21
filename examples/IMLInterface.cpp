@@ -38,16 +38,20 @@ void IMLInterface::setup(size_t n_inputs, size_t n_outputs, std::shared_ptr<disp
     disp_ = disp;
 }
 
-void IMLInterface::SetTrainingMode(training_mode_t training_mode)
+bool IMLInterface::SetTrainingMode(training_mode_t training_mode)
 {
     Serial.print("Training mode: ");
     Serial.println(training_mode == INFERENCE_MODE ? "Inference" : "Training");
 
+    bool has_trained = false;
+
     if (training_mode == INFERENCE_MODE && training_mode_ == TRAINING_MODE) {
         // Train the network!
-        MLTraining_();
+        has_trained = MLTraining_();
     }
     training_mode_ = training_mode;
+
+    return has_trained;
 }
 
 void IMLInterface::ProcessInput()
@@ -90,46 +94,53 @@ void IMLInterface::SetInput(size_t index, float value)
     input_updated_ = true;
 }
 
-void IMLInterface::SaveInput(saving_mode_t mode)
+bool IMLInterface::SaveInput(saving_mode_t mode)
 {
     if (training_mode_ == TRAINING_MODE) {
-        if (STORE_VALUE_MODE == mode) {
+        if (STORE_VALUE_MODE == mode && perform_inference_) {
 
             Serial.println("Move input to position...");
             perform_inference_ = false;
+            return true;
 
-        } else {  // STORE_POSITION_MODE
+        } else if (STORE_POSITION_MODE == mode && !perform_inference_) {
 
             Serial.println("Creating example in this position.");
             // Save pair in the dataset
             dataset_->Add(input_state_, output_state_);
             perform_inference_ = true;
             MLInference_(input_state_);
-
+            return true;
         }
+        return false;
     } else {
         Serial.println("Switch to training mode first.");
+        return false;
     }
 }
 
-void IMLInterface::ClearData()
+bool IMLInterface::ClearData()
 {
     if (training_mode_ == TRAINING_MODE) {
         Serial.println("Clearing dataset...");
         dataset_->Clear();
+        return true;
     } else {
         Serial.println("Switch to training mode first.");
+        return false;
     }
 }
 
-void IMLInterface::Randomise()
+bool IMLInterface::Randomise()
 {
     if (training_mode_ == TRAINING_MODE) {
         Serial.println("Randomising weights...");
         MLRandomise_();
         MLInference_(input_state_);
+        return true;
     } else {
         Serial.println("Switch to training mode first.");
+        return false;
     }
 }
 
@@ -209,11 +220,11 @@ void IMLInterface::MLRandomise_()
     randomised_state_ = true;
 }
 
-void IMLInterface::MLTraining_()
+bool IMLInterface::MLTraining_()
 {
     if (!mlp_) {
         Serial.println("ML not initialized!");
-        return;
+        return false;
     }
     // Restore old weights
     if (randomised_state_) {
@@ -231,7 +242,7 @@ void IMLInterface::MLTraining_()
     Serial.println(dataset.second.size());
     if (!dataset.first.size() || !dataset.second.size()) {
         Serial.println("Empty dataset!");
-        return;
+        return false;
     }
     Serial.print("Feature dim ");
     Serial.print(dataset.first[0].size());
@@ -239,7 +250,7 @@ void IMLInterface::MLTraining_()
     Serial.println(dataset.second[0].size());
     if (!dataset.first[0].size() || !dataset.second[0].size()) {
         Serial.println("Empty dataset dimensions!");
-        return;
+        return false;
     }
 
     // Training loop
@@ -253,20 +264,19 @@ void IMLInterface::MLTraining_()
             false);
     Serial.print("Trained, loss = ");
     Serial.println(loss, 10);
+    return true;
 }
 
 void IMLInterface::bindInterface(bool disable_joystick)
 {
     // Set up momentary switch callbacks
     MEMLNaut::Instance()->setMomA1Callback([this]() {
-        this->Randomise();
-        if (disp_) {
+        if (this->Randomise() && disp_) {
             disp_->post("Randomised");
         }
     });
     MEMLNaut::Instance()->setMomA2Callback([this]() {
-        this->ClearData();
-        if (disp_) {
+        if (this->ClearData() && disp_) {
             disp_->post("Dataset cleared");
         }
     });
@@ -276,14 +286,14 @@ void IMLInterface::bindInterface(bool disable_joystick)
         if (disp_) {
             disp_->post(state ? "Training mode" : "Inference mode");
         }
-        this->SetTrainingMode(state ? TRAINING_MODE : INFERENCE_MODE);
-        if (disp_ && state == false) {
+        bool trained = this->SetTrainingMode(state ? TRAINING_MODE : INFERENCE_MODE);
+        if (disp_ && state == false && trained) {
             disp_->post("Model trained");
         }
     });
     MEMLNaut::Instance()->setJoySWCallback([this](bool state) {
-        this->SaveInput(state ? STORE_VALUE_MODE : STORE_POSITION_MODE);
-        if (disp_) {
+        bool saved = this->SaveInput(state ? STORE_VALUE_MODE : STORE_POSITION_MODE);
+        if (disp_ && saved) {
             disp_->post(state ? "Where do you want it?" : "Here!");
         }
     });

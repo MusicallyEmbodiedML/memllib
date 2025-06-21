@@ -28,18 +28,18 @@ public:
         TRAINING_MODE
     };
 
-    void SetTrainingMode(training_mode_t training_mode);
+    bool SetTrainingMode(training_mode_t training_mode);
     void ProcessInput();
     void SetInput(size_t index, float value);
 
     enum saving_mode_t {
         STORE_VALUE_MODE,
-        STORE_POSITION_MODE,
+        STORE_POSITION_MODE
     };
 
-    void SaveInput(saving_mode_t mode);
-    void ClearData();
-    void Randomise();
+    bool SaveInput(saving_mode_t mode);
+    bool ClearData();
+    bool Randomise();
     void SetIterations(size_t iterations);
 
     // New binding methods
@@ -73,7 +73,7 @@ protected:
     void MLSetup_();
     void MLInference_(std::vector<float> input);
     void MLRandomise_();
-    void MLTraining_();
+    bool MLTraining_();
 };
 
 #endif  // __IML_INTERFACE_HPP__
