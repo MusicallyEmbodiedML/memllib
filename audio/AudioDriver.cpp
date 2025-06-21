@@ -31,6 +31,8 @@ static __attribute__((aligned(8))) pio_i2s i2s;
 
 volatile bool AUDIO_MEM dsp_overload;
 
+float master_volume_ = 0;
+
 #if TEST_TONES
 maxiOsc osc, osc2;
 
@@ -84,8 +86,8 @@ static inline __attribute__((always_inline)) void AUDIO_FUNC(process_normal)(
 
     y = audio_callback_(y);  // y should now be in [-1.0, 1.0] range
 
-    output[indexL] = static_cast<int32_t>(_scale_and_saturate(y.L));
-    output[indexR] = static_cast<int32_t>(_scale_and_saturate(y.R));
+    output[indexL] = static_cast<int32_t>(_scale_and_saturate(y.L * master_volume_));
+    output[indexR] = static_cast<int32_t>(_scale_and_saturate(y.R * master_volume_));
 }
 
 static void AUDIO_FUNC(process_audio)(const int32_t* input, int32_t* output, size_t num_frames) {
@@ -175,6 +177,7 @@ bool AudioDriver::Setup(const codec_config_t &config) {
     }
 
     dsp_overload = false;
+    master_volume_ = 0;
 
     maxiSettings::setup(kSampleRate, 2, kBufferSize);
 
@@ -198,6 +201,8 @@ bool AudioDriver::Setup(const codec_config_t &config) {
         true
     };
     i2s_program_start_synched(pio0, &picoI2SConfig, dma_i2s_in_handler, &i2s);
+
+    setDACVolume(3.9f);
 
     // init i2c
     codecCtl.enable();

@@ -1,4 +1,5 @@
 #include "MEMLNaut.hpp"
+#include "../../audio/AudioDriver.hpp"
 
 MEMLNaut* MEMLNaut::instance = nullptr;
 
@@ -111,6 +112,9 @@ MEMLNaut::MEMLNaut() {
     attachInterrupt(digitalPinToInterrupt(Pins::TOG_B1), handleTogB1, CHANGE);
     attachInterrupt(digitalPinToInterrupt(Pins::TOG_B2), handleTogB2, CHANGE);
     attachInterrupt(digitalPinToInterrupt(Pins::JOY_SW), handleJoySW, CHANGE);
+
+    // Force RVGain to be master volume
+    setRVGain1Volume(DEFAULT_THRESHOLD);
 }
 
 // Momentary switch callback setters
@@ -140,7 +144,17 @@ void MEMLNaut::setJoyZCallback(AnalogCallback cb, uint16_t threshold) {
     adcStates[2] = {analogRead(Pins::JOY_Z) / ADC_SCALE, threshold, cb};
 }
 void MEMLNaut::setRVGain1Callback(AnalogCallback cb, uint16_t threshold) {
-    adcStates[3] = {analogRead(Pins::RV_GAIN1) / ADC_SCALE, threshold, cb};
+    //adcStates[3] = {analogRead(Pins::RV_GAIN1) / ADC_SCALE, threshold, cb};
+    Serial.println("RVGain1 overridden - only controls audio volume");
+}
+void MEMLNaut::setRVGain1Volume(uint16_t threshold) {
+    adcStates[3] = {
+        analogRead(Pins::RV_GAIN1) / ADC_SCALE,
+        threshold,
+        [] (float value) {
+            AudioDriver::SetMasterVolume(value);
+        }
+    };
 }
 void MEMLNaut::setRVZ1Callback(AnalogCallback cb, uint16_t threshold) {
     adcStates[4] = {analogRead(Pins::RV_Z1) / ADC_SCALE, threshold, cb};

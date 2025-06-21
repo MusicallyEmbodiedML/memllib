@@ -107,12 +107,21 @@ public:
     void setJoyYCallback(AnalogCallback cb, uint16_t threshold = DEFAULT_THRESHOLD);
     void setJoyZCallback(AnalogCallback cb, uint16_t threshold = DEFAULT_THRESHOLD);
     void setRVGain1Callback(AnalogCallback cb, uint16_t threshold = DEFAULT_THRESHOLD);
+    void setRVGain1Volume(uint16_t threshold = DEFAULT_THRESHOLD);
     void setRVZ1Callback(AnalogCallback cb, uint16_t threshold = DEFAULT_THRESHOLD);
     void setRVY1Callback(AnalogCallback cb, uint16_t threshold = DEFAULT_THRESHOLD);
     void setRVX1Callback(AnalogCallback cb, uint16_t threshold = DEFAULT_THRESHOLD);
 
     // Main loop callback setter
     void setLoopCallback(LoopCallback cb);
+
+    /**
+     * @brief Read all pots and switches at once. Synchronise with the
+     * state of the hardware panel. Run once after all callbacks are
+     * correctly created and all interfaces and references are set up.
+     *
+     */
+    void SyncOnBoot();
 
     void loop();
 };

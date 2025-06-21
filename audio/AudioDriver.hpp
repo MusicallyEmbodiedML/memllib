@@ -33,6 +33,7 @@ enum PinConfig_i2c {
 };
 
 extern volatile bool AUDIO_MEM dsp_overload;
+extern float master_volume_;
 
 class AudioDriver {
  public:
@@ -49,6 +50,14 @@ class AudioDriver {
         Serial.print("AUDIO_DRIVER - Callback address: ");
         Serial.printf("%p\n", audio_callback_);
     }
+    static inline void SetMasterVolume(float volume) {
+        if (volume > 1.0f) {
+            volume = 1.0f;
+        } else if (volume < 0) {
+            volume = 0;
+        }
+        master_volume_ = volume;
+    }
 
     static inline size_t GetSampleRate() { return kSampleRate; }
 
@@ -56,6 +65,8 @@ class AudioDriver {
 
     static void i2sOutputCallback(void);
     static stereosample_t silence_(stereosample_t);
+
+private:
     static void setDACVolume(float n);
 };
 
