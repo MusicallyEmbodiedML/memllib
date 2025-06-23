@@ -95,6 +95,22 @@ void InterfaceRL::bind_RL_interface(display& scr_ref, bool disable_joystick) {
         });
     }
 
+    
+    MEMLNaut::Instance()->setTogB1Callback([this](bool state) { // scr_ref no longer captured directly
+        if (state) {
+            this->forgetMemory();
+            static APP_SRAM std::vector<String> forgetmsgs = {
+                "Erasing my memory", "Forgetting everything", "Memory wiped","Thank you Susan?",
+                "Starting afresh", "Why care about the past?","Living in the moment"
+            };
+            String msg = forgetmsgs[rand() % forgetmsgs.size()];
+
+            if (m_scr_ptr) m_scr_ptr->post(msg);
+        
+        }
+    });
+
+
     MEMLNaut::Instance()->setRVX1Callback([this](float value) { // scr_ref no longer captured directly
         size_t divisor = 1 + (value * 100);
         String msg;
