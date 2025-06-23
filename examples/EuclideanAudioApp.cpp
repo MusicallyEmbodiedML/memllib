@@ -6,7 +6,7 @@ void EuclideanAudioApp::Setup(float sample_rate, std::shared_ptr<InterfaceBase> 
     AudioAppBase::Setup(sample_rate, interface);
     // Additional setup code specific to EuclideanAudioApp
     phase_ = 0.0f;
-    SetBPM(10.0f); // Default BPM
+    SetBPM(20.0f); // Default BPM
 }
 
 
@@ -53,7 +53,7 @@ stereosample_t EuclideanAudioApp::Process(const stereosample_t x) {
     for (size_t i = 0; i < kN_Operators; ++i) {
         const auto& op_params = params_t.op_params[i];
         // Pulse width: half a step (1/(2*N)), always a submultiple of N
-        float pulse_width = 1.0f / (2.0f * static_cast<float>(op_params.n));
+        float pulse_width = 0.5f;
         euclidean_output[i] = static_cast<float>(
             euclidean(phase_,
                       op_params.n,
