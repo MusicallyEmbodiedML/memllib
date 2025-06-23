@@ -138,7 +138,7 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
 
     actor_layers_nodes = {
         stateSize + bias,
-        10, 10,
+        10, 12,
         actionSize
     };
 
@@ -266,7 +266,7 @@ void InterfaceRL::optimise() {
             for(size_t j=0; j < actionSize; j++) {
              actorLoss[j] += l0Grads[j+stateSize]; // Accumulate gradients for actions
             }
-            delay(1); // This delay might be problematic in an optimization loop
+            // delay(1); // This delay might be problematic in an optimization loop
         }
 
         float totalLoss = 0.f;
@@ -288,7 +288,7 @@ void InterfaceRL::optimise() {
             // MLP::ApplyLoss expects the gradient of the loss function w.r.t the output of the network.
             // So, actorLoss (which is dQ/da) is the correct gradient to pass.
             actor->ApplyLoss(actorInput, actorLoss, learningRate);
-            delay(1); // This delay might be problematic
+            // delay(1); // This delay might be problematic
         }
 
         // soft update the target networks
