@@ -23,6 +23,10 @@ void IMLInterface::setup(size_t n_inputs, size_t n_outputs)
     perform_inference_ = true;
     input_updated_ = false;
 
+    zoom_centre_ = std::vector<float>(n_inputs_, 0.5f);
+    zoom_enabled_ = false;
+    zoom_factor_ = 0.5f;
+
     Serial.println("IMLInterface setup done");
     Serial.print("Address of n_inputs_: ");
     Serial.println(reinterpret_cast<uintptr_t>(&n_inputs_));
@@ -64,7 +68,12 @@ void IMLInterface::ProcessInput()
             Serial.print(" ");
         }
         Serial.println();
-        MLInference_(input_state_);
+        // Only zoom here
+        std::vector<float> zoomed_input = input_state_;
+        if (zoom_enabled_) {
+            zoomed_input = ZoomCoordinates(input_state_, zoom_centre_, zoom_factor_);
+        }
+        MLInference_(zoomed_input);
         input_updated_ = false;
     }
 }
@@ -149,6 +158,17 @@ void IMLInterface::SetIterations(size_t iterations)
     n_iterations_ = iterations;
     Serial.print("Iterations set to: ");
     Serial.println(n_iterations_);
+}
+
+void IMLInterface::SetZoomEnabled(bool enabled)
+{
+    zoom_enabled_ = enabled;
+    if (disp_) {
+        disp_->post(enabled ? "Zoom enabled" : "Zoom disabled");
+    }
+    if (enabled) {
+        zoom_centre_ = input_state_;
+    }
 }
 
 void IMLInterface::MLSetup_()
@@ -291,6 +311,10 @@ void IMLInterface::bindInterface(bool disable_joystick)
             disp_->post("Model trained");
         }
     });
+    MEMLNaut::Instance()->setTogB2Callback([this](bool state) {
+        this->SetZoomEnabled(state);
+    });
+
     MEMLNaut::Instance()->setJoySWCallback([this](bool state) {
         bool saved = this->SaveInput(state ? STORE_VALUE_MODE : STORE_POSITION_MODE);
         if (disp_ && saved) {
@@ -317,6 +341,16 @@ void IMLInterface::bindInterface(bool disable_joystick)
         // Scale value from 0-1 range to 1-3000
         value = 1.0f + (value * 2999.0f);
         this->SetIterations(static_cast<size_t>(value));
+        if (disp_) {
+            disp_->post("Training terations = " + String(value));
+        }
+    });
+    MEMLNaut::Instance()->setRVX1Callback([this](float value) {
+        // Scale value from 0-1 range to 0-1
+        this->SetZoomFactor(value);
+        if (disp_) {
+            disp_->post("Zoom factor = " + String(value));
+        }
     });
 
     // Set up loop callback
@@ -349,4 +383,54 @@ void IMLInterface::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf)
             Serial.printf("MIDI CC %d: %d\n", cc_number, cc_value);
         });
     }
+}
+
+
+std::vector<float> IMLInterface::ZoomCoordinates(const std::vector<float>& coord, const std::vector<float>& zoom_centre, float factor)
+{
+    // Input validation
+    if (coord.size() != zoom_centre.size()) {
+        Serial.println("Warning: ZoomCoordinates - coord and zoom_centre size mismatch");
+        return coord;
+    }
+
+    if (factor < 0.0f || factor > 1.0f) {
+        Serial.println("Warning: ZoomCoordinates - factor must be between 0 and 1");
+        return coord;
+    }
+
+    std::vector<float> result;
+    result.reserve(coord.size());
+
+    for (size_t i = 0; i < coord.size(); i++) {
+        float centre = zoom_centre[i];
+        float half_factor = factor * 0.5f;
+
+        // Calculate initial range
+        float range_min = centre - half_factor;
+        float range_max = centre + half_factor;
+
+        // Adjust centre if range exceeds [0, 1]
+        if (range_min < 0.0f) {
+            float adjustment = -range_min;
+            centre += adjustment;
+        } else if (range_max > 1.0f) {
+            float adjustment = range_max - 1.0f;
+            centre -= adjustment;
+        }
+
+        // Recalculate adjusted range
+        range_min = centre - half_factor;
+        range_max = centre + half_factor;
+
+        // Map coordinate from [0, 1] to [range_min, range_max]
+        float mapped = range_min + coord[i] * (range_max - range_min);
+
+        // Clamp to [0, 1] as final safety
+        mapped = mapped < 0.0f ? 0.0f : (mapped > 1.0f ? 1.0f : mapped);
+
+        result.push_back(mapped);
+    }
+
+    return result;
 }

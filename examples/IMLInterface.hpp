@@ -41,6 +41,8 @@ public:
     bool ClearData();
     bool Randomise();
     void SetIterations(size_t iterations);
+    void SetZoomEnabled(bool enabled);
+    void SetZoomFactor(float factor) { zoom_factor_ = factor; }
 
     // New binding methods
     void bindInterface(bool disable_joystick = false);
@@ -70,10 +72,16 @@ protected:
     // Display reference for binding methods
     std::shared_ptr<display> disp_;
 
+    // Zooming
+    bool zoom_enabled_;
+    float zoom_factor_;
+    std::vector<float> zoom_centre_;
+
     void MLSetup_();
     void MLInference_(std::vector<float> input);
     void MLRandomise_();
     bool MLTraining_();
+    std::vector<float> ZoomCoordinates(const std::vector<float>& coord, const std::vector<float>& zoom_centre, float factor);
 };
 
 #endif  // __IML_INTERFACE_HPP__
