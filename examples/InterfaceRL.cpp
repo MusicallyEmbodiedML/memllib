@@ -97,7 +97,13 @@ void InterfaceRL::bind_RL_interface(display& scr_ref, bool disable_joystick) {
 
     MEMLNaut::Instance()->setRVX1Callback([this](float value) { // scr_ref no longer captured directly
         size_t divisor = 1 + (value * 100);
-        String msg = "Optimise every " + String(divisor);
+        String msg;
+        if (divisor > 90) {
+            divisor = 999999;
+            msg = "Optimisation paused";
+        }else{
+            msg = "Optimise every " + String(divisor) + " cycles";
+        }
         if (m_scr_ptr) m_scr_ptr->post(msg);
         this->setOptimiseDivisor(divisor);
         Serial.println(msg);
