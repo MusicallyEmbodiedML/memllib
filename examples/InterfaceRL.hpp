@@ -50,6 +50,7 @@ public:
         if (optimiseCounter>=optimiseDivisor) {
             optimise();
             optimiseCounter=0;
+            newInput = true;
         }else{
             optimiseCounter++;
         }
@@ -61,19 +62,26 @@ public:
     {
         actor->DrawWeights();
         actorTarget->DrawWeights();
+        newInput = true;
     }
 
     inline void randomiseTheCritic()
     {
         critic->DrawWeights();
         criticTarget->DrawWeights();
+        newInput = true;
     }
 
     inline void setOptimiseDivisor(size_t newDiv) {
         optimiseDivisor = newDiv;
     }
+
     inline void forgetMemory() {
         replayMem.clear();
+    }
+
+    inline void setRewardScale(float scale) {
+        rewardScale = scale;
     }
 
     // New methods
@@ -143,7 +151,7 @@ private:
     std::vector<float> actorControlInput;
 
     //std::vector<float> criticLossLog, actorLossLog, log1;
-
+    float rewardScale = 1.f;
 
 };
 

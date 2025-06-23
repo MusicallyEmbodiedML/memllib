@@ -20,7 +20,7 @@ void InterfaceRL::_perform_like_action() {
         "Keep shining!", "Fantastic!", "Incredible vibes!", "Love this journey!"
     };
     String msg = likemsgs[rand() % likemsgs.size()];
-    this->storeExperience(1.f);
+    this->storeExperience(1.f * rewardScale);
     Serial.println(msg);
     m_scr_ptr->post(msg);
 }
@@ -37,7 +37,7 @@ void InterfaceRL::_perform_dislike_action() {
         "Learning from this.", "I'll adjust, promise.", "Noted, I'll improve."
     };
     String msg = dislikemsgs[rand() % dislikemsgs.size()];
-    this->storeExperience(-1.f);
+    this->storeExperience(-1.f * rewardScale);
     Serial.println(msg);
     m_scr_ptr->post(msg);
 }
@@ -107,6 +107,12 @@ void InterfaceRL::bind_RL_interface(display& scr_ref, bool disable_joystick) {
         if (m_scr_ptr) m_scr_ptr->post(msg);
         this->setOptimiseDivisor(divisor);
         Serial.println(msg);
+    });
+
+    MEMLNaut::Instance()->setRVY1Callback([this](float value) { // scr_ref no longer captured directly
+        this->setRewardScale(value);
+        String msg = "Reward scale: " + String(value);
+        if (m_scr_ptr) m_scr_ptr->post(msg);
     });
 
     // Set up loop callback
