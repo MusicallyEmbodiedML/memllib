@@ -202,7 +202,7 @@ bool AudioDriver::Setup(const codec_config_t &config) {
     };
     i2s_program_start_synched(pio0, &picoI2SConfig, dma_i2s_in_handler, &i2s);
 
-    setDACVolume(3.9f);
+    setDACVolume(3.0f);
 
     // init i2c
     codecCtl.enable();
@@ -215,7 +215,7 @@ bool AudioDriver::Setup(const codec_config_t &config) {
     codecCtl.lineInLevel(config.line_level);
     Serial.printf("config.mic_gain_dB = %d\n", config.mic_gain_dB);
     codecCtl.micGain(config.mic_gain_dB);
-    codecCtl.lineOutLevel(13);
+    codecCtl.lineOutLevel(25);
 
     return true;
 }

@@ -50,6 +50,7 @@ public:
     void bindMIDI(std::shared_ptr<MIDIInOut> midi_interf);
 
 protected:
+    static constexpr float kMax = 2.0f;
     size_t n_inputs_;
     size_t n_outputs_;
     size_t n_iterations_;

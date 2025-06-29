@@ -72,6 +72,12 @@ void IMLInterface::ProcessInput()
         std::vector<float> zoomed_input = input_state_;
         if (zoom_enabled_) {
             zoomed_input = ZoomCoordinates(input_state_, zoom_centre_, zoom_factor_);
+            Serial.print("Zoomed input: ");
+            for (auto val : zoomed_input) {
+                Serial.print(val);
+                Serial.print(" ");
+            }
+            Serial.println();
         }
         MLInference_(zoomed_input);
         input_updated_ = false;
@@ -97,6 +103,7 @@ void IMLInterface::SetInput(size_t index, float value)
     } else if (value > 1.0) {
         value = 1.0;
     }
+    value *= kMax; // Scale to kMax
 
     // Update state of input
     input_state_[index] = value;
@@ -168,6 +175,12 @@ void IMLInterface::SetZoomEnabled(bool enabled)
     }
     if (enabled) {
         zoom_centre_ = input_state_;
+        Serial.println("Zoom centre: ");
+        for (auto val : zoom_centre_) {
+            Serial.print(val);
+            Serial.print(" ");
+        }
+        Serial.println();
     }
 }
 
@@ -340,9 +353,10 @@ void IMLInterface::bindInterface(bool disable_joystick)
     MEMLNaut::Instance()->setRVZ1Callback([this](float value) {
         // Scale value from 0-1 range to 1-3000
         value = 1.0f + (value * 2999.0f);
-        this->SetIterations(static_cast<size_t>(value));
+        const size_t valInt = static_cast<size_t>(value);
+        this->SetIterations(valInt);
         if (disp_) {
-            disp_->post("Training terations = " + String(value));
+            disp_->post("Training iterations = " + String(valInt));
         }
     });
     MEMLNaut::Instance()->setRVX1Callback([this](float value) {
@@ -414,8 +428,8 @@ std::vector<float> IMLInterface::ZoomCoordinates(const std::vector<float>& coord
         if (range_min < 0.0f) {
             float adjustment = -range_min;
             centre += adjustment;
-        } else if (range_max > 1.0f) {
-            float adjustment = range_max - 1.0f;
+        } else if (range_max > kMax) {
+            float adjustment = range_max - kMax;
             centre -= adjustment;
         }
 
@@ -427,7 +441,7 @@ std::vector<float> IMLInterface::ZoomCoordinates(const std::vector<float>& coord
         float mapped = range_min + coord[i] * (range_max - range_min);
 
         // Clamp to [0, 1] as final safety
-        mapped = mapped < 0.0f ? 0.0f : (mapped > 1.0f ? 1.0f : mapped);
+        mapped = mapped < 0.0f ? 0.0f : (mapped > kMax ? kMax : mapped);
 
         result.push_back(mapped);
     }
