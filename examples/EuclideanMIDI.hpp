@@ -17,11 +17,28 @@
 #include "EuclideanAudioApp.hpp"
 
 /**
+ * @brief MIDI note configuration structure
+ *
+ * Contains MIDI note number and channel for a single operator
+ */
+struct MIDINoteConfig {
+    uint8_t note_number;  ///< MIDI note number (0-127)
+    uint8_t channel;      ///< MIDI channel (1-16)
+
+    /**
+     * @brief Constructor with default values
+     * @param note MIDI note number (default: 60 - middle C)
+     * @param ch MIDI channel (default: 1)
+     */
+    MIDINoteConfig(uint8_t note = 60, uint8_t ch = 1) : note_number(note), channel(ch) {}
+};
+
+/**
  * @brief MIDI output class for Euclidean rhythm patterns
  *
  * Converts CV values from euclidean generators to MIDI note on/off messages.
  * Tracks note states to avoid duplicate messages and supports configurable
- * note numbers for each operator.
+ * note numbers and channels for each operator.
  */
 class EuclideanMIDI {
 public:
@@ -44,8 +61,17 @@ public:
      * @brief Setup the MIDI interface and note configuration
      *
      * @param midi_interface Shared pointer to MIDIInOut instance
+     * @param note_configs Vector of MIDI note configurations (note number and channel) for each operator
+     */
+    void Setup(std::shared_ptr<MIDIInOut> midi_interface,
+               const std::vector<MIDINoteConfig>& note_configs);
+
+    /**
+     * @brief Setup the MIDI interface with uniform channel
+     *
+     * @param midi_interface Shared pointer to MIDIInOut instance
      * @param note_numbers Vector of MIDI note numbers (0-127) for each operator
-     * @param midi_channel MIDI channel for note messages (1-16, default: 1)
+     * @param midi_channel MIDI channel for all notes (1-16, default: 1)
      */
     void Setup(std::shared_ptr<MIDIInOut> midi_interface,
                const std::vector<uint8_t>& note_numbers,
@@ -63,18 +89,26 @@ public:
     void ProcessCV(const std::vector<float>& cv_values);
 
     /**
-     * @brief Set MIDI note numbers for operators
+     * @brief Set MIDI note configurations for operators
      *
-     * @param note_numbers Vector of MIDI note numbers (0-127)
+     * @param note_configs Vector of MIDI note configurations (note number and channel pairs)
      */
-    void SetNoteNumbers(const std::vector<uint8_t>& note_numbers);
+    void SetNoteNumbers(const std::vector<MIDINoteConfig>& note_configs);
 
     /**
-     * @brief Get current note numbers
+     * @brief Set MIDI note numbers with uniform channel for operators
      *
-     * @return Vector of current MIDI note numbers
+     * @param note_numbers Vector of MIDI note numbers (0-127)
+     * @param midi_channel MIDI channel for all notes (1-16, default: 1)
      */
-    const std::vector<uint8_t>& GetNoteNumbers() const { return note_numbers_; }
+    void SetNoteNumbers(const std::vector<uint8_t>& note_numbers, uint8_t midi_channel = 1);
+
+    /**
+     * @brief Get current note configurations
+     *
+     * @return Vector of current MIDI note configurations
+     */
+    const std::vector<MIDINoteConfig>& GetNoteConfigs() const { return note_configs_; }
 
     /**
      * @brief Turn off all currently active notes
@@ -90,10 +124,9 @@ public:
 
 private:
     std::shared_ptr<MIDIInOut> midi_interface_;  ///< MIDI interface
-    std::vector<uint8_t> note_numbers_;          ///< MIDI note numbers for each operator
+    std::vector<MIDINoteConfig> note_configs_;   ///< MIDI note configurations for each operator
     std::vector<bool> note_states_;              ///< Current on/off state for each note
     std::vector<uint8_t> last_velocities_;       ///< Last sent velocity for each note
-    uint8_t midi_channel_;                       ///< MIDI channel for notes
 
     /**
      * @brief Scale CV value (0-1) to MIDI velocity (0-127)

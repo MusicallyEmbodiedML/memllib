@@ -22,7 +22,8 @@ MIDIInOut::MIDIInOut() : n_outputs_(0),
     instance_ = this;
 }
 
-void MIDIInOut::Setup(size_t n_outputs, uint8_t midi_tx, uint8_t midi_rx) {
+void MIDIInOut::Setup(size_t n_outputs,
+    bool midi_through, uint8_t midi_tx, uint8_t midi_rx) {
     n_outputs_ = n_outputs;
     cc_numbers_.resize(n_outputs);
 
@@ -42,7 +43,13 @@ void MIDIInOut::Setup(size_t n_outputs, uint8_t midi_tx, uint8_t midi_rx) {
         cc_numbers_[i] = static_cast<uint8_t>(i + cc_start);
     }
 
-    MIDI.turnThruOff();  // Add this line to prevent MIDI loop-back
+    if (midi_through) {
+        // Enable MIDI thru if requested
+        MIDI.turnThruOn();
+    } else {
+        // Disable MIDI thru to prevent loop-back
+        MIDI.turnThruOff();
+    }
 
     // Setup static callbacks
     MIDI.setHandleControlChange(handleControlChange);
