@@ -25,6 +25,7 @@ public:
      * @param midi_rx RX pin the MIDI device is connected to (default: Pins::MIDI_RX).
      */
     void Setup(size_t n_outputs,
+               bool midi_through = false,
                uint8_t midi_tx = Pins::MIDI_TX,
                uint8_t midi_rx = Pins::MIDI_RX);
     /**
