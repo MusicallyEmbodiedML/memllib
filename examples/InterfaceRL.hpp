@@ -31,7 +31,9 @@ struct trainRLItem {
 class InterfaceRL : public InterfaceBase
 {
 public:
+   InterfaceMinimaRL() : InterfaceBase(), ou_noise(0.02f, 0.0f, 0.2f, 0.001f, 0.0f) {
 
+    }
     void setup(size_t n_inputs, size_t n_outputs);
     void setup(size_t n_inputs, size_t n_outputs, std::shared_ptr<display> disp);
 
@@ -84,6 +86,14 @@ public:
         rewardScale = scale;
     }
 
+    inline void setDiscountFactor(float factor) {
+        discountFactor = factor;
+    }
+
+    inline void setNoiseLevel(float level) {
+        ou_noise.setSigma(level * 0.5f);
+    }
+
     // New methods
     void bind_RL_interface(display& scr_ref, bool disable_joystick = false); // scr_ref is passed once here
     void bindInterface(bool disable_joystick = false)
@@ -127,6 +137,7 @@ private:
         RELU, RELU, SIGMOID
     };
 
+    size_t controlSize;
     size_t stateSize;
     size_t actionSize;
 
@@ -138,9 +149,10 @@ private:
 
     std::shared_ptr<MLP<float> > actor, actorTarget, critic, criticTarget;
 
-    float discountFactor = 0.95;
-    float learningRate = 0.005;
-    float smoothingAlpha = 0.005;
+    float discountFactor = 0.1f;
+    float actorLearningRate = 1e-4;
+    float criticLearningRate = 1e-4;
+    float smoothingAlpha = 0.01f;
 
     std::vector<float> action;
 
@@ -152,7 +164,8 @@ private:
 
     //std::vector<float> criticLossLog, actorLossLog, log1;
     float rewardScale = 1.f;
-
+  
+    OrnsteinUhlenbeckNoise ou_noise;
 };
 
 #endif // INTERFACERL_HPP
