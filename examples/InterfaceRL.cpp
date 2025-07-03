@@ -138,9 +138,7 @@ void InterfaceRL::bind_RL_interface(display& scr_ref, bool disable_joystick) {
         // this->setDiscountFactor(value);
         // String msg = "Discount factor: " + String(value);
         // if (m_scr_ptr) m_scr_ptr->post(msg);
-        ou_noise.setSigma(value);
-        String msg = "OU Sigma: " + String(value);
-        if (m_scr_ptr) m_scr_ptr->post(msg);
+        setNoiseLevel(value);
     });
     // Set up loop callback
     MEMLNaut::Instance()->setLoopCallback([this]() {
@@ -369,7 +367,11 @@ void InterfaceRL::optimise() {
         // stateInput.push_back(1.f);
         // actor->ApplyLoss(stateInput, actorGradient, learningRate);
 
-        // m_scr_ptr->post("Cr: " + String(loss, 4) + " Ac: " + String(totalActorGradient, 4));
+        // Log the loss and total actor gradient
+        // static APP_SRAM size_t msgCount = 0;
+        // if (++msgCount % 20 == 0) { // Log every 10th optimisation
+        //     if (m_scr_ptr) m_scr_ptr->post("Cr: " + String(loss, 4) + " Ac: " + String(totalActorGradient, 4));
+        // }
 
         //back propagate the actor loss (apply gradients)
         // for(size_t i = 0; i < sample.size(); i++) {
@@ -411,9 +413,15 @@ void InterfaceRL::generateAction(bool donthesitate) {
         // std::vector<float> actorOutput; // This was shadowing the member variable
         actorTarget->GetOutput(actorControlInput, &actorOutput); // Use member actorOutput
         for(size_t i=0; i < actorOutput.size(); i++) {
-            const float noise = ou_noise.sample(); 
+            const float noise = ou_noise.sample() * 0.4f;
             actorOutput[i] += noise;
-        }        
+            if (actorOutput[i] < 0.f) {
+                actorOutput[i] = 0.f; // Ensure output is non-negative
+            } else if (actorOutput[i] > 1.f) {
+                actorOutput[i] = 1.f; // Ensure output does not exceed 1
+            }
+        }       
+
         SendParamsToQueue(actorOutput);
         action = actorOutput;
 

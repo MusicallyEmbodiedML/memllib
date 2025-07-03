@@ -31,7 +31,7 @@ struct trainRLItem {
 class InterfaceRL : public InterfaceBase
 {
 public:
-   InterfaceMinimaRL() : InterfaceBase(), ou_noise(0.02f, 0.0f, 0.2f, 0.001f, 0.0f) {
+   InterfaceRL() : InterfaceBase(), ou_noise(0.02f, 0.0f, 0.2f, 0.001f, 0.0f) {
 
     }
     void setup(size_t n_inputs, size_t n_outputs);
@@ -91,7 +91,14 @@ public:
     }
 
     inline void setNoiseLevel(float level) {
-        ou_noise.setSigma(level * 0.5f);
+        level *= 0.5f;
+        if (level < 0.05f) {
+            level = 0.f;
+            if (m_scr_ptr) m_scr_ptr->post("Noise off");
+        }
+        String msg = "OU Sigma: " + String(level, 4);
+        if (m_scr_ptr) m_scr_ptr->post(msg);
+        ou_noise.setSigma(level);
     }
 
     // New methods
