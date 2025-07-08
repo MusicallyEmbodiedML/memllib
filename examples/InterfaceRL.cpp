@@ -130,7 +130,16 @@ void InterfaceRL::bind_RL_interface(display& scr_ref, bool disable_joystick) {
         String msg = "Reward scale: " + String(value);
         if (m_scr_ptr) m_scr_ptr->post(msg);
     });
-
+    MEMLNaut::Instance()->setRVZ1Callback([this](float value) { // scr_ref no longer captured directly
+        // value *= 0.1f; // Scale down the value
+        // this->setLearningRate(value);
+        // String msg = "LR: " + String(value,8);
+        // if (m_scr_ptr) m_scr_ptr->post(msg);
+        // this->setDiscountFactor(value);
+        // String msg = "Discount factor: " + String(value);
+        // if (m_scr_ptr) m_scr_ptr->post(msg);
+        setNoiseLevel(value);
+    });
     // Set up loop callback
     MEMLNaut::Instance()->setLoopCallback([this]() {
         this->optimiseSometimes();
@@ -145,11 +154,12 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
 #else
     const size_t nAudioAnalysisInputs = 0;
 #endif
-    const size_t nAllInputs = n_inputs + nAudioAnalysisInputs;
-    InterfaceBase::setup(nAllInputs, n_outputs);
+    controlSize = n_inputs + nAudioAnalysisInputs;
+    InterfaceBase::setup(controlSize, n_outputs);
 
 
-    stateSize = nAllInputs;
+    stateSize = controlSize; //state = control inputs + synth params 
+
     actionSize = n_outputs;
 
     actor_layers_nodes = {
@@ -207,7 +217,7 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs, std::shared_ptr<displ
 }
 
 void InterfaceRL::optimise() {
-    constexpr size_t batchSize = 4;
+    constexpr size_t batchSize = 8;
     std::vector<trainRLItem> sample = replayMem.sample(batchSize);
     if (sample.size() == batchSize) {
         //run sample through critic target, build training set for critic net
@@ -237,10 +247,10 @@ void InterfaceRL::optimise() {
 
             //use criticTarget to estimate value of next action given next state
             for(size_t j=0; j < stateSize; j++) {
-            criticInput[j] = sample[i].state[j];
+                criticInput[j] = sample[i].state[j];
             }
             for(size_t j=0; j < actionSize; j++) {
-            criticInput[j+stateSize] = sample[i].action[j];
+                criticInput[j+stateSize] = sample[i].action[j];
             }
             criticInput[criticInput.size()-1] = 1.f; //bias
 
@@ -249,63 +259,132 @@ void InterfaceRL::optimise() {
         }
 
         //train the critic
-        float loss = critic->Train(ts, learningRate, 1);
+        float loss = critic->Train(ts, criticLearningRate, 1);
 
         //TODO: size limit to this log
-        //criticLossLog.push_back(loss);
+        // criticLossLog.push_back(loss);
 
         //update the actor
 
         //for each memory in replay memory sample, and get grads from critic
-        std::vector<float> actorLoss(actionSize, 0.f);
         std::vector<float> gradientLoss= {1.f};
+        float sampleSizeRecr = static_cast<float>(1.f/sample.size());
+        std::vector<float> accumulatedGradient(actionSize, 0.0f);
 
         for(size_t i = 0; i < sample.size(); i++) {
             //use criticTarget to estimate value of next action given next state
             for(size_t j=0; j < stateSize; j++) {
-            criticInput[j] = sample[i].nextState[j]; // Note: This was sample[i].nextState[j] in original, but actor loss usually uses current state's action.
-                                                 // However, DDPG actor loss depends on critic's gradient w.r.t action, and critic takes state and action.
-                                                 // The original code for critic gradient calculation seems to use sample[i].action[j] with sample[i].nextState[j] for state.
-                                                 // This looks like an error in the original logic if it's meant to be policy gradient w.r.t. Q(s,a).
-                                                 // For DDPG, actor loss is based on Q(s, mu(s)). So critic needs s and mu(s).
-                                                 // The gradient from critic is dQ/da. This gradient is then used to update actor.
-                                                 // Let's stick to the original code's logic for now.
+                criticInput[j] = sample[i].state[j]; 
             }
+            auto stateInput = sample[i].state;
+            stateInput.push_back(1.f); // bias
+            actor->GetOutput(stateInput, &actorOutput);
+
+            // Use this fresh action for critic input
             for(size_t j=0; j < actionSize; j++) {
-            criticInput[j+stateSize] = sample[i].action[j];
+                criticInput[j+stateSize] = actorOutput[j];
             }
+
+            // for(size_t j=0; j < actionSize; j++) {
+            //     criticInput[j+stateSize] = sample[i].action[j];
+            // }
             criticInput[criticInput.size()-1] = 1.f; //bias
 
             critic->CalcGradients(criticInput, gradientLoss); // This calculates dQ/d(input to critic)
+            
             std::vector<float> l0Grads = critic->m_layers[0].GetGrads(); // Gradients of critic's first layer inputs
-
+            
             for(size_t j=0; j < actionSize; j++) {
-             actorLoss[j] += l0Grads[j+stateSize]; // Accumulate gradients for actions
+                accumulatedGradient[j] += l0Grads[j+stateSize];
             }
-            // delay(1); // This delay might be problematic in an optimization loop
+
+
+            // for(size_t j=0; j < actionSize; j++) {
+            //     actorGradient[j] += l0Grads[j+stateSize] * sampleSizeRecr; // Accumulate gradients for actions
+            //     totalActorGradient += actorGradient[j];      // Sum of gradients
+            // }
+
+            // actor->ApplyLoss(stateInput, actorGradient, actorLearningRate);
+
+            // float avgQ = criticOutput[0];
+            // float gradMagnitude = 0;
+            // for(auto& g : actorGradient) gradMagnitude += g*g;
+            // gradMagnitude = sqrt(gradMagnitude);
+
+            // Serial.printf("Q-value: %.3f, Grad magnitude: %.3f\n", avgQ, gradMagnitude);
+
+
+
         }
 
-        float totalLoss = 0.f;
-        for(size_t j=0; j < actorLoss.size(); j++) {
-            actorLoss[j] /= sample.size(); // Average gradient
-            actorLoss[j] = -actorLoss[j];   // Negate for gradient ascent (or if loss is defined as -Q)
-            totalLoss += actorLoss[j];      // This is not actor loss, but sum of (negative) gradients
+        for(size_t j=0; j < actionSize; j++) {
+            accumulatedGradient[j] *= sampleSizeRecr;
         }
+
+        // Simple gradient clipping 
+        const float maxGradNorm = 0.5f;  // Start conservative
+        float gradNorm = 0.0f;
+        
+        for(auto& g : accumulatedGradient) {
+            gradNorm += g * g;
+        }
+        gradNorm = sqrt(gradNorm);
+        
+        if (gradNorm > maxGradNorm) {
+            float scale = maxGradNorm / gradNorm;
+            for(auto& g : accumulatedGradient) {
+                g *= scale;
+            }
+            
+            // Optional: notify user of instability
+            if (gradNorm > maxGradNorm * 2.0f) {
+                m_scr_ptr->post("Learning unstable - adjusting...");
+            }
+        }
+
+        std::vector<float> avgState(stateSize, 0.0f);
+        for(size_t i = 0; i < sample.size(); i++) {
+            for(size_t j = 0; j < stateSize; j++) {
+                avgState[j] += sample[i].state[j] * sampleSizeRecr;
+            }
+        }
+        avgState.push_back(1.f); // bias
+        actor->ApplyLoss(avgState, accumulatedGradient, actorLearningRate);
+
+        // Calculate total gradient for logging
+        float totalActorGradient = 0.0f;
+        for(auto& g : accumulatedGradient) {
+            totalActorGradient += std::abs(g);
+        }   
+
+        // for(size_t j=0; j < actorGradient.size(); j++) {
+        //     actorGradient[j] *= sampleSizeRecr; // Average gradient
+        //     totalActorGradient += actorGradient[j];      // Sum of (negative) gradients
+        // }
         // actorLossLog.push_back(actorLoss); // This would log a vector
         // Serial.printf("Actor loss: %f\n", totalLoss); // This prints sum of gradients, not a scalar loss
+        // auto stateInput = sample[0].state; // Could use any sample's state here
+        // stateInput.push_back(1.f);
+        // actor->ApplyLoss(stateInput, actorGradient, learningRate);
+
+        // Log the loss and total actor gradient
+        // static APP_SRAM size_t msgCount = 0;
+        // if (++msgCount % 20 == 0) { // Log every 10th optimisation
+        //     if (m_scr_ptr) m_scr_ptr->post("Cr: " + String(loss, 4) + " Ac: " + String(totalActorGradient, 4));
+        // }
 
         //back propagate the actor loss (apply gradients)
-        for(size_t i = 0; i < sample.size(); i++) {
-            auto actorInput = sample[i].state;
-            actorInput.push_back(bias); // Add bias to state for actor input
+        // for(size_t i = 0; i < sample.size(); i++) {
+        //     auto actorInput = sample[i].state;
+        //     actorInput.push_back(bias); // Add bias to state for actor input
 
-            // The actorLoss vector here is dQ/da. Actor update is theta_mu' = theta_mu + alpha_mu * grad_theta_mu Q(s, mu(s|theta_mu))
-            // grad_theta_mu Q(s, mu(s|theta_mu)) = grad_a Q(s,a)|a=mu(s) * grad_theta_mu mu(s|theta_mu)
-            // MLP::ApplyLoss expects the gradient of the loss function w.r.t the output of the network.
-            // So, actorLoss (which is dQ/da) is the correct gradient to pass.
-            actor->ApplyLoss(actorInput, actorLoss, learningRate);
-            // delay(1); // This delay might be problematic
-        }
+        //     // The actorLoss vector here is dQ/da. Actor update is theta_mu' = theta_mu + alpha_mu * grad_theta_mu Q(s, mu(s|theta_mu))
+        //     // grad_theta_mu Q(s, mu(s|theta_mu)) = grad_a Q(s,a)|a=mu(s) * grad_theta_mu mu(s|theta_mu)
+        //     // MLP::ApplyLoss expects the gradient of the loss function w.r.t the output of the network.
+        //     // So, actorLoss (which is dQ/da) is the correct gradient to pass.
+        //     actor->ApplyLoss(actorInput, actorLoss, learningRate);
+        //     // delay(1); // This delay might be problematic
+        // }
 
         // soft update the target networks
         criticTarget->SmoothUpdateWeights(critic, smoothingAlpha);
@@ -333,6 +412,16 @@ void InterfaceRL::generateAction(bool donthesitate) {
         newInput = false;
         // std::vector<float> actorOutput; // This was shadowing the member variable
         actorTarget->GetOutput(actorControlInput, &actorOutput); // Use member actorOutput
+        for(size_t i=0; i < actorOutput.size(); i++) {
+            const float noise = ou_noise.sample() * 0.4f;
+            actorOutput[i] += noise;
+            if (actorOutput[i] < 0.f) {
+                actorOutput[i] = 0.f; // Ensure output is non-negative
+            } else if (actorOutput[i] > 1.f) {
+                actorOutput[i] = 1.f; // Ensure output does not exceed 1
+            }
+        }       
+
         SendParamsToQueue(actorOutput);
         action = actorOutput;
 

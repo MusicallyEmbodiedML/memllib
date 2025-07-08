@@ -4,6 +4,7 @@
 
 #include <Arduino.h>
 #include <cmath>
+#include <algorithm>
 #include "../audio/AudioAppBase.hpp"
 
 
@@ -105,6 +106,44 @@ protected:
         return static_cast<size_t>(std::round(mapped));
     }
     /**
+     * @brief Find the nearest valid N value (power of 2 or 3) within the given range
+     *
+     * @param target_n Target N value
+     * @param n_min Minimum allowed N
+     * @param n_max Maximum allowed N
+     * @return size_t Nearest valid N value
+     */
+    inline size_t FindValidN_(size_t target_n, size_t n_min, size_t n_max)
+    {
+        size_t nearest = n_min;
+        size_t min_diff = (target_n > nearest) ? (target_n - nearest) : (nearest - target_n);
+
+        // Check powers of 2
+        for (size_t power_of_2 = 1; power_of_2 <= n_max; power_of_2 *= 2) {
+            if (power_of_2 >= n_min) {
+                size_t diff = (target_n > power_of_2) ? (target_n - power_of_2) : (power_of_2 - target_n);
+                if (diff < min_diff) {
+                    min_diff = diff;
+                    nearest = power_of_2;
+                }
+            }
+        }
+
+        // Check powers of 3
+        for (size_t power_of_3 = 1; power_of_3 <= n_max; power_of_3 *= 3) {
+            if (power_of_3 >= n_min) {
+                size_t diff = (target_n > power_of_3) ? (target_n - power_of_3) : (power_of_3 - target_n);
+                if (diff < min_diff) {
+                    min_diff = diff;
+                    nearest = power_of_3;
+                }
+            }
+        }
+
+        return nearest;
+    }
+
+    /**
      * @brief Voice a single operator:
      *
      * @param op_params
@@ -112,8 +151,10 @@ protected:
      */
     inline void VoiceOperator_(operator_params_t& op_params, std::vector<float> &params, operator_voicing_t& voicing)
     {
-        // Map n, k, offset from params
-        op_params.n = DiscreteMap_(params[0], voicing.n_min, voicing.n_max);
+        // Map n from params, then constrain to powers of 2 or 3
+        size_t raw_n = DiscreteMap_(params[0], voicing.n_min, voicing.n_max);
+        op_params.n = FindValidN_(raw_n, voicing.n_min, voicing.n_max);
+
         size_t local_k_max = std::min(voicing.k_max, op_params.n); // Ensure k does not exceed n
         op_params.k = DiscreteMap_(params[1], voicing.k_min, local_k_max);
 

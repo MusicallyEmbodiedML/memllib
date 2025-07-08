@@ -1,7 +1,6 @@
 #ifndef __MIDI_IN_OUT_HPP__
 #define __MIDI_IN_OUT_HPP__
 
-
 #include <Arduino.h>
 #include <MIDI.h>
 #include <memory>
@@ -25,6 +24,7 @@ public:
      * @param midi_rx RX pin the MIDI device is connected to (default: Pins::MIDI_RX).
      */
     void Setup(size_t n_outputs,
+               bool midi_through = false,
                uint8_t midi_tx = Pins::MIDI_TX,
                uint8_t midi_rx = Pins::MIDI_RX);
     /**
@@ -124,6 +124,45 @@ public:
      */
     void SetNoteCallback(midi_note_callback_t callback);
 
+    /**
+     * @brief Structure for advanced CC parameter mapping
+     */
+    struct CCMapping {
+        uint8_t cc_number;
+        uint8_t channel;
+        uint8_t min_value;
+        uint8_t max_value;
+        float scale_factor; // Precomputed for efficiency: (max - min)
+
+        constexpr CCMapping() : cc_number(0), channel(1), min_value(0), max_value(127), scale_factor(127.0f) {}
+        constexpr CCMapping(uint8_t cc, uint8_t ch, uint8_t min_val, uint8_t max_val)
+            : cc_number(cc), channel(ch), min_value(min_val), max_value(max_val),
+              scale_factor(max_val - min_val) {}
+    };
+
+    /**
+     * @brief Set advanced parameter mappings with individual CC, channel, and range settings
+     *
+     * @param mappings Vector of CCMapping structures (must equal n_outputs_ size)
+     */
+    void SetAdvancedParamMappings(const std::vector<CCMapping>& mappings);
+
+    /**
+     * @brief Set mapping for a single parameter
+     *
+     * @param index Parameter index
+     * @param cc_number CC number (0-127)
+     * @param channel MIDI channel (1-16)
+     * @param min_value Minimum output value (0-127)
+     * @param max_value Maximum output value (0-127)
+     */
+    void SetParamMapping(size_t index, uint8_t cc_number, uint8_t channel, uint8_t min_value, uint8_t max_value);
+
+    /**
+     * @brief Clear advanced mappings and revert to simple mode
+     */
+    void ClearAdvancedMappings();
+
 protected:
     std::vector<uint8_t> cc_numbers_;
     size_t n_outputs_;
@@ -134,12 +173,25 @@ protected:
     bool refresh_uart_;
     static MIDIInOut* instance_;  // Add static instance pointer
 
+    // Advanced mapping support
+    std::vector<CCMapping> advanced_mappings_;
+    bool use_advanced_mappings_;
+
+    // Helper for size mismatch warnings
+    void warnSizeMismatch(const char* function_name, size_t expected, size_t actual) const;
+
 private:
     // Static callback handlers
     static void handleControlChange(byte channel, byte number, byte value);
     static void handleNoteOn(byte channel, byte note, byte velocity);
     static void handleNoteOff(byte channel, byte note, byte velocity);
     void RefreshUART_(void);
+
+    // Inline helper for efficient value scaling
+    inline uint8_t scaleValue(float param, const CCMapping& mapping) const {
+        float clamped = param > 1.0f ? 1.0f : (param < 0.0f ? 0.0f : param);
+        return static_cast<uint8_t>(clamped * mapping.scale_factor + mapping.min_value + 0.5f);
+    }
 };
 
 #endif  // __MIDI_IN_OUT_HPP__
