@@ -528,7 +528,7 @@ bool AudioControlSGTL5000::enable(const unsigned extMCLK, const uint32_t pllFreq
 
 	//Check if we are in Master Mode and if the Teensy had a reset:
   int n = read(CHIP_I2S_CTRL);
-  Serial.printf("chip i2s ctl: %d\n", n);
+//   DEBUG_PRINTF("chip i2s ctl: %d\n", n);
 	if ( (extMCLK > 0) && (n == (0x0030 | (1<<7))) ) {
 		//Yes. Do not initialize.
 		muted = false;
@@ -536,10 +536,10 @@ bool AudioControlSGTL5000::enable(const unsigned extMCLK, const uint32_t pllFreq
 		return true;
 	}
 
-	Serial.print("chip ID = ");
+	 DEBUG_PRINT("chip ID = ");
 	delay(5);
 	n = read(CHIP_ID);
-	Serial.println(n);
+	 DEBUG_PRINTLN(n);
 
         muted = true;
 
@@ -761,7 +761,7 @@ unsigned short AudioControlSGTL5000::lineOutLevel(uint8_t left, uint8_t right)
 
 unsigned short AudioControlSGTL5000::dacVolume(float n) // set both directly
 {
-    //Serial.printf("ADCDAC_CTRL %d\n", read(CHIP_ADCDAC_CTRL));
+    //DEBUG_PRINTF("ADCDAC_CTRL %d\n", read(CHIP_ADCDAC_CTRL));
 	if ((read(CHIP_ADCDAC_CTRL)&(3<<2)) != ((n>0 ? 0:3)<<2)) {
 		modify(CHIP_ADCDAC_CTRL,(n>0 ? 0:3)<<2,3<<2);
 	}

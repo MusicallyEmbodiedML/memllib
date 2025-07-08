@@ -108,17 +108,17 @@ public:
         if (m_scr_ptr) {
             bind_RL_interface(*m_scr_ptr, disable_joystick); // Use the stored pointer to display
         } else {
-            Serial.println("Display pointer is null, cannot bind interface.");
+            DEBUG_PRINTLN("Display pointer is null, cannot bind interface.");
         }
     }
     void bindUARTInput(std::shared_ptr<UARTInput> uart_input,
         const std::vector<size_t>& kUARTListenInputs)
     {
-        Serial.println("bindUARTInput not implemented yet");
+        DEBUG_PRINTLN("bindUARTInput not implemented yet");
     }
     void bindMIDI(std::shared_ptr<MIDIInOut> midi_interf)
     {
-        Serial.println("bindMIDI not implemented yet");
+        DEBUG_PRINTLN("bindMIDI not implemented yet");
     }
 
     void trigger_like();

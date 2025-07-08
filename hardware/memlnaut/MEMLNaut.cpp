@@ -145,7 +145,7 @@ void MEMLNaut::setJoyZCallback(AnalogCallback cb, uint16_t threshold) {
 }
 void MEMLNaut::setRVGain1Callback(AnalogCallback cb, uint16_t threshold) {
     //adcStates[3] = {analogRead(Pins::RV_GAIN1) / ADC_SCALE, threshold, cb};
-    Serial.println("RVGain1 overridden - only controls audio volume");
+    DEBUG_PRINTLN("RVGain1 overridden - only controls audio volume");
 }
 void MEMLNaut::setRVGain1Volume(uint16_t threshold) {
     adcStates[3] = {

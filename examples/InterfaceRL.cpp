@@ -21,7 +21,7 @@ void InterfaceRL::_perform_like_action() {
     };
     String msg = likemsgs[rand() % likemsgs.size()];
     this->storeExperience(1.f * rewardScale);
-    Serial.println(msg);
+    DEBUG_PRINTLN(msg);
     m_scr_ptr->post(msg);
 }
 
@@ -38,7 +38,7 @@ void InterfaceRL::_perform_dislike_action() {
     };
     String msg = dislikemsgs[rand() % dislikemsgs.size()];
     this->storeExperience(-1.f * rewardScale);
-    Serial.println(msg);
+    DEBUG_PRINTLN(msg);
     m_scr_ptr->post(msg);
 }
 
@@ -46,7 +46,7 @@ void InterfaceRL::_perform_randomiseRL_action() {
     if (!m_scr_ptr) return; // Guard against null pointer
     this->randomiseTheActor();
     this->generateAction(true);
-    Serial.println("The Actor is confused");
+    DEBUG_PRINTLN("The Actor is confused");
     m_scr_ptr->post("Actor: i'm confused");
 }
 
@@ -79,7 +79,7 @@ void InterfaceRL::bind_RL_interface(display& scr_ref, bool disable_joystick) {
     MEMLNaut::Instance()->setMomB2Callback([this]() { // scr_ref no longer captured directly
         this->randomiseTheCritic();
         this->generateAction(true);
-        Serial.println("The Critic is confounded");
+        DEBUG_PRINTLN("The Critic is confounded");
         if (m_scr_ptr) m_scr_ptr->post("Critic: totally confounded");
     });
     if (!disable_joystick) {
@@ -122,7 +122,7 @@ void InterfaceRL::bind_RL_interface(display& scr_ref, bool disable_joystick) {
         }
         if (m_scr_ptr) m_scr_ptr->post(msg);
         this->setOptimiseDivisor(divisor);
-        Serial.println(msg);
+        DEBUG_PRINTLN(msg);
     });
 
     MEMLNaut::Instance()->setRVY1Callback([this](float value) { // scr_ref no longer captured directly
@@ -311,7 +311,7 @@ void InterfaceRL::optimise() {
             // for(auto& g : actorGradient) gradMagnitude += g*g;
             // gradMagnitude = sqrt(gradMagnitude);
 
-            // Serial.printf("Q-value: %.3f, Grad magnitude: %.3f\n", avgQ, gradMagnitude);
+            //  DEBUG_PRINTF("Q-value: %.3f, Grad magnitude: %.3f\n", avgQ, gradMagnitude);
 
 
 
@@ -362,7 +362,7 @@ void InterfaceRL::optimise() {
         //     totalActorGradient += actorGradient[j];      // Sum of (negative) gradients
         // }
         // actorLossLog.push_back(actorLoss); // This would log a vector
-        // Serial.printf("Actor loss: %f\n", totalLoss); // This prints sum of gradients, not a scalar loss
+        //  DEBUG_PRINTF("Actor loss: %f\n", totalLoss); // This prints sum of gradients, not a scalar loss
         // auto stateInput = sample[0].state; // Could use any sample's state here
         // stateInput.push_back(1.f);
         // actor->ApplyLoss(stateInput, actorGradient, learningRate);
@@ -400,7 +400,7 @@ void InterfaceRL::readAnalysisParameters() {
     actorControlInput[2] = READ_VOLATILE(sharedMem::f2);
     actorControlInput[3] = READ_VOLATILE(sharedMem::f3);
     PERIODIC_DEBUG(40, { // Ensure PERIODIC_DEBUG is defined (e.g. in PicoDefs.hpp or sharedMem.hpp)
-        Serial.println(actorControlInput[0]);
+        DEBUG_PRINTLN(actorControlInput[0]);
     })
     newInput = true;
 #endif
@@ -447,9 +447,9 @@ void InterfaceRL::storeExperience(float reward) {
 
 
     for(size_t i=0; i < state.size(); i++) { // state here is without bias
-        Serial.printf("%f\t", state[i]);
+        DEBUG_PRINTF("%f\t", state[i]);
     }
-    Serial.println();
+    DEBUG_PRINTLN();
     // nextState in DDPG is the state resulting from taking 'action' in 'state'.
     // Here, 'state' is used as 'nextState', which is common if the environment is static
     // or if the 'nextState' is the same as the current state for the purpose of this reward.

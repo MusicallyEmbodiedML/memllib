@@ -74,7 +74,7 @@ void MIDIInOut::Setup(size_t n_outputs,
     // Serial2.flush();
     // MEMORY_BARRIER();
 
-    // Serial.println("MIDI setup complete");
+     DEBUG_PRINTLN("MIDI setup complete");
     // Serial2.flush();  // Ensure the message is sent completely
 }
 
@@ -87,7 +87,7 @@ void MIDIInOut::Poll()
 
 
 void MIDIInOut::warnSizeMismatch(const char* function_name, size_t expected, size_t actual) const {
-    Serial.printf("Warning: %s size mismatch (expected %d, got %d)\n", function_name, expected, actual);
+    DEBUG_PRINTF("Warning: %s size mismatch (expected %d, got %d)\n", function_name, expected, actual);
 }
 
 void MIDIInOut::SetParamCCNumbers(const std::vector<uint8_t>& cc_numbers) {
@@ -154,7 +154,7 @@ void MIDIInOut::SetAdvancedParamMappings(const std::vector<CCMapping>& mappings)
 
 void MIDIInOut::SetParamMapping(size_t index, uint8_t cc_number, uint8_t channel, uint8_t min_value, uint8_t max_value) {
     if (index >= n_outputs_) {
-        Serial.printf("Warning: Parameter index %d out of range (max %d)\n", index, n_outputs_ - 1);
+        DEBUG_PRINTF("Warning: Parameter index %d out of range (max %d)\n", index, n_outputs_ - 1);
         return;
     }
 
@@ -180,7 +180,7 @@ void MIDIInOut::ClearAdvancedMappings() {
 void MIDIInOut::SetMIDISendChannel(uint8_t channel) {
     // Ensure channel is in valid range (1-16)
     if (channel < 1 || channel > 16) {
-        Serial.printf("Warning: Invalid MIDI channel %d (must be 1-16)\n", channel);
+        DEBUG_PRINTF("Warning: Invalid MIDI channel %d (must be 1-16)\n", channel);
         return;
     }
     send_channel_ = channel;
@@ -189,7 +189,7 @@ void MIDIInOut::SetMIDISendChannel(uint8_t channel) {
 void MIDIInOut::SetMIDINoteChannel(uint8_t channel) {
     // Ensure channel is in valid range (1-16)
     if (channel < 1 || channel > 16) {
-        Serial.printf("Warning: Invalid MIDI note channel %d (must be 1-16)\n", channel);
+        DEBUG_PRINTF("Warning: Invalid MIDI note channel %d (must be 1-16)\n", channel);
         return;
     }
     note_channel_ = channel;
@@ -233,7 +233,7 @@ void MIDIInOut::RefreshUART_(void) {
         while(!Serial2) {} // Wait for Serial2
         WRITE_VOLATILE(refresh_uart_, true);
 
-        Serial.println("MIDI UART refreshed.");
+        DEBUG_PRINTLN("MIDI UART refreshed.");
     }
 }
 

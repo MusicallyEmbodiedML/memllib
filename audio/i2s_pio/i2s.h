@@ -22,6 +22,8 @@
 
 #include <stdio.h>
 #include "hardware/pio.h"
+#include "../../PicoDefs.hpp"
+
 
 #ifndef I2S_TEST_I2S_H
 #define I2S_TEST_I2S_H

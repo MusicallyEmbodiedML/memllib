@@ -7,6 +7,7 @@
 #include "../hardware/memlnaut/display.hpp"
 #include <algorithm>
 
+
 void IMLInterface::setup(size_t n_inputs, size_t n_outputs)
 {
     InterfaceBase::setup(n_inputs, n_outputs);
@@ -27,13 +28,13 @@ void IMLInterface::setup(size_t n_inputs, size_t n_outputs)
     zoom_enabled_ = false;
     zoom_factor_ = 0.5f;
 
-    Serial.println("IMLInterface setup done");
-    Serial.print("Address of n_inputs_: ");
-    Serial.println(reinterpret_cast<uintptr_t>(&n_inputs_));
-    Serial.print("Inputs: ");
-    Serial.print(n_inputs_);
-    Serial.print(", Outputs: ");
-    Serial.println(n_outputs_);
+     DEBUG_PRINTLN("IMLInterface setup done");
+     DEBUG_PRINT("Address of n_inputs_: ");
+     DEBUG_PRINTLN(reinterpret_cast<uintptr_t>(&n_inputs_));
+     DEBUG_PRINT("Inputs: ");
+     DEBUG_PRINT(n_inputs_);
+     DEBUG_PRINT(", Outputs: ");
+     DEBUG_PRINTLN(n_outputs_);
 }
 
 void IMLInterface::setup(size_t n_inputs, size_t n_outputs, std::shared_ptr<display> disp)
@@ -44,8 +45,8 @@ void IMLInterface::setup(size_t n_inputs, size_t n_outputs, std::shared_ptr<disp
 
 bool IMLInterface::SetTrainingMode(training_mode_t training_mode)
 {
-    Serial.print("Training mode: ");
-    Serial.println(training_mode == INFERENCE_MODE ? "Inference" : "Training");
+     DEBUG_PRINT("Training mode: ");
+     DEBUG_PRINTLN(training_mode == INFERENCE_MODE ? "Inference" : "Training");
 
     bool has_trained = false;
 
@@ -62,22 +63,22 @@ void IMLInterface::ProcessInput()
 {
     // Check if input is updated
     if (perform_inference_ && input_updated_) {
-        Serial.print("Input state: ");
-        for (auto val : input_state_) {
-            Serial.print(val);
-            Serial.print(" ");
-        }
-        Serial.println();
+         DEBUG_PRINT("Input state: ");
+        // for (auto val : input_state_) {
+        //     DEBUG_PRINT(val);
+        //     DEBUG_PRINT(" ");
+        // }
+         DEBUG_PRINTLN();
         // Only zoom here
         std::vector<float> zoomed_input = input_state_;
         if (zoom_enabled_) {
             zoomed_input = ZoomCoordinates(input_state_, zoom_centre_, zoom_factor_);
-            Serial.print("Zoomed input: ");
-            for (auto val : zoomed_input) {
-                Serial.print(val);
-                Serial.print(" ");
-            }
-            Serial.println();
+             DEBUG_PRINT("Zoomed input: ");
+            // for (auto val : zoomed_input) {
+            //     DEBUG_PRINT(val);
+            //     DEBUG_PRINT(" ");
+            // }
+             DEBUG_PRINTLN();
         }
         MLInference_(zoomed_input);
         input_updated_ = false;
@@ -86,15 +87,15 @@ void IMLInterface::ProcessInput()
 
 void IMLInterface::SetInput(size_t index, float value)
 {
-    // Serial.print("Input ");
-    // Serial.print(index);
-    // Serial.print(" set to: ");
-    // Serial.println(value);
+     DEBUG_PRINT("Input ");
+     DEBUG_PRINT(index);
+     DEBUG_PRINT(" set to: ");
+     DEBUG_PRINTLN(value);
 
     if (index >= n_inputs_) {
-        Serial.print("Input index ");
-        Serial.print(index);
-        Serial.println(" out of bounds.");
+         DEBUG_PRINT("Input index ");
+         DEBUG_PRINT(index);
+         DEBUG_PRINTLN(" out of bounds.");
         return;
     }
 
@@ -115,13 +116,13 @@ bool IMLInterface::SaveInput(saving_mode_t mode)
     if (training_mode_ == TRAINING_MODE) {
         if (STORE_VALUE_MODE == mode && perform_inference_) {
 
-            Serial.println("Move input to position...");
+             DEBUG_PRINTLN("Move input to position...");
             perform_inference_ = false;
             return true;
 
         } else if (STORE_POSITION_MODE == mode && !perform_inference_) {
 
-            Serial.println("Creating example in this position.");
+             DEBUG_PRINTLN("Creating example in this position.");
             // Save pair in the dataset
             dataset_->Add(input_state_, output_state_);
             perform_inference_ = true;
@@ -130,7 +131,7 @@ bool IMLInterface::SaveInput(saving_mode_t mode)
         }
         return false;
     } else {
-        Serial.println("Switch to training mode first.");
+         DEBUG_PRINTLN("Switch to training mode first.");
         return false;
     }
 }
@@ -138,11 +139,11 @@ bool IMLInterface::SaveInput(saving_mode_t mode)
 bool IMLInterface::ClearData()
 {
     if (training_mode_ == TRAINING_MODE) {
-        Serial.println("Clearing dataset...");
+         DEBUG_PRINTLN("Clearing dataset...");
         dataset_->Clear();
         return true;
     } else {
-        Serial.println("Switch to training mode first.");
+         DEBUG_PRINTLN("Switch to training mode first.");
         return false;
     }
 }
@@ -150,12 +151,12 @@ bool IMLInterface::ClearData()
 bool IMLInterface::Randomise()
 {
     if (training_mode_ == TRAINING_MODE) {
-        Serial.println("Randomising weights...");
+        DEBUG_PRINTLN("Randomising weights...");
         MLRandomise_();
         MLInference_(input_state_);
         return true;
     } else {
-        Serial.println("Switch to training mode first.");
+        DEBUG_PRINTLN("Switch to training mode first.");
         return false;
     }
 }
@@ -163,8 +164,8 @@ bool IMLInterface::Randomise()
 void IMLInterface::SetIterations(size_t iterations)
 {
     n_iterations_ = iterations;
-    Serial.print("Iterations set to: ");
-    Serial.println(n_iterations_);
+    DEBUG_PRINT("Iterations set to: ");
+    DEBUG_PRINTLN(n_iterations_);
 }
 
 void IMLInterface::SetZoomEnabled(bool enabled)
@@ -175,12 +176,12 @@ void IMLInterface::SetZoomEnabled(bool enabled)
     }
     if (enabled) {
         zoom_centre_ = input_state_;
-        Serial.println("Zoom centre: ");
+        DEBUG_PRINTLN("Zoom centre: ");
         for (auto val : zoom_centre_) {
-            Serial.print(val);
-            Serial.print(" ");
+            DEBUG_PRINT(val);
+            DEBUG_PRINT(" ");
         }
-        Serial.println();
+        DEBUG_PRINTLN();
     }
 }
 
@@ -218,16 +219,16 @@ void IMLInterface::MLSetup_()
 void IMLInterface::MLInference_(std::vector<float> input)
 {
     if (!dataset_ || !mlp_) {
-        Serial.println("ML not initialized!");
+        DEBUG_PRINTLN("ML not initialized!");
         return;
     }
 
     if (input.size() != n_inputs_) {
-        Serial.print("Input size mismatch - ");
-        Serial.print("Expected: ");
-        Serial.print(n_inputs_);
-        Serial.print(", Got: ");
-        Serial.println(input.size());
+        DEBUG_PRINT("Input size mismatch - ");
+        DEBUG_PRINT("Expected: ");
+        DEBUG_PRINT(n_inputs_);
+        DEBUG_PRINT(", Got: ");
+        DEBUG_PRINTLN(input.size());
         return;
     }
 
@@ -243,7 +244,7 @@ void IMLInterface::MLInference_(std::vector<float> input)
 void IMLInterface::MLRandomise_()
 {
     if (!mlp_) {
-        Serial.println("ML not initialized!");
+        DEBUG_PRINTLN("ML not initialized!");
         return;
     }
 
@@ -256,7 +257,7 @@ void IMLInterface::MLRandomise_()
 bool IMLInterface::MLTraining_()
 {
     if (!mlp_) {
-        Serial.println("ML not initialized!");
+        DEBUG_PRINTLN("ML not initialized!");
         return false;
     }
     // Restore old weights
@@ -269,34 +270,34 @@ bool IMLInterface::MLTraining_()
     // Extract dataset to training pair
     MLP<float>::training_pair_t dataset(dataset_->GetFeatures(), dataset_->GetLabels());
     // Check and report on dataset size
-    Serial.print("Feature size ");
-    Serial.print(dataset.first.size());
-    Serial.print(", label size ");
-    Serial.println(dataset.second.size());
+    DEBUG_PRINT("Feature size ");
+    DEBUG_PRINT(dataset.first.size());
+    DEBUG_PRINT(", label size ");
+    DEBUG_PRINTLN(dataset.second.size());
     if (!dataset.first.size() || !dataset.second.size()) {
-        Serial.println("Empty dataset!");
+        DEBUG_PRINTLN("Empty dataset!");
         return false;
     }
-    Serial.print("Feature dim ");
-    Serial.print(dataset.first[0].size());
-    Serial.print(", label dim ");
-    Serial.println(dataset.second[0].size());
+    DEBUG_PRINT("Feature dim ");
+    DEBUG_PRINT(dataset.first[0].size());
+    DEBUG_PRINT(", label dim ");
+    DEBUG_PRINTLN(dataset.second[0].size());
     if (!dataset.first[0].size() || !dataset.second[0].size()) {
-        Serial.println("Empty dataset dimensions!");
+        DEBUG_PRINTLN("Empty dataset dimensions!");
         return false;
     }
 
     // Training loop
-    Serial.print("Training for max ");
-    Serial.print(n_iterations_);
-    Serial.println(" iterations...");
+    DEBUG_PRINT("Training for max ");
+    DEBUG_PRINT(n_iterations_);
+    DEBUG_PRINTLN(" iterations...");
     float loss = mlp_->Train(dataset,
             1.,
             n_iterations_,
             0.00001,
             false);
-    Serial.print("Trained, loss = ");
-    Serial.println(loss, 10);
+    DEBUG_PRINT("Trained, loss = ");
+    DEBUG_PRINTLN(loss, 10);
     return true;
 }
 
@@ -381,10 +382,10 @@ void IMLInterface::bindUARTInput(std::shared_ptr<UARTInput> uart_input, const st
             auto it = std::find(kUARTListenInputs.begin(), kUARTListenInputs.end(), sensor_index);
             if (it != kUARTListenInputs.end()) {
                 size_t param_index = std::distance(kUARTListenInputs.begin(), it);
-                Serial.printf("Sensor %zu: %f\n", sensor_index, value);
+                DEBUG_PRINTF("Sensor %zu: %f\n", sensor_index, value);
                 this->SetInput(param_index, value);
             } else {
-                Serial.printf("Invalid sensor index: %zu\n", sensor_index);
+                DEBUG_PRINTF("Invalid sensor index: %zu\n", sensor_index);
             }
         });
     }
@@ -394,7 +395,7 @@ void IMLInterface::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf)
 {
     if (midi_interf) {
         midi_interf->SetCCCallback([this](uint8_t cc_number, uint8_t cc_value) {
-            Serial.printf("MIDI CC %d: %d\n", cc_number, cc_value);
+            DEBUG_PRINTF("MIDI CC %d: %d\n", cc_number, cc_value);
         });
     }
 }
@@ -404,12 +405,12 @@ std::vector<float> IMLInterface::ZoomCoordinates(const std::vector<float>& coord
 {
     // Input validation
     if (coord.size() != zoom_centre.size()) {
-        Serial.println("Warning: ZoomCoordinates - coord and zoom_centre size mismatch");
+        DEBUG_PRINTLN("Warning: ZoomCoordinates - coord and zoom_centre size mismatch");
         return coord;
     }
 
     if (factor < 0.0f || factor > 1.0f) {
-        Serial.println("Warning: ZoomCoordinates - factor must be between 0 and 1");
+        DEBUG_PRINTLN("Warning: ZoomCoordinates - factor must be between 0 and 1");
         return coord;
     }
 

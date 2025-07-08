@@ -115,7 +115,7 @@ static void AUDIO_FUNC(process_audio)(const int32_t* input, int32_t* output, siz
             ((static_cast<float>(kBufferSize)/static_cast<float>(kSampleRate))
             * 1000000.f);
     const float dspload = elapsed * quantumLength;
-    // Serial.println(dspload);
+     DEBUG_PRINTLN(dspload);
     // Report DSP overload if needed
     if (dspload > 0.95 and !dsp_overload) {
         dsp_overload = true;
@@ -183,12 +183,12 @@ bool AudioDriver::Setup(const codec_config_t &config) {
 
     if (!Wire.setSDA(i2c_sgt5000Data) ||
             !Wire.setSCL(i2c_sgt5000Clk)) {
-        Serial.println("AUDIO- Failed to setup I2C with codec!");
+         DEBUG_PRINTLN("AUDIO- Failed to setup I2C with codec!");
     }
 
     set_sys_clock_khz(132000*2, true);
     // set_sys_clock_khz(129600, true);
-    Serial.printf("System Clock: %lu\n", clock_get_hz(clk_sys));
+     DEBUG_PRINTF("System Clock: %lu\n", clock_get_hz(clk_sys));
 
     i2s_config picoI2SConfig {
         kSampleRate, // 48000,
@@ -206,14 +206,14 @@ bool AudioDriver::Setup(const codec_config_t &config) {
 
     // init i2c
     codecCtl.enable();
-    Serial.println("AUDIO - Codec enabled");
-    Serial.printf("config.output_volume = %f\n", config.output_volume);
+     DEBUG_PRINTLN("AUDIO - Codec enabled");
+     DEBUG_PRINTF("config.output_volume = %f\n", config.output_volume);
     codecCtl.volume(config.output_volume > 0.99 ? 0.99 : config.output_volume);
-    Serial.printf("config.mic_input = %d\n", config.mic_input);
+     DEBUG_PRINTF("config.mic_input = %d\n", config.mic_input);
     codecCtl.inputSelect(config.mic_input ? AUDIO_INPUT_MIC : AUDIO_INPUT_LINEIN);
-    Serial.printf("config.line_level = %d\n", config.line_level);
+     DEBUG_PRINTF("config.line_level = %d\n", config.line_level);
     codecCtl.lineInLevel(config.line_level);
-    Serial.printf("config.mic_gain_dB = %d\n", config.mic_gain_dB);
+     DEBUG_PRINTF("config.mic_gain_dB = %d\n", config.mic_gain_dB);
     codecCtl.micGain(config.mic_gain_dB);
     codecCtl.lineOutLevel(25);
 

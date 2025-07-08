@@ -1,6 +1,9 @@
 #include "SerialUSBInput.hpp"
 #include "../utils/SLIP.hpp"
 
+#include "SerialUSBOutput.hpp"
+
+SerialUSBOutput usbSerialOut;
 
 SerialUSBInput::SerialUSBInput(std::shared_ptr<display> dispptr, size_t baud_rate) :
     slipBuffer{ 0 },
@@ -35,15 +38,15 @@ void SerialUSBInput::Poll()
     if (!refresh_uart_) {
         // What baud rate is the UART running at?
         // Print debug info about PIO Serial state
-        Serial.print("PIO Serial Status - Initialized: ");
-        Serial.print(Serial ? "Yes" : "No");
-        Serial.print(", Target Baud Rate: ");
-        Serial.println(baud_rate_);
+        DEBUG_PRINT("PIO Serial Status - Initialized: ");
+        DEBUG_PRINT(Serial ? "Yes" : "No");
+        DEBUG_PRINT(", Target Baud Rate: ");
+        DEBUG_PRINTLN(baud_rate_);
         // Start at current baud rate
         Serial1.begin(baud_rate_);
-        Serial.println("PIO_UART refreshed.");
-        Serial.print("Serial available: ");
-        Serial.println(Serial.available());
+        DEBUG_PRINTLN("PIO_UART refreshed.");
+        DEBUG_PRINT("Serial available: ");
+        DEBUG_PRINTLN(Serial.available());
         refresh_uart_ = true;
     }
 
@@ -84,16 +87,23 @@ void SerialUSBInput::Poll()
                             disp->post("Decoded packet successfully");
                             float f = bytes2float_union(outBuf);    
                             disp->post("Value: " + String(f, 8));
+
+                            std::vector<float> values(1);
+                            values[0] = f * 2.0f;
+                            usbSerialOut.SendFloatArray(values);
+                            disp->post("Sent value back: " + String(f, 8));
                             // spiMessage msg;
                             // memcpy(&msg, outBuf, maxOut);
                             // Parse_(msg);
+                        }else{
+                            disp->post("Failed to decode packet, got: " + String(got));
                         }
                         // Reset for next packet
                         spiState = SPISTATES::WAITFOREND;
                         spiIdx   = 0;
                     }
                 } else {
-                    Serial.println("UARTInput: SLIP buffer overrun, dropping packet");
+                    DEBUG_PRINTLN("UARTInput: SLIP buffer overrun, dropping packet");
                     spiState = SPISTATES::WAITFOREND;
                     spiIdx   = 0;
                 }
@@ -126,10 +136,10 @@ void SerialUSBInput::Poll()
 
 //         // Print the value (Arduino scope) if it's the observed channel
 //         if (kObservedChan == msg.msg) {
-//             Serial.print("Low:0.00,High:1.00,Value:");
-//             Serial.print(msg.value, 8);
-//             Serial.print(",FilteredValue:");
-//             Serial.println(filtered_value, 8);
+//             DEBUG_PRINT("Low:0.00,High:1.00,Value:");
+//             DEBUG_PRINT(msg.value, 8);
+//             DEBUG_PRINT(",FilteredValue:");
+//             DEBUG_PRINTLN(filtered_value, 8);
 //         }
 
 //         value_states_[index] = filtered_value;

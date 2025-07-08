@@ -2,35 +2,35 @@
 #include <Arduino.h>
 
 // Button callback functions
-void onMomA1() { Serial.println("MOM_A1 pressed"); }
-void onMomA2() { Serial.println("MOM_A2 pressed"); }
-void onMomB1() { Serial.println("MOM_B1 pressed"); }
-void onMomB2() { Serial.println("MOM_B2 pressed"); }
-void onReSW() { Serial.println("RE_SW pressed"); }
-void onReA() { Serial.println("RE_A triggered"); }
-void onReB() { Serial.println("RE_B triggered"); }
+void onMomA1() { DEBUG_PRINTLN("MOM_A1 pressed"); }
+void onMomA2() { DEBUG_PRINTLN("MOM_A2 pressed"); }
+void onMomB1() { DEBUG_PRINTLN("MOM_B1 pressed"); }
+void onMomB2() { DEBUG_PRINTLN("MOM_B2 pressed"); }
+void onReSW() { DEBUG_PRINTLN("RE_SW pressed"); }
+void onReA() { DEBUG_PRINTLN("RE_A triggered"); }
+void onReB() { DEBUG_PRINTLN("RE_B triggered"); }
 
 // Toggle callback functions
-void onTogA1(bool state) { Serial.printf("TOG_A1: %s\n", state ? "ON" : "OFF"); }
-void onTogA2(bool state) { Serial.printf("TOG_A2: %s\n", state ? "ON" : "OFF"); }
-void onTogB1(bool state) { Serial.printf("TOG_B1: %s\n", state ? "ON" : "OFF"); }
-void onTogB2(bool state) { Serial.printf("TOG_B2: %s\n", state ? "ON" : "OFF"); }
-void onJoySW(bool state) { Serial.printf("JOY_SW: %s\n", state ? "ON" : "OFF"); }
+void onTogA1(bool state) { DEBUG_PRINTF("TOG_A1: %s\n", state ? "ON" : "OFF"); }
+void onTogA2(bool state) { DEBUG_PRINTF("TOG_A2: %s\n", state ? "ON" : "OFF"); }
+void onTogB1(bool state) { DEBUG_PRINTF("TOG_B1: %s\n", state ? "ON" : "OFF"); }
+void onTogB2(bool state) { DEBUG_PRINTF("TOG_B2: %s\n", state ? "ON" : "OFF"); }
+void onJoySW(bool state) { DEBUG_PRINTF("JOY_SW: %s\n", state ? "ON" : "OFF"); }
 
 // ADC callback functions
-void onJoyX(float value) { Serial.printf("JOY_X: %.3f\n", value); }
-void onJoyY(float value) { Serial.printf("JOY_Y: %.3f\n", value); }
-void onJoyZ(float value) { Serial.printf("JOY_Z: %.3f\n", value); }
-void onRVGain1(float value) { Serial.printf("RV_GAIN1: %.3f\n", value); }
-void onRVZ1(float value) { Serial.printf("RV_Z1: %.3f\n", value); }
-void onRVY1(float value) { Serial.printf("RV_Y1: %.3f\n", value); }
-void onRVX1(float value) { Serial.printf("RV_X1: %.3f\n", value); }
+void onJoyX(float value) { DEBUG_PRINTF("JOY_X: %.3f\n", value); }
+void onJoyY(float value) { DEBUG_PRINTF("JOY_Y: %.3f\n", value); }
+void onJoyZ(float value) { DEBUG_PRINTF("JOY_Z: %.3f\n", value); }
+void onRVGain1(float value) { DEBUG_PRINTF("RV_GAIN1: %.3f\n", value); }
+void onRVZ1(float value) { DEBUG_PRINTF("RV_Z1: %.3f\n", value); }
+void onRVY1(float value) { DEBUG_PRINTF("RV_Y1: %.3f\n", value); }
+void onRVX1(float value) { DEBUG_PRINTF("RV_X1: %.3f\n", value); }
 
 namespace MEMLNautTest {
     void Setup() {
         Serial.begin(115200);
         while (!Serial) delay(10);
-        Serial.println("MEMLNaut Test Starting...");
+        DEBUG_PRINTLN("MEMLNaut Test Starting...");
 
         // Set up momentary switch callbacks
         MEMLNaut::Instance()->setMomA1Callback(onMomA1);
@@ -57,6 +57,6 @@ namespace MEMLNautTest {
         MEMLNaut::Instance()->setRVY1Callback(onRVY1);
         MEMLNaut::Instance()->setRVX1Callback(onRVX1);
 
-        Serial.println("MEMLNaut Test Setup Complete!");
+        DEBUG_PRINTLN("MEMLNaut Test Setup Complete!");
     }
 }

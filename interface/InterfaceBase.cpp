@@ -27,12 +27,12 @@ void InterfaceBase::setup(size_t n_inputs, size_t n_outputs)
 
 void InterfaceBase::SendParamsToQueue(const std::vector<float>& data) {
     if (!init_done_) {
-        Serial.println("InterfaceBase::SendParamsToQueue - Error: Interface not initialized");
+        DEBUG_PRINTLN("InterfaceBase::SendParamsToQueue - Error: Interface not initialized");
         return;
     }
     if (data.size() != n_outputs_) {
-        Serial.println("InterfaceBase::SendParamsToQueue - Error: data size mismatch");
-        Serial.printf("Expected: %zu, Received: %zu\n", n_outputs_, data.size());
+        DEBUG_PRINTLN("InterfaceBase::SendParamsToQueue - Error: data size mismatch");
+        DEBUG_PRINTF("Expected: %zu, Received: %zu\n", n_outputs_, data.size());
         return;
     }
     queue_try_add(&queue_audioparam_, data.data());
@@ -46,7 +46,7 @@ void InterfaceBase::SendParamsToQueue(const std::vector<float>& data) {
 
 bool InterfaceBase::ReceiveParamsFromQueue(std::vector<float>& data) {
     if (!init_done_) {
-        Serial.println("InterfaceBase::ReceiveParamsFromQueue - Error: Interface not initialized");
+        DEBUG_PRINTLN("InterfaceBase::ReceiveParamsFromQueue - Error: Interface not initialized");
         return false;
     }
     if (data.size() != n_outputs_) {

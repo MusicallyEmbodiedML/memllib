@@ -10,6 +10,7 @@
 #ifndef __PINS_HPP__
 #define __PINS_HPP__
 #include <Arduino.h>
+#include "../../PicoDefs.hpp"
 
 /**
  * @brief Class containing all pin definitions and initialization functions
@@ -142,7 +143,7 @@ public:
         // Set ADC resolution to 12 bits
         analogReadResolution(12);
 
-        Serial.println("Pins initialized.");
+        DEBUG_PRINTLN("Pins initialized.");
     }
 };
 

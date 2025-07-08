@@ -19,5 +19,17 @@
 #define WRITE_VOLATILE(var, val) do { MEMORY_BARRIER(); (var) = (val); MEMORY_BARRIER(); } while (0)
 #define READ_VOLATILE(var) ({ MEMORY_BARRIER(); typeof(var) __temp = (var); MEMORY_BARRIER(); __temp; })
 
+// #define ALLOW_DEBUG
+
+#ifdef ALLOW_DEBUG
+#define DEBUG_PRINTF(...) Serial.printf(__VA_ARGS__)
+#define DEBUG_PRINT(...) Serial.print(__VA_ARGS__)
+#define DEBUG_PRINTLN(...) Serial.println(__VA_ARGS__)
+#else
+#define DEBUG_PRINT(...)  
+#define DEBUG_PRINTLN(...)  
+#define DEBUG_PRINTF(...)  
+#endif
+
 
 #endif  // __MEML_PICO_HPP__

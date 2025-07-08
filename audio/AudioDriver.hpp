@@ -47,8 +47,8 @@ class AudioDriver {
     static bool Setup(const codec_config_t& config);
     static inline void SetCallback(audiocallback_fptr_t callback) {
         audio_callback_ = callback;
-        Serial.print("AUDIO_DRIVER - Callback address: ");
-        Serial.printf("%p\n", audio_callback_);
+         DEBUG_PRINT("AUDIO_DRIVER - Callback address: ");
+         DEBUG_PRINTF("%p\n", audio_callback_);
     }
     static inline void SetMasterVolume(float volume) {
         if (volume > 1.0f) {

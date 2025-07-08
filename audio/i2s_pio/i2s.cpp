@@ -63,9 +63,9 @@ static bool validate_sck_bck_sync(pio_i2s_clocks* clocks) {
     float ratio      = clocks->sck_pio_hz / clocks->bck_pio_hz;
     float actual_sck = clocks->sck_pio_hz / (float)i2s_sck_program_pio_mult;
     float actual_bck = clocks->bck_pio_hz / (float)i2s_out_master_program_pio_mult;
-    Serial.printf("Clock speed for SCK: %f (PIO %f Hz with divider %d.%d)\n", actual_sck, clocks->sck_pio_hz, clocks->sck_d, clocks->sck_f);
-    Serial.printf("Clock speed for BCK: %f (PIO %f Hz with divider %d.%d)\n", actual_bck, clocks->bck_pio_hz, clocks->bck_d, clocks->bck_f);
-    Serial.printf("Clock Ratio: %f\n", ratio);
+     DEBUG_PRINTF("Clock speed for SCK: %f (PIO %f Hz with divider %d.%d)\n", actual_sck, clocks->sck_pio_hz, clocks->sck_d, clocks->sck_f);
+     DEBUG_PRINTF("Clock speed for BCK: %f (PIO %f Hz with divider %d.%d)\n", actual_bck, clocks->bck_pio_hz, clocks->bck_d, clocks->bck_f);
+     DEBUG_PRINTF("Clock Ratio: %f\n", ratio);
     float whole_ratio;
     float fractional_ratio = modff(ratio, &whole_ratio);
     return (fractional_ratio == 0.0f);
@@ -144,7 +144,7 @@ static void dma_double_buffer_init(pio_i2s* i2s, void (*dma_handler)(void)) {
  *       with the resulting i2s object!
  */
 static void i2s_slave_program_init(PIO pio, const i2s_config* config, pio_i2s* i2s) {
-    Serial.println("Slave init");
+     DEBUG_PRINTLN("Slave init");
     uint offset  = 0;
     i2s->pio     = pio;
     i2s->sm_mask = 0;
@@ -190,7 +190,7 @@ static void i2s_sync_program_init(PIO pio, const i2s_config* config, pio_i2s* i2
              *  - You are running a 24-bit I2S with a 256x SCK multiplier (RP2040 cannot support this)
              *  - You have mucked with the PIO ratios or done something silly.
              */
-            Serial.println("SCK and BCK are not in sync.");
+             DEBUG_PRINTLN("SCK and BCK are not in sync.");
         }
 
         // SCK block
@@ -218,7 +218,7 @@ static void i2s_sync_program_init(PIO pio, const i2s_config* config, pio_i2s* i2
 
 void i2s_program_start_slaved(PIO pio, const i2s_config* config, void (*dma_handler)(void), pio_i2s* i2s) {
     if (((uint32_t)i2s & 0x7) != 0) {
-        Serial.println("pio_i2s argument must be 8-byte aligned!");
+         DEBUG_PRINTLN("pio_i2s argument must be 8-byte aligned!");
     }
     i2s_slave_program_init(pio, config, i2s);
     dma_double_buffer_init(i2s, dma_handler);
@@ -226,9 +226,9 @@ void i2s_program_start_slaved(PIO pio, const i2s_config* config, void (*dma_hand
 }
 
 void i2s_program_start_synched(PIO pio, const i2s_config* config, void (*dma_handler)(void), pio_i2s* i2s) {
-  Serial.println("Start synched");
+//   DEBUG_PRINTLN("Start synched");
     if (((uint32_t)i2s & 0x7) != 0) {
-        Serial.println("pio_i2s argument must be 8-byte aligned!");
+         DEBUG_PRINTLN("pio_i2s argument must be 8-byte aligned!");
     }
     i2s_sync_program_init(pio, config, i2s);
     dma_double_buffer_init(i2s, dma_handler);

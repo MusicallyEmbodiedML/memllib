@@ -141,7 +141,7 @@ float FMSynth::process()
 
     // float y = op1.play(500,1, 1);
     // if (sampleIdx++ %1000 == 0) {
-    //     Serial.println(y);
+    //     DEBUG_PRINTLN(y);
     // }
 
     return std::tanh(y);
