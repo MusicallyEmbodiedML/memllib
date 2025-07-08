@@ -8,6 +8,7 @@ SerialUSBOutput::SerialUSBOutput()
 
 void SerialUSBOutput::SendFloatArray(const std::vector<float> &params)
 {
+    Serial.write(SLIP_END);
     // Encode each float (4 bytes) via SLIP
     for(const auto& f : params)
     {
