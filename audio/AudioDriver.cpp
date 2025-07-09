@@ -115,7 +115,7 @@ static void AUDIO_FUNC(process_audio)(const int32_t* input, int32_t* output, siz
             ((static_cast<float>(kBufferSize)/static_cast<float>(kSampleRate))
             * 1000000.f);
     const float dspload = elapsed * quantumLength;
-     DEBUG_PRINTLN(dspload);
+     //DEBUG_PRINTLN(dspload);
     // Report DSP overload if needed
     if (dspload > 0.95 and !dsp_overload) {
         dsp_overload = true;

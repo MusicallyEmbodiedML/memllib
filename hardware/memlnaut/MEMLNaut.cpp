@@ -3,44 +3,36 @@
 
 MEMLNaut* MEMLNaut::instance = nullptr;
 
+#define FAST_MEM __not_in_flash("memlnaut")
+
 // Static interrupt handlers implementation
-void MEMLNaut::handleMomA1() {
+void __not_in_flash_func(MEMLNaut::handleMomA1)() {
     if (instance && instance->debouncers[0].debounce() && instance->momA1Callback) {
         instance->momA1Callback();
     }
 }
-void MEMLNaut::handleMomA2() {
+void __not_in_flash_func(MEMLNaut::handleMomA2)() {
     if (instance && instance->debouncers[1].debounce() && instance->momA2Callback) {
         instance->momA2Callback();
     }
 }
-void MEMLNaut::handleMomB1() {
+void __not_in_flash_func(MEMLNaut::handleMomB1)() {
     if (instance && instance->debouncers[2].debounce() && instance->momB1Callback) {
         instance->momB1Callback();
     }
 }
-void MEMLNaut::handleMomB2() {
+void __not_in_flash_func(MEMLNaut::handleMomB2)() {
     if (instance && instance->debouncers[3].debounce() && instance->momB2Callback) {
         instance->momB2Callback();
     }
 }
-void MEMLNaut::handleReSW() {
+void __not_in_flash_func(MEMLNaut::handleReSW)() {
     if (instance && instance->debouncers[4].debounce() && instance->reSWCallback) {
         instance->reSWCallback();
     }
 }
-void MEMLNaut::handleReA() {
-    if (instance && instance->debouncers[5].debounce() && instance->reACallback) {
-        instance->reACallback();
-    }
-}
-void MEMLNaut::handleReB() {
-    if (instance && instance->debouncers[6].debounce() && instance->reBCallback) {
-        instance->reBCallback();
-    }
-}
 
-void MEMLNaut::handleTogA1() {
+void __not_in_flash_func(MEMLNaut::handleTogA1)() {
     if (instance) {
         bool should_update = instance->toggleDebouncers[0].debounce(digitalRead(Pins::TOG_A1) == LOW);
         if (should_update && instance->togA1Callback) {
@@ -49,7 +41,7 @@ void MEMLNaut::handleTogA1() {
         }
     }
 }
-void MEMLNaut::handleTogA2() {
+void __not_in_flash_func(MEMLNaut::handleTogA2)() {
     if (instance) {
         bool should_update = instance->toggleDebouncers[1].debounce(digitalRead(Pins::TOG_A2) == LOW);
         if (should_update && instance->togA2Callback) {
@@ -58,7 +50,7 @@ void MEMLNaut::handleTogA2() {
         }
     }
 }
-void MEMLNaut::handleTogB1() {
+void __not_in_flash_func(MEMLNaut::handleTogB1)() {
     if (instance) {
         bool should_update = instance->toggleDebouncers[2].debounce(digitalRead(Pins::TOG_B1) == LOW);
         if (should_update && instance->togB1Callback) {
@@ -67,7 +59,7 @@ void MEMLNaut::handleTogB1() {
         }
     }
 }
-void MEMLNaut::handleTogB2() {
+void __not_in_flash_func(MEMLNaut::handleTogB2)() {
     if (instance) {
         bool should_update = instance->toggleDebouncers[3].debounce(digitalRead(Pins::TOG_B2) == LOW);
         if (should_update && instance->togB2Callback) {
@@ -76,7 +68,7 @@ void MEMLNaut::handleTogB2() {
         }
     }
 }
-void MEMLNaut::handleJoySW() {
+void __not_in_flash_func(MEMLNaut::handleJoySW)() {
     if (instance) {
         bool should_update = instance->toggleDebouncers[4].debounce(digitalRead(Pins::JOY_SW) == LOW);
         if (should_update && instance->joySWCallback) {
@@ -85,6 +77,39 @@ void MEMLNaut::handleJoySW() {
         }
     }
 }
+
+int8_t __not_in_flash_func(read_rotary)(uint8_t &prevNextCode, uint16_t &store, int a_pin, int b_pin) {
+  static int8_t FAST_MEM rot_enc_table[] = { 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0 };
+
+  prevNextCode <<= 2;
+  if (digitalRead(b_pin)) prevNextCode |= 0x02;
+  if (digitalRead(a_pin)) prevNextCode |= 0x01;
+  prevNextCode &= 0x0f;
+  // Serial.println(prevNextCode);
+
+  // If valid then store as 16 bit data.
+  if (rot_enc_table[prevNextCode]) {
+    store <<= 4;
+    store |= prevNextCode;
+    if ((store & 0xff) == 0x2b) return -1;
+    if ((store & 0xff) == 0x17) return 1;
+  }
+  return 0;
+}
+
+static uint8_t FAST_MEM enc1Code = 0;
+static uint16_t FAST_MEM enc1Store = 0;
+
+void __isr MEMLNaut::encoder1_callback() {
+  int change = read_rotary(enc1Code, enc1Store, Pins::RE_A, Pins::RE_B);
+  DEBUG_PRINTLN("Encoder1 change: " + String(change));
+    if (instance && instance->rotEncCallback && change != 0) {
+        instance->rotEncCallback(change);
+    }
+
+}
+
+
 
 MEMLNaut::MEMLNaut() {
     instance = this;
@@ -103,8 +128,8 @@ MEMLNaut::MEMLNaut() {
     attachInterrupt(digitalPinToInterrupt(Pins::MOM_B1), handleMomB1, FALLING);
     attachInterrupt(digitalPinToInterrupt(Pins::MOM_B2), handleMomB2, FALLING);
     attachInterrupt(digitalPinToInterrupt(Pins::RE_SW), handleReSW, FALLING);
-    attachInterrupt(digitalPinToInterrupt(Pins::RE_A), handleReA, FALLING);
-    attachInterrupt(digitalPinToInterrupt(Pins::RE_B), handleReB, FALLING);
+    // attachInterrupt(digitalPinToInterrupt(Pins::RE_A), handleReA, FALLING);
+    // attachInterrupt(digitalPinToInterrupt(Pins::RE_B), handleReB, FALLING);
 
     // Attach toggle switch interrupts (CHANGE)
     attachInterrupt(digitalPinToInterrupt(Pins::TOG_A1), handleTogA1, CHANGE);
@@ -115,6 +140,14 @@ MEMLNaut::MEMLNaut() {
 
     // Force RVGain to be master volume
     setRVGain1Volume(DEFAULT_THRESHOLD);
+
+    //rotary encoder setup
+    attachInterrupt(digitalPinToInterrupt(Pins::RE_A), encoder1_callback,
+                        CHANGE);
+    attachInterrupt(digitalPinToInterrupt(Pins::RE_B), encoder1_callback,
+                        CHANGE);
+
+
 }
 
 // Momentary switch callback setters
@@ -123,8 +156,6 @@ void MEMLNaut::setMomA2Callback(ButtonCallback cb) { momA2Callback = cb; }
 void MEMLNaut::setMomB1Callback(ButtonCallback cb) { momB1Callback = cb; }
 void MEMLNaut::setMomB2Callback(ButtonCallback cb) { momB2Callback = cb; }
 void MEMLNaut::setReSWCallback(ButtonCallback cb) { reSWCallback = cb; }
-void MEMLNaut::setReACallback(ButtonCallback cb) { reACallback = cb; }
-void MEMLNaut::setReBCallback(ButtonCallback cb) { reBCallback = cb; }
 
 // Toggle switch callback setters
 void MEMLNaut::setTogA1Callback(ToggleCallback cb) { togA1Callback = cb; }
@@ -166,9 +197,16 @@ void MEMLNaut::setRVX1Callback(AnalogCallback cb, uint16_t threshold) {
     adcStates[6] = {analogRead(Pins::RV_X1) / ADC_SCALE, threshold, cb};
 }
 
+void MEMLNaut::setRotaryEncoderCallback(RotaryEncoderCallback cb) {
+    rotEncCallback = cb;
+}
+
+
 void MEMLNaut::setLoopCallback(LoopCallback cb) {
     loopCallback = cb;
 }
+
+
 
 void MEMLNaut::loop() {
 
