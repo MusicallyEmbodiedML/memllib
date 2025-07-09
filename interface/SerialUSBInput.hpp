@@ -21,7 +21,7 @@ public:
     // Change to trigger debugging of single channel
     static constexpr size_t kObservedChan = 9999;
 
-    using uart_in_callback_t = std::function<void(size_t, float)>;
+    using usb_uart_in_callback_t = std::function<void(std::vector<float>)>;
     /**
      * @brief Construct a new UARTInput object for communication
      * with the MEML Sensor Board.
@@ -30,7 +30,7 @@ public:
      * @param sensor_rx RX pin the Sensor Board is connected to (default: Pins::SENSOR_RX).
      * @param sensor_tx TX pin the Sensor Board is connected to (default: Pins::SENSOR_TX).
      */
-    SerialUSBInput(std::shared_ptr<display> disp, size_t baud_rate = 115200);
+    SerialUSBInput(size_t n_inputs, std::shared_ptr<display> disp, size_t baud_rate = 115200);
     /**
      * @brief Poll input. Put in a regular loop.
      */
@@ -40,7 +40,7 @@ public:
      *
      * @param callback Callback that accepts a vector of sensor readings.
      */
-    inline void SetCallback(uart_in_callback_t callback)
+    inline void SetCallback(usb_uart_in_callback_t callback)
     {
         callback_ = callback;
     }
@@ -52,7 +52,7 @@ protected:
 
     // std::vector<MedianFilter<float>> filters_;
     std::vector<float> value_states_;
-    uart_in_callback_t callback_ = nullptr;
+    usb_uart_in_callback_t callback_ = nullptr;
     bool refresh_uart_;
     size_t baud_rate_;
 
@@ -74,6 +74,7 @@ protected:
 
 private:
     std::shared_ptr<display> disp;
+    size_t n_inputs_;
 };
 
 #endif // __UART_INPUT_HPP__

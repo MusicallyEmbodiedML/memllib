@@ -5,13 +5,14 @@
 
 SerialUSBOutput usbSerialOut;
 
-SerialUSBInput::SerialUSBInput(std::shared_ptr<display> dispptr, size_t baud_rate) :
+SerialUSBInput::SerialUSBInput(size_t n_inputs, std::shared_ptr<display> dispptr, size_t baud_rate) :
     slipBuffer{ 0 },
-    value_states_{ 0 },
+    value_states_(n_inputs, 0),
     spiState(SPISTATES::WAITFOREND),
     spiIdx(0),
     callback_(nullptr),
     refresh_uart_(false),
+    n_inputs_(n_inputs),
     baud_rate_(baud_rate)
 {
     disp = dispptr;
@@ -24,12 +25,12 @@ float bytes2float_union(const uint8_t* bytes) {
         uint32_t i;
         float f;
     } converter;
-    
-    converter.i = bytes[0] | 
-                 (bytes[1] << 8) | 
-                 (bytes[2] << 16) | 
+
+    converter.i = bytes[0] |
+                 (bytes[1] << 8) |
+                 (bytes[2] << 16) |
                  (bytes[3] << 24);
-    
+
     return converter.f;
 }
 
@@ -79,24 +80,32 @@ void SerialUSBInput::Poll()
 
                     if (spiByte == SLIP::END) {
                         // Safe decode into fixed buffer
-                        disp->post("Received packet");
-                        uint8_t outBuf[8] = {0};
-                        size_t  maxOut = 8;
+                        //disp->post("Received packet");
+                        size_t  maxOut = n_inputs_ * sizeof(float);
+                        uint8_t outBuf[maxOut] = {0};
                         size_t  got    = SLIP::decode(slipBuffer, spiIdx, outBuf, maxOut);
                         if (got == maxOut) {
-                            disp->post("Decoded packet successfully");
-                            float f = bytes2float_union(outBuf);    
-                            disp->post("Value: " + String(f, 8));
+                            //disp->post("Decoded packet successfully");
+                            //float f = bytes2float_union(outBuf);
+                            //disp->post("Value: " + String(f, 8));
 
-                            std::vector<float> values(1);
-                            values[0] = f * 2.0f;
-                            usbSerialOut.SendFloatArray(values);
-                            disp->post("Sent value back: " + String(f, 8));
+                            for (size_t n = 0; n < n_inputs_; n++) {
+                                // Convert each 4-byte float in the buffer
+                                float f = bytes2float_union(&outBuf[n * sizeof(float)]);
+                                value_states_[n] = f; // Store the value
+                                if (n == 0) disp->post("USBIn0: "+ String(f, 8));
+                            }
+                            callback_(value_states_);
+
+                            // std::vector<float> values(1);
+                            // values[0] = f * 2.0f;
+                            // usbSerialOut.SendFloatArray(values);
+                            //disp->post("Sent value back: " + String(f, 8));
                             // spiMessage msg;
                             // memcpy(&msg, outBuf, maxOut);
                             // Parse_(msg);
                         }else{
-                            disp->post("Failed to decode packet, got: " + String(got));
+                            disp->post("Invalid packet: " + String(got));
                         }
                         // Reset for next packet
                         spiState = SPISTATES::WAITFOREND;
