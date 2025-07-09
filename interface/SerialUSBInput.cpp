@@ -93,7 +93,7 @@ void SerialUSBInput::Poll()
                                 // Convert each 4-byte float in the buffer
                                 float f = bytes2float_union(&outBuf[n * sizeof(float)]);
                                 value_states_[n] = f; // Store the value
-                                if (n == 0) disp->post("USBIn0: "+ String(f, 8));
+                                //if (n == 0) disp->post("USBIn0: "+ String(f, 8));
                             }
                             callback_(value_states_);
 
