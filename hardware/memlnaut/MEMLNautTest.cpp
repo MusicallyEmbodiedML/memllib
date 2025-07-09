@@ -38,8 +38,6 @@ namespace MEMLNautTest {
         MEMLNaut::Instance()->setMomB1Callback(onMomB1);
         MEMLNaut::Instance()->setMomB2Callback(onMomB2);
         MEMLNaut::Instance()->setReSWCallback(onReSW);
-        MEMLNaut::Instance()->setReACallback(onReA);
-        MEMLNaut::Instance()->setReBCallback(onReB);
 
         // Set up toggle switch callbacks
         MEMLNaut::Instance()->setTogA1Callback(onTogA1);

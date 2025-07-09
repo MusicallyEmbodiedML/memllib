@@ -14,6 +14,7 @@ public:
     using ToggleCallback = std::function<void(bool)>;
     using AnalogCallback = std::function<void(float)>;
     using LoopCallback = std::function<void(void)>;
+    using RotaryEncoderCallback = std::function<void(int)>;
 
 private:
     static MEMLNaut* __not_in_flash("memlnaut") instance;
@@ -43,8 +44,7 @@ private:
     ButtonCallback momB1Callback;
     ButtonCallback momB2Callback;
     ButtonCallback reSWCallback;
-    ButtonCallback reACallback;
-    ButtonCallback reBCallback;
+    RotaryEncoderCallback rotEncCallback;
 
     ToggleCallback togA1Callback;
     ToggleCallback togA2Callback;
@@ -60,14 +60,17 @@ private:
     static void handleMomB1();
     static void handleMomB2();
     static void handleReSW();
-    static void handleReA();
-    static void handleReB();
+    // static void handleReA();
+    // static void handleReB();
 
     static void handleTogA1();
     static void handleTogA2();
     static void handleTogB1();
     static void handleTogB2();
     static void handleJoySW();
+    //encoder
+    static void encoder1_callback();
+
 
 public:
     static __attribute__((always_inline)) MEMLNaut* Instance() {
@@ -92,8 +95,6 @@ public:
     void setMomB1Callback(ButtonCallback cb);
     void setMomB2Callback(ButtonCallback cb);
     void setReSWCallback(ButtonCallback cb);
-    void setReACallback(ButtonCallback cb);
-    void setReBCallback(ButtonCallback cb);
 
     // Set callbacks for toggle switches
     void setTogA1Callback(ToggleCallback cb);
@@ -114,6 +115,9 @@ public:
 
     // Main loop callback setter
     void setLoopCallback(LoopCallback cb);
+
+    void setRotaryEncoderCallback(RotaryEncoderCallback cb);
+
 
     /**
      * @brief Read all pots and switches at once. Synchronise with the

@@ -19,7 +19,7 @@
 #define WRITE_VOLATILE(var, val) do { MEMORY_BARRIER(); (var) = (val); MEMORY_BARRIER(); } while (0)
 #define READ_VOLATILE(var) ({ MEMORY_BARRIER(); typeof(var) __temp = (var); MEMORY_BARRIER(); __temp; })
 
-// #define ALLOW_DEBUG
+#define ALLOW_DEBUG
 
 #ifdef ALLOW_DEBUG
 #define DEBUG_PRINTF(...) Serial.printf(__VA_ARGS__)

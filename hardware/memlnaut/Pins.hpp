@@ -97,6 +97,9 @@ public:
     static constexpr uint8_t USEQ_SCL = 39; ///< USeq I2C SCL (CV output)
     /** @} */
 
+
+
+
     /**
      * @brief Initialize all pins with their respective modes
      */
@@ -142,6 +145,7 @@ public:
 
         // Set ADC resolution to 12 bits
         analogReadResolution(12);
+
 
         DEBUG_PRINTLN("Pins initialized.");
     }
