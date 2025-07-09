@@ -28,6 +28,7 @@ public:
     void SetInput(size_t index, float value);
 
     bool SaveInput(std::vector<float> category);
+    bool Train();
     bool ClearData();
     bool Randomise();
     void SetIterations(size_t iterations);

@@ -102,9 +102,19 @@ bool SteliosInterface::SaveInput(std::vector<float> category)
     WRITE_VOLATILE(perform_inference_, false); // Stop inference while saving
     // Save pair in the dataset
     dataset_->Add(input_state_, category);
-    // Perform training on dataset
-    bool trained = MLTraining_();
+    DEBUG_PRINT("Saved input.");
 
+    WRITE_VOLATILE(perform_inference_, true); // Resume inference
+    return true;
+}
+
+bool SteliosInterface::Train()
+{
+    WRITE_VOLATILE(perform_inference_, false); // Stop inference while training
+    DEBUG_PRINTLN("Training MLP...");
+    bool trained = MLTraining_();
+    //DEBUG_PRINT("Training done, loss = ");
+    //DEBUG_PRINTLN(mlp_->GetLoss(), 10);
     WRITE_VOLATILE(perform_inference_, true); // Resume inference
     return trained;
 }
@@ -225,9 +235,9 @@ void SteliosInterface::MLRandomise_()
     }
 
     // Randomize weights
-    mlp_stored_weights_ = mlp_->GetWeights();
+    //mlp_stored_weights_ = mlp_->GetWeights();
     mlp_->DrawWeights();
-    randomised_state_ = true;
+    //randomised_state_ = true;
 }
 
 bool SteliosInterface::MLTraining_()
@@ -237,10 +247,10 @@ bool SteliosInterface::MLTraining_()
         return false;
     }
     // Restore old weights
-    if (randomised_state_) {
-        mlp_->SetWeights(mlp_stored_weights_);
-    }
-    randomised_state_ = false;
+    // if (randomised_state_) {
+    //     mlp_->SetWeights(mlp_stored_weights_);
+    // }
+    // randomised_state_ = false;
 
     // Prepare for training
     // Extract dataset to training pair
@@ -268,12 +278,11 @@ bool SteliosInterface::MLTraining_()
     DEBUG_PRINT(n_iterations_);
     DEBUG_PRINTLN(" iterations...");
     float loss = mlp_->Train(dataset,
-            5.,
+            0.5f,
             n_iterations_,
             0.00001,
             false);
-    DEBUG_PRINT("Trained, loss = ");
-    DEBUG_PRINTLN(loss, 10);
+    disp_->post("Trained, loss = " + String(loss, 5));
     return true;
 }
 
@@ -298,14 +307,17 @@ void SteliosInterface::bindInterface()
             class_vector[this->selected_category_] = 1.0f;
         }
         char buf[24];
-        snprintf(buf, sizeof(buf), "Training with class %zu", this->selected_category_);
-        if (disp_) {
+        snprintf(buf, sizeof(buf), "Saved class %zu", this->selected_category_);
+        if (this->SaveInput(class_vector) && disp_) {
             disp_->post(buf);
         }
-        if (this->SaveInput(class_vector)) {
-            if (disp_) disp_->post("Model trained");
-        } else {
-            if (disp_) disp_->post("Training failed");
+    });
+    MEMLNaut::Instance()->setMomB2Callback([this]() {
+        if (disp_) {
+            disp_->post("Training...");
+        }
+        if (!this->Train() && disp_) {
+            disp_->post("Failed to train");
         }
     });
 
