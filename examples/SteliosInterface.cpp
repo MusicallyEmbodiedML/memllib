@@ -6,6 +6,7 @@
 #include "../interface/MIDIInOut.hpp"
 #include "../hardware/memlnaut/display.hpp"
 #include <algorithm>
+#include <memory>
 
 
 void SteliosInterface::setup(size_t n_inputs, size_t n_outputs)
@@ -32,6 +33,24 @@ void SteliosInterface::setup(size_t n_inputs, size_t n_outputs)
 
     uart_output = std::make_shared<SerialUSBOutput>();
 
+    // Configure SD card
+#if 0
+    auto sdcard = std::make_unique<SDCard>();
+    sdcard->SetCardEventCallback([this](bool inserted) {
+        if (inserted) {
+            DEBUG_PRINTLN("SD card inserted.");
+            if (disp_) {
+                disp_->post("SD card inserted");
+            }
+        } else {
+            DEBUG_PRINTLN("SD card not present.");
+            if (disp_) {
+                disp_->post("SD card absent");
+            }
+        }
+    });
+    sdcard->Poll(); // Initial poll to check card status
+#endif
 
     DEBUG_PRINTLN("SteliosInterface setup done");
     DEBUG_PRINT("Address of n_inputs_: ");
@@ -44,12 +63,12 @@ void SteliosInterface::setup(size_t n_inputs, size_t n_outputs)
 
 void SteliosInterface::setup(size_t n_inputs, size_t n_outputs, std::shared_ptr<display> disp)
 {
-    setup(n_inputs, n_outputs);
     disp_ = disp;
     if (disp_) {
         disp_->statusPost("No class sel", 0);
         disp_->statusPost("No class out", 1);
     }
+    setup(n_inputs, n_outputs);
 }
 
 void SteliosInterface::ProcessInput()
@@ -179,7 +198,7 @@ void SteliosInterface::MLSetup_()
     // Layer size definitions
     const std::vector<size_t> layers_nodes = {
         n_inputs_ + kBias,
-        10, 10, 10,
+        20, 20, 10,
         n_outputs_
     };
 
@@ -193,6 +212,18 @@ void SteliosInterface::MLSetup_()
         use_constant_weight_init,
         constant_weight_init
     );
+    // Load weights from file if available
+    if (mlp_->LoadMLPNetwork(kFilename)) {
+        DEBUG_PRINTLN("Loaded MLP weights from file.");
+        if (disp_) {
+            disp_->post("Weights loaded from SD");
+        }
+    } else {
+        DEBUG_PRINTLN("No MLP weights file found, using default initialization.");
+        if (disp_) {
+            disp_->post("No SD - random init!");
+        }
+    }
 
     // State machine
     randomised_state_ = false;
@@ -300,6 +331,19 @@ bool SteliosInterface::MLTraining_()
             0.00001,
             false);
     disp_->post("Trained, loss = " + String(loss, 5));
+
+    // Save the trained model to SD card
+    if (mlp_->SaveMLPNetwork(kFilename)) {
+        DEBUG_PRINTLN("Saved MLP weights to file.");
+        if (disp_) {
+            disp_->post("Weights saved to SD");
+        }
+    } else {
+        DEBUG_PRINTLN("Failed to save MLP weights to file.");
+        if (disp_) {
+            disp_->post("Failed to save weights");
+        }
+    }
     return true;
 }
 
@@ -343,11 +387,6 @@ void SteliosInterface::bindInterface()
         if (!this->Train() && disp_) {
             disp_->post("Failed to train");
         }
-    });
-
-    // Set up toggle switch callbacks
-    MEMLNaut::Instance()->setTogB2Callback([this](bool state) {
-        this->SetZoomEnabled(state);
     });
 
     // Set up other ADC callbacks

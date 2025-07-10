@@ -4,9 +4,9 @@
 
 SDCard::SDCard(int miso, int mosi, int cs, int sck)
     : miso_(miso), mosi_(mosi), cs_(cs), sck_(sck), cardPresent_(false), cardEventCb_(nullptr) {
-    SPI.setRX(miso_);
-    SPI.setTX(mosi_);
-    SPI.setSCK(sck_);
+    SPI1.setRX(miso_);
+    SPI1.setTX(mosi_);
+    SPI1.setSCK(sck_);
     Poll();
 }
 

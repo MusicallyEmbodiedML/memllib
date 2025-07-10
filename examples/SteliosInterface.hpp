@@ -8,6 +8,7 @@
 #include "../../memlp/Dataset.hpp"
 #include "../interface/SerialUSBInput.hpp"
 #include "../interface/SerialUSBOutput.hpp"
+#include "../interface/SDCard.hpp"
 
 
 // Forward declarations
@@ -20,6 +21,9 @@ class display;
 class SteliosInterface : public InterfaceBase
 {
 public:
+
+    static constexpr char kFilename[] = "mlp_weights.bin";
+
     SteliosInterface() : InterfaceBase() {}
 
     void setup(size_t n_inputs, size_t n_outputs) override;
