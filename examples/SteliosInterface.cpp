@@ -29,6 +29,9 @@ void SteliosInterface::setup(size_t n_inputs, size_t n_outputs)
 
     selected_category_ = 0;
 
+    uart_output = std::make_shared<SerialUSBOutput>();
+
+
     DEBUG_PRINTLN("SteliosInterface setup done");
     DEBUG_PRINT("Address of n_inputs_: ");
     DEBUG_PRINTLN(reinterpret_cast<uintptr_t>(&n_inputs_));
@@ -216,6 +219,7 @@ void SteliosInterface::MLInference_(std::vector<float> input)
     // Process inferenced data
     output_state_ = output;
     SendParamsToQueue(output);
+    uart_output->SendFloatArray(output);
 
     if (disp_) {
         char buf[24];
@@ -255,6 +259,7 @@ bool SteliosInterface::MLTraining_()
     // Prepare for training
     // Extract dataset to training pair
     MLP<float>::training_pair_t dataset(dataset_->GetFeatures(), dataset_->GetLabels());
+
     // Check and report on dataset size
     DEBUG_PRINT("Feature size ");
     DEBUG_PRINT(dataset.first.size());

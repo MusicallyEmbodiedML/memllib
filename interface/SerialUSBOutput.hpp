@@ -1,5 +1,5 @@
-#ifndef __UART_OUTPUT_HPP__
-#define __UART_OUTPUT_HPP__
+#ifndef __SERIALUSBUART_OUTPUT_HPP__
+#define __SERIALUSBUART_OUTPUT_HPP__
 
 #include <Arduino.h>
 #include <SerialPIO.h>

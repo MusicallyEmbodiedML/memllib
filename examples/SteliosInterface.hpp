@@ -7,6 +7,7 @@
 #include "../../memlp/MLP.h"
 #include "../../memlp/Dataset.hpp"
 #include "../interface/SerialUSBInput.hpp"
+#include "../interface/SerialUSBOutput.hpp"
 
 
 // Forward declarations
@@ -76,6 +77,8 @@ protected:
     void MLRandomise_();
     bool MLTraining_();
     std::vector<float> ZoomCoordinates(const std::vector<float>& coord, const std::vector<float>& zoom_centre, float factor);
+
+    std::shared_ptr<SerialUSBOutput> uart_output;
 };
 
 #endif  // __STELIOS_INTERFACE_HPP__
