@@ -71,6 +71,7 @@ protected:
 
     // Category selection
     size_t selected_category_;
+    std::vector<size_t> class_occurrences_;
 
     void MLSetup_();
     void MLInference_(std::vector<float> input);

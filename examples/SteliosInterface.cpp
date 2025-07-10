@@ -28,6 +28,7 @@ void SteliosInterface::setup(size_t n_inputs, size_t n_outputs)
     zoom_factor_ = 0.5f;
 
     selected_category_ = 0;
+    class_occurrences_.resize(n_outputs_, 0);
 
     uart_output = std::make_shared<SerialUSBOutput>();
 
@@ -127,6 +128,7 @@ bool SteliosInterface::ClearData()
     WRITE_VOLATILE(perform_inference_, false); // Stop inference while clearing
     DEBUG_PRINTLN("Clearing dataset...");
     dataset_->Clear();
+    class_occurrences_.assign(n_outputs_, 0);
     WRITE_VOLATILE(perform_inference_, true); // Resume inference
     return true;
 }
@@ -222,11 +224,21 @@ void SteliosInterface::MLInference_(std::vector<float> input)
     uart_output->SendFloatArray(output);
 
     if (disp_) {
-        char buf[24];
-        snprintf(buf, sizeof(buf), "Out:");
-        for (size_t i = 0; i < output.size(); ++i) {
-            snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "%.2f ", output[i]);
+        // Find the class with highest output (argmax)
+        size_t class_id = 0;
+        float max_output = output_state_[0];
+        for (size_t i = 1; i < output_state_.size(); ++i) {
+            if (output_state_[i] > max_output) {
+                max_output = output_state_[i];
+                class_id = i;
+            }
         }
+
+        // Calculate confidence as the maximum probability
+        float confidence = max_output;
+
+        // Format buffer as Out:<class_id> (<confidence>)
+        String buf = "Out:" + String(class_id) + " (" + String(confidence, 3) + ")";
         disp_->statusPost(buf, 1);
     }
 }
@@ -311,9 +323,16 @@ void SteliosInterface::bindInterface()
         if (this->selected_category_ < this->n_outputs_) {
             class_vector[this->selected_category_] = 1.0f;
         }
-        char buf[24];
-        snprintf(buf, sizeof(buf), "Saved class %zu", this->selected_category_);
+        // Increment class occurrence count
+        if (this->selected_category_ < this->class_occurrences_.size()) {
+            this->class_occurrences_[this->selected_category_] += 1;
+        }
+        // Save input
         if (this->SaveInput(class_vector) && disp_) {
+            String buf = "";
+            for (size_t i = 0; i < this->class_occurrences_.size(); ++i) {
+                buf += "Cl" + String(i) + ":" + String(this->class_occurrences_[i]) + " ";
+            }
             disp_->post(buf);
         }
     });
