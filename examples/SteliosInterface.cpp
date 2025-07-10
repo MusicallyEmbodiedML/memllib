@@ -224,6 +224,12 @@ void SteliosInterface::MLSetup_()
             disp_->post("No SD - random init!");
         }
     }
+    // Register logging callback
+    mlp_->SetProgressCallback([this](size_t iteration, float loss) {
+        if (disp_) {
+            disp_->post("Iter: " + String(iteration) + " Loss: " + String(loss, 5));
+        }
+    });
 
     // State machine
     randomised_state_ = false;
@@ -325,10 +331,11 @@ bool SteliosInterface::MLTraining_()
     DEBUG_PRINT("Training for max ");
     DEBUG_PRINT(n_iterations_);
     DEBUG_PRINTLN(" iterations...");
-    float loss = mlp_->Train(dataset,
-            0.5f,
+    float loss = mlp_->MiniBatchTrain(dataset,
+            0.03f,
             n_iterations_,
-            0.00001,
+            32, // Batch size
+            0,
             false);
     disp_->post("Trained, loss = " + String(loss, 5));
 
@@ -341,7 +348,7 @@ bool SteliosInterface::MLTraining_()
     } else {
         DEBUG_PRINTLN("Failed to save MLP weights to file.");
         if (disp_) {
-            disp_->post("Failed to save weights");
+            disp_->post("Store weights to SD failed");
         }
     }
     return true;
@@ -360,7 +367,8 @@ void SteliosInterface::bindInterface()
             disp_->post("Dataset cleared");
         }
     });
-    MEMLNaut::Instance()->setMomB1Callback([this]() {
+
+    auto handle_save_data = [this]() {
         // Trigger training with current class
         // - Convert selected_category_ to one-hot vector
         std::vector<float> class_vector(this->n_outputs_, 0.0f);
@@ -379,7 +387,16 @@ void SteliosInterface::bindInterface()
             }
             disp_->post(buf);
         }
+    };
+
+    MEMLNaut::Instance()->setMomB1Callback(handle_save_data);
+
+    MEMLNaut::Instance()->setRotaryEncoderCallback([=](int direction) {
+        if (direction == 1) {
+            handle_save_data();
+        }
     });
+
     MEMLNaut::Instance()->setMomB2Callback([this]() {
         if (disp_) {
             disp_->post("Training...");
