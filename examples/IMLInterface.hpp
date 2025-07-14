@@ -49,6 +49,8 @@ public:
     void bindUARTInput(std::shared_ptr<UARTInput> uart_input, const std::vector<size_t>& kUARTListenInputs);
     void bindMIDI(std::shared_ptr<MIDIInOut> midi_interf);
 
+    bool sdtest=false;
+
 protected:
     static constexpr float kMax = 2.0f;
     size_t n_inputs_;

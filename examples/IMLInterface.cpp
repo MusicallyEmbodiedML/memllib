@@ -6,6 +6,7 @@
 #include "../interface/MIDIInOut.hpp"
 #include "../hardware/memlnaut/display.hpp"
 #include <algorithm>
+#include <SD.h>
 
 
 void IMLInterface::setup(size_t n_inputs, size_t n_outputs)
@@ -371,6 +372,61 @@ void IMLInterface::bindInterface(bool disable_joystick)
     // Set up loop callback
     MEMLNaut::Instance()->setLoopCallback([this]() {
         this->ProcessInput();
+        if (sdtest) {
+            sdtest=false;
+            Serial.println("Initializing SD card...");
+            
+            
+            if (!SD.begin(Pins::SD_CS, SPI1)) {
+                Serial.println("SD card initialization failed!");
+                Serial.println("Check wiring and card insertion");
+            }else{
+            
+                Serial.println("SD card initialized successfully");
+                
+                // Write files to SD card
+                for(size_t i = 0; i < 10; i++) {
+                    Serial.printf("Iteration: %d\n", i);
+                    String content = "iteration " + String(i*100);
+                    
+                    // Open file on SD card for writing
+                    File file = SD.open("/test.txt", FILE_WRITE);
+                    if (file) {
+                    file.seek(0);  // Start from beginning
+                    file.print(content);
+                    file.close();
+                    Serial.println("File written to SD card");
+                    } else {
+                    Serial.println("Error: Could not open file on SD card");
+                    break;
+                    }
+                    
+                    delay(100);
+                    
+                    // Optional: Read back to verify
+                    File readFile = SD.open("/test.txt", FILE_READ);
+                    if (readFile) {
+                    String readContent = readFile.readString();
+                    readFile.close();
+                    Serial.printf("Read back: %s\n", readContent.c_str());
+                    }
+                    
+                    delay(100);
+                }
+                
+                Serial.println("SD card write test completed");
+                
+            }
+
+        }        
+    });
+
+    MEMLNaut::Instance()->setReSWCallback([this]() {
+        if (disp_) {
+            disp_->post("Re switch pressed");
+        }
+
+        sdtest=true;
     });
 }
 

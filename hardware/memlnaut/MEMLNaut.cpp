@@ -1,5 +1,7 @@
 #include "MEMLNaut.hpp"
 #include "../../audio/AudioDriver.hpp"
+#include "Arduino.h"
+#include "SD.h"
 
 MEMLNaut* MEMLNaut::instance = nullptr;
 
@@ -146,6 +148,11 @@ MEMLNaut::MEMLNaut() {
                         CHANGE);
     attachInterrupt(digitalPinToInterrupt(Pins::RE_B), encoder1_callback,
                         CHANGE);
+
+    SPI1.setRX(Pins::SD_MISO);
+    SPI1.setTX(Pins::SD_MOSI);
+    SPI1.setSCK(Pins::SD_SCK);  
+
 
 
 }
