@@ -16,10 +16,11 @@
 class MLDrummer : public AudioAppBase
 {
 public:
-    static constexpr size_t kN_Params = 20;
 
+    static constexpr float segments = 16;
+    static constexpr float segLength = 1.f/segments;
 
-
+    static constexpr size_t kN_Params = segments;
 
     // Sample information structure
     typedef struct {
@@ -128,45 +129,13 @@ public:
 
         smoother.Process(neuralNetOutputs.data(), smoothParams.data());
 
+        // Process drum machine
 
-        // dl1mix = smoothParams[0] * smoothParams[0] * 0.4f;
-        // dl2mix = smoothParams[1] * smoothParams[1] * 0.4f;
-        // dl3mix = smoothParams[2] * smoothParams[2] * 0.8f;
-        // allp1fb = smoothParams[4] * 0.99f;
-        // allp2fb = smoothParams[5] * 0.99f;
-        // float comb1fb = (smoothParams[6] * 0.95f);
-        // float comb2fb = (smoothParams[7] * 0.95f);
-
-        // float dl1fb = (smoothParams[8] * 0.95f);
-        // float dl2fb = (smoothParams[9] * 0.95f);
-        // float dl3fb = (smoothParams[10] * 0.95f);
-
-
-        // float y = dcb.play(mix, 0.99f) * 3.f;
-        // float y1 = allp1.allpass(y, 30, allp1fb);
-        // y1 = comb1.combfb(y1, 127, comb1fb);
-
-        // float y2 = allp2.allpass(y, 500, allp2fb);
-        // y2 = comb2.combfb(y2, 808, comb2fb);
-
-        // y = y1 + y2;
-        // float d1 = (dl1.play(y, 3500, dl1fb) * dl1mix);
-        // float d2 = (dl2.play(y, 9000, dl2fb) * dl2mix);
-        // float d3 = (dl3.play(y, 1199, dl3fb) * dl3mix);
-
-
-        // y = y + d1 + d2 + d3;
-
-        // y = tanhf(y);
-
-
-        constexpr float segments= 16;
-        constexpr float segLength = 1.f/segments;
         //cast phase with rounding
         size_t currentSegment = static_cast<size_t>(phase / sample_info.sample_count / segLength);
         float segmentRoot = (float)static_cast<size_t>(smoothParams[currentSegment] * segments);
 
-        PERIODIC_DEBUG(5000,
+        PERIODIC_DEBUG(44100,
             DEBUG_PRINTLN("bpf1: " + String(bpf1Val) + ", bpf2: " + String(bpf2Val) +
                           ", root: " + String(segmentRoot) + "seg: " + String(currentSegment)
                          );
@@ -180,7 +149,7 @@ public:
         // }
         phase += rateInput;
         segmentPhase += rateInput;
-        
+
         float segLengthInSamples = segLength * sample_info.sample_count;
         if (rateInput >=0.f) {
             if (phase >= sample_info.sample_count) {
@@ -196,8 +165,8 @@ public:
             if (segmentPhase < 0) {
                 segmentPhase += segLengthInSamples;
             }
-        }        
-        
+        }
+
         stereosample_t ret { y, y };
 
         return ret;
@@ -207,10 +176,10 @@ public:
     {
         AudioAppBase::Setup(sample_rate, interface);
         maxiSettings::sampleRate = sample_rate;
-        bpf1.set(maxiBiquad::filterTypes::BANDPASS, 100.f, 5.f, 0.f);
-        bpf2.set(maxiBiquad::filterTypes::BANDPASS, 500.f, 5.f, 0.f);
-        bpf3.set(maxiBiquad::filterTypes::BANDPASS, 1000.f, 5.f, 0.f);
-        bpf4.set(maxiBiquad::filterTypes::BANDPASS, 4000.f, 5.f, 0.f);
+        bpf1.set(maxiBiquad::filterTypes::BANDPASS, 200.f, 5.f, 0.f);
+        bpf2.set(maxiBiquad::filterTypes::BANDPASS, 600.f, 5.f, 0.f);
+        bpf3.set(maxiBiquad::filterTypes::BANDPASS, 1800.f, 5.f, 0.f);
+        bpf4.set(maxiBiquad::filterTypes::BANDPASS, 5400.f, 5.f, 0.f);
     }
 
     void ProcessParams(const std::vector<float>& params) override
@@ -221,24 +190,7 @@ public:
 
 protected:
 
-    maxiDelayline<5000> dl1;
-    maxiDelayline<15100> dl2;
-    maxiDelayline<1201> dl3;
-
-    maxiReverbFilters<300> allp1;
-    maxiReverbFilters<1000> allp2;
-    maxiReverbFilters<300> comb1;
-    maxiReverbFilters<1000> comb2;
-
     std::vector<float> neuralNetOutputs, smoothParams;
-
-
-    float frame=0;
-    float dl1mix = 0.0f;
-    float dl2mix = 0.0f;
-    float dl3mix = 0.0f;
-    float allp1fb=0.5f;
-    float allp2fb=0.5f;
 
     //listening
     maxiBiquad bpf1;
