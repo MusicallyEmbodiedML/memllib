@@ -16,7 +16,7 @@
 class MLDrummer : public AudioAppBase
 {
 public:
-    static constexpr size_t kN_Params = 12;
+    static constexpr size_t kN_Params = 20;
 
 
 
@@ -160,18 +160,20 @@ public:
         // y = tanhf(y);
 
 
-        constexpr float segments= 32;
+        constexpr float segments= 16;
         constexpr float segLength = 1.f/segments;
         //cast phase with rounding
-        float segmentRoot = static_cast<size_t>(smoothParams[0] * segments) * segLength;
+        size_t currentSegment = static_cast<size_t>(phase / sample_info.sample_count / segLength);
+        float segmentRoot = (float)static_cast<size_t>(smoothParams[currentSegment] * segments);
 
         PERIODIC_DEBUG(5000,
             DEBUG_PRINTLN("bpf1: " + String(bpf1Val) + ", bpf2: " + String(bpf2Val) +
-                          ", root: " + String(segmentRoot) );
+                          ", root: " + String(segmentRoot) + "seg: " + String(currentSegment)
+                         );
         );
 
         // float y = sample_info.samples[static_cast<size_t>(phase+0.5f)];
-        float y = sample_info.samples[static_cast<size_t>((segmentRoot * segLength) + segmentPhase+0.5f)];
+        float y = sample_info.samples[static_cast<size_t>((segmentRoot * segLength * sample_info.sample_count) + segmentPhase+0.5f)];
         float rateInput = 1.f;
         // if (smoothParams[1] > 0.5f) {
         //     rateInput *= -1.f;
