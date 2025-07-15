@@ -17,8 +17,6 @@
 
 #define RL_MEM __not_in_flash("rlmem")
 
-#define XIASRI    0
-
 
 struct trainRLItem {
     std::vector<float> state ;
@@ -116,10 +114,7 @@ public:
     {
         DEBUG_PRINTLN("bindUARTInput not implemented yet");
     }
-    void bindMIDI(std::shared_ptr<MIDIInOut> midi_interf)
-    {
-        DEBUG_PRINTLN("bindMIDI not implemented yet");
-    }
+    void bindMIDI(std::shared_ptr<MIDIInOut> midi_interf);
 
     void trigger_like();
     void trigger_dislike();
@@ -171,7 +166,7 @@ private:
 
     //std::vector<float> criticLossLog, actorLossLog, log1;
     float rewardScale = 1.f;
-  
+
     OrnsteinUhlenbeckNoise ou_noise;
 };
 
