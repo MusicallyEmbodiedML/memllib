@@ -95,7 +95,7 @@ void InterfaceRL::bind_RL_interface(display& scr_ref, bool disable_joystick) {
         });
     }
 
-    
+
     MEMLNaut::Instance()->setTogB1Callback([this](bool state) { // scr_ref no longer captured directly
         if (state) {
             this->forgetMemory();
@@ -106,7 +106,7 @@ void InterfaceRL::bind_RL_interface(display& scr_ref, bool disable_joystick) {
             String msg = forgetmsgs[rand() % forgetmsgs.size()];
 
             if (m_scr_ptr) m_scr_ptr->post(msg);
-        
+
         }
     });
 
@@ -147,6 +147,36 @@ void InterfaceRL::bind_RL_interface(display& scr_ref, bool disable_joystick) {
     });
 }
 
+void InterfaceRL::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf)
+{
+    if (midi_interf) {
+        midi_interf->SetCCCallback([this] (uint8_t cc_number, uint8_t cc_value) {
+            Serial.printf("MIDI CC %d: %d\n", cc_number, cc_value);
+            switch(cc_number) {
+                case 1:
+                {
+                    this->_perform_like_action();
+                    break;
+                }
+                case 2:
+                {
+                    this->_perform_dislike_action();
+                    break;
+                }
+                case 3:
+                {
+                    this->_perform_randomiseRL_action();
+                    break;
+                }
+                case 4:
+                {
+                    break;
+                }
+            };
+        });
+    }
+}
+
 void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
 {
 #if XIASRI
@@ -158,7 +188,7 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
     InterfaceBase::setup(controlSize, n_outputs);
 
 
-    stateSize = controlSize; //state = control inputs + synth params 
+    stateSize = controlSize; //state = control inputs + synth params
 
     actionSize = n_outputs;
 
@@ -214,6 +244,12 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
 void InterfaceRL::setup(size_t n_inputs, size_t n_outputs, std::shared_ptr<display> disp) {
     this->setup(n_inputs, n_outputs);
     m_scr_ptr = disp.get(); // Store the pointer to the display object
+#if XIASRI
+    if (m_scr_ptr) {
+        m_scr_ptr->statusPost("No value", 0);
+        m_scr_ptr->statusPost("No value", 1);
+    }
+#endif
 }
 
 void InterfaceRL::optimise() {
@@ -274,7 +310,7 @@ void InterfaceRL::optimise() {
         for(size_t i = 0; i < sample.size(); i++) {
             //use criticTarget to estimate value of next action given next state
             for(size_t j=0; j < stateSize; j++) {
-                criticInput[j] = sample[i].state[j]; 
+                criticInput[j] = sample[i].state[j];
             }
             auto stateInput = sample[i].state;
             stateInput.push_back(1.f); // bias
@@ -291,9 +327,9 @@ void InterfaceRL::optimise() {
             criticInput[criticInput.size()-1] = 1.f; //bias
 
             critic->CalcGradients(criticInput, gradientLoss); // This calculates dQ/d(input to critic)
-            
+
             std::vector<float> l0Grads = critic->m_layers[0].GetGrads(); // Gradients of critic's first layer inputs
-            
+
             for(size_t j=0; j < actionSize; j++) {
                 accumulatedGradient[j] += l0Grads[j+stateSize];
             }
@@ -321,21 +357,21 @@ void InterfaceRL::optimise() {
             accumulatedGradient[j] *= sampleSizeRecr;
         }
 
-        // Simple gradient clipping 
+        // Simple gradient clipping
         const float maxGradNorm = 0.5f;  // Start conservative
         float gradNorm = 0.0f;
-        
+
         for(auto& g : accumulatedGradient) {
             gradNorm += g * g;
         }
         gradNorm = sqrt(gradNorm);
-        
+
         if (gradNorm > maxGradNorm) {
             float scale = maxGradNorm / gradNorm;
             for(auto& g : accumulatedGradient) {
                 g *= scale;
             }
-            
+
             // Optional: notify user of instability
             if (gradNorm > maxGradNorm * 2.0f) {
                 m_scr_ptr->post("Learning unstable - adjusting...");
@@ -355,7 +391,7 @@ void InterfaceRL::optimise() {
         float totalActorGradient = 0.0f;
         for(auto& g : accumulatedGradient) {
             totalActorGradient += std::abs(g);
-        }   
+        }
 
         // for(size_t j=0; j < actorGradient.size(); j++) {
         //     actorGradient[j] *= sampleSizeRecr; // Average gradient
@@ -403,6 +439,17 @@ void InterfaceRL::readAnalysisParameters() {
         DEBUG_PRINTLN(actorControlInput[0]);
     })
     newInput = true;
+    if (m_scr_ptr) {
+        m_scr_ptr->statusPost(String(actorControlInput[0], 4), 0);
+        // Calculate argmax of actorControlInput
+        size_t maxIndex = 0;
+        for (size_t i = 1; i < actorControlInput.size(); ++i) {
+            if (actorControlInput[i] > actorControlInput[maxIndex]) {
+                maxIndex = i;
+            }
+        }
+        m_scr_ptr->statusPost("Max:" + String(maxIndex), 1);
+    }
 #endif
     generateAction(true);
 }
@@ -420,7 +467,7 @@ void InterfaceRL::generateAction(bool donthesitate) {
             } else if (actorOutput[i] > 1.f) {
                 actorOutput[i] = 1.f; // Ensure output does not exceed 1
             }
-        }       
+        }
 
         SendParamsToQueue(actorOutput);
         action = actorOutput;
