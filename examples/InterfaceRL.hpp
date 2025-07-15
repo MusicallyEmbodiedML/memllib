@@ -17,6 +17,7 @@
 
 #define RL_MEM __not_in_flash("rlmem")
 
+#define XIASRI 1
 
 struct trainRLItem {
     std::vector<float> state ;

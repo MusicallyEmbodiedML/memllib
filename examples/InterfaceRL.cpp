@@ -244,6 +244,12 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
 void InterfaceRL::setup(size_t n_inputs, size_t n_outputs, std::shared_ptr<display> disp) {
     this->setup(n_inputs, n_outputs);
     m_scr_ptr = disp.get(); // Store the pointer to the display object
+#if XIASRI
+    if (m_scr_ptr) {
+        m_scr_ptr->statusPost("No value", 0);
+        m_scr_ptr->statusPost("No value", 1);
+    }
+#endif
 }
 
 void InterfaceRL::optimise() {
@@ -433,6 +439,10 @@ void InterfaceRL::readAnalysisParameters() {
         DEBUG_PRINTLN(actorControlInput[0]);
     })
     newInput = true;
+    if (m_scr_ptr) {
+        m_scr_ptr->statusPost(String(actorControlInput[0], 4), 0);
+        m_scr_ptr->statusPost(String(actorControlInput[1], 4), 1);
+    }
 #endif
     generateAction(true);
 }
