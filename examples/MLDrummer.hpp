@@ -159,27 +159,40 @@ public:
 
         // y = tanhf(y);
 
-        constexpr segments= 8;
-        constexpr segLength = 1.f/segments;
+
+        constexpr float segments= 32;
+        constexpr float segLength = 1.f/segments;
         //cast phase with rounding
-        float y = sample_info.samples[static_cast<size_t>(phase+0.5f)];
-        float rateInput = 0.5f + smoothParams[0];
-        if (smoothParams[1] > 0.5f) {
-            rateInput *= -1.f;
-        }
-        phase += rateInput
-;
+        float segmentRoot = static_cast<size_t>(smoothParams[0] * segments) * segLength;
+
+        PERIODIC_DEBUG(5000,
+            DEBUG_PRINTLN("bpf1: " + String(bpf1Val) + ", bpf2: " + String(bpf2Val) +
+                          ", root: " + String(segmentRoot) );
+        );
+
+        // float y = sample_info.samples[static_cast<size_t>(phase+0.5f)];
+        float y = sample_info.samples[static_cast<size_t>((segmentRoot * segLength) + segmentPhase+0.5f)];
+        float rateInput = 1.f;
+        // if (smoothParams[1] > 0.5f) {
+        //     rateInput *= -1.f;
+        // }
+        phase += rateInput;
+        segmentPhase += rateInput;
+        
+        float segLengthInSamples = segLength * sample_info.sample_count;
         if (rateInput >=0.f) {
             if (phase >= sample_info.sample_count) {
-                if (looping) {
-                    phase -= sample_info.sample_count;
-                }else{
-                    playing = false;
-                }
+                phase -= sample_info.sample_count;
+            }
+            if (segmentPhase >= segLengthInSamples) {
+                segmentPhase -= segLengthInSamples;
             }
         } else {
             if (phase < 0) {
                 phase += sample_info.sample_count;
+            }
+            if (segmentPhase < 0) {
+                segmentPhase += segLengthInSamples;
             }
         }        
         
@@ -242,7 +255,7 @@ protected:
 
     sample_info_t sample_info; 
     float phase=0.f;
-
+    float segmentPhase = 0.f;
     bool looping=true;
     bool playing = true;
 
