@@ -18,7 +18,7 @@ class MLDrummer : public AudioAppBase
 public:
     static constexpr size_t kN_Params = 12;
 
- 
+
 
 
     // Sample information structure
@@ -49,7 +49,7 @@ public:
 
     /**
      * Get sample information by filename (without .wav extension)
-     * 
+     *
      * @param filename Name of the file without .wav extension (e.g., "intro", "beep")
      * @param info Pointer to sample_info_t structure to fill
      * @return true if file found, false otherwise
@@ -59,20 +59,20 @@ public:
         if (!filename || !info) {
             return false;
         }
-        
+
         // Initialize info structure
         memset(info, 0, sizeof(sample_info_t));
-        
+
         // Read pointers from memory based on flash address
         const uint8_t* binary_data = (const uint8_t*)AUDIO_FLASH_ADDRESS;
         const audio_header_t* header = (const audio_header_t*)binary_data;
         const audio_file_entry_t* file_table = (const audio_file_entry_t*)(binary_data + 16);
-        
+
         // Verify binary is valid
         if (header->magic != AUDIO_MAGIC) {
             return false;
         }
-        
+
         // Search for the file by name
         for (uint32_t i = 0; i < header->file_count; i++) {
             if (strcmp(file_table[i].name, filename) == 0) {
@@ -85,7 +85,7 @@ public:
                 return true;
             }
         }
-        
+
         // File not found
         info->found = false;
         return false;
@@ -253,7 +253,7 @@ protected:
 
     OnePoleSmoother<kN_Params> smoother;
 
-    sample_info_t sample_info; 
+    sample_info_t sample_info;
     float phase=0.f;
     float segmentPhase = 0.f;
     bool looping=true;
