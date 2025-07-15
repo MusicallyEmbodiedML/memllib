@@ -150,22 +150,22 @@ void InterfaceRL::bind_RL_interface(display& scr_ref, bool disable_joystick) {
 void InterfaceRL::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf)
 {
     if (midi_interf) {
-        midi_interf->SetCCCallback([RLInterface] (uint8_t cc_number, uint8_t cc_value) {
+        midi_interf->SetCCCallback([this] (uint8_t cc_number, uint8_t cc_value) {
             Serial.printf("MIDI CC %d: %d\n", cc_number, cc_value);
             switch(cc_number) {
                 case 1:
                 {
-                    _perform_like_action();
+                    this->_perform_like_action();
                     break;
                 }
                 case 2:
                 {
-                    _perform_dislike_action();
+                    this->_perform_dislike_action();
                     break;
                 }
                 case 3:
                 {
-                    _perform_randomiseRL_action();
+                    this->_perform_randomiseRL_action();
                     break;
                 }
                 case 4:
