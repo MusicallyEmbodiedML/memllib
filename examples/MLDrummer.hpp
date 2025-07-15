@@ -179,11 +179,7 @@ public:
             }
         } else {
             if (phase < 0) {
-                if (looping) {
-                    phase += sample_info.sample_count;
-                }else{
-                playing = false;
-                }
+                phase += sample_info.sample_count;
             }
         }
 
