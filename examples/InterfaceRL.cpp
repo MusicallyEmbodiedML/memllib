@@ -63,6 +63,23 @@ void InterfaceRL::trigger_randomiseRL() {
     _perform_randomiseRL_action();
 }
 
+
+void InterfaceRL::setOptimiseDivisorInterf(float value)
+{
+    size_t divisor = 1 + (value * 100);
+    String msg;
+    if (divisor > 90) {
+        divisor = 999999;
+        msg = "Optimisation paused";
+    }else{
+        msg = "Optimise every " + String(divisor) + " cycles";
+    }
+    if (m_scr_ptr) m_scr_ptr->post(msg);
+    this->setOptimiseDivisor(divisor);
+    DEBUG_PRINTLN(msg);
+}
+
+
 void InterfaceRL::bind_RL_interface(display& scr_ref, bool disable_joystick) {
     m_scr_ptr = &scr_ref; // Store the pointer to the display object
 
@@ -112,23 +129,11 @@ void InterfaceRL::bind_RL_interface(display& scr_ref, bool disable_joystick) {
 
 
     MEMLNaut::Instance()->setRVX1Callback([this](float value) { // scr_ref no longer captured directly
-        size_t divisor = 1 + (value * 100);
-        String msg;
-        if (divisor > 90) {
-            divisor = 999999;
-            msg = "Optimisation paused";
-        }else{
-            msg = "Optimise every " + String(divisor) + " cycles";
-        }
-        if (m_scr_ptr) m_scr_ptr->post(msg);
-        this->setOptimiseDivisor(divisor);
-        DEBUG_PRINTLN(msg);
+        this->setOptimiseDivisorInterf(value);
     });
 
     MEMLNaut::Instance()->setRVY1Callback([this](float value) { // scr_ref no longer captured directly
-        this->setRewardScale(value);
-        String msg = "Reward scale: " + String(value);
-        if (m_scr_ptr) m_scr_ptr->post(msg);
+        this->setRewardScaleInterf(value);
     });
     MEMLNaut::Instance()->setRVZ1Callback([this](float value) { // scr_ref no longer captured directly
         // value *= 0.1f; // Scale down the value
@@ -146,6 +151,15 @@ void InterfaceRL::bind_RL_interface(display& scr_ref, bool disable_joystick) {
         this->generateAction();
     });
 }
+
+
+void InterfaceRL::setRewardScaleInterf(float value)
+{
+    this->setRewardScale(value);
+    String msg = "Reward scale: " + String(value);
+    if (m_scr_ptr) m_scr_ptr->post(msg);
+}
+
 
 void InterfaceRL::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf)
 {
@@ -170,6 +184,20 @@ void InterfaceRL::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf)
                 }
                 case 4:
                 {
+                    break;
+                }
+                case 5:
+                {
+                    static constexpr float cc_scale = 1.f/127.f;
+                    float scale = static_cast<float>(cc_value) * cc_scale;
+                    this->setRewardScaleInterf(scale);
+                    break;
+                }
+                case 6:
+                {
+                    static constexpr float cc_scale = 1.f/127.f;
+                    float opt = static_cast<float>(cc_value) * cc_scale;
+                    this->setOptimiseDivisorInterf(opt);
                     break;
                 }
             };
@@ -244,12 +272,12 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
 void InterfaceRL::setup(size_t n_inputs, size_t n_outputs, std::shared_ptr<display> disp) {
     this->setup(n_inputs, n_outputs);
     m_scr_ptr = disp.get(); // Store the pointer to the display object
-#if XIASRI
+
     if (m_scr_ptr) {
         m_scr_ptr->statusPost("No value", 0);
         m_scr_ptr->statusPost("No value", 1);
     }
-#endif
+
 }
 
 void InterfaceRL::optimise() {
@@ -458,6 +486,14 @@ void InterfaceRL::generateAction(bool donthesitate) {
     if (newInput || donthesitate) {
         newInput = false;
         // std::vector<float> actorOutput; // This was shadowing the member variable
+
+#if XIASRI
+#else
+        if (m_scr_ptr) {
+            m_scr_ptr->statusPost(String(actorControlInput[0], 4), 0);
+        }
+#endif
+
         actorTarget->GetOutput(actorControlInput, &actorOutput); // Use member actorOutput
         for(size_t i=0; i < actorOutput.size(); i++) {
             const float noise = ou_noise.sample() * 0.4f;
@@ -476,6 +512,13 @@ void InterfaceRL::generateAction(bool donthesitate) {
         //     const float noise = ou_noise.sample() * knobL; // ou_noise and knobL are not defined here
         //     actorOutput[i] += noise;
         // }
+
+        #if XIASRI
+#else
+        if (m_scr_ptr) {
+            m_scr_ptr->statusPost(String(action[0], 4), 1);
+        }
+#endif
     }
 }
 

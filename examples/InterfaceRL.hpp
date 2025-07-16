@@ -17,7 +17,7 @@
 
 #define RL_MEM __not_in_flash("rlmem")
 
-#define XIASRI 1
+//#define XIASRI 1
 
 struct trainRLItem {
     std::vector<float> state ;
@@ -77,6 +77,8 @@ public:
         optimiseDivisor = newDiv;
     }
 
+    void setOptimiseDivisorInterf(float value);
+
     inline void forgetMemory() {
         replayMem.clear();
     }
@@ -84,6 +86,8 @@ public:
     inline void setRewardScale(float scale) {
         rewardScale = scale;
     }
+
+    void setRewardScaleInterf(float value);
 
     inline void setDiscountFactor(float factor) {
         discountFactor = factor;
