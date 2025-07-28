@@ -1,8 +1,8 @@
 #ifndef __AUDIO_DRIVER_HPP__
 #define __AUDIO_DRIVER_HPP__
 
-#include <cstddef>
 #include <Arduino.h>
+#include <stddef.h>
 #include "../PicoDefs.hpp"
 
 extern "C" {

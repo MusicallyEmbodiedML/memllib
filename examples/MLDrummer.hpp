@@ -8,10 +8,15 @@
 #include "../synth/OnePoleSmoother.hpp"
 #include "../synth/maximilian.h"
 
+#if !(OLD_LISTENING_MODE)
+    #include "../synth/SaxAnalysis.hpp"
+#endif
+
 // Flash memory address where audio data is loaded
 #define AUDIO_FLASH_ADDRESS    0x10200000U
 #define AUDIO_MAGIC            0x4F434950U  // 'PICO'
 #define AUDIO_VERSION          1U
+
 
 class MLDrummer : public AudioAppBase
 {
@@ -114,6 +119,7 @@ public:
 
     stereosample_t __force_inline Process(const stereosample_t x) override
     {
+    #if OLD_LISTENING_MODE
         constexpr float boost = 5.f;
         float mix = x.L + x.R;
         float bpf1Val = bpf1.play(mix) * boost;
@@ -131,6 +137,10 @@ public:
         float bpf4Val = bpf4.play(mix) * boost;
         bpf4Val = bpfEnv4.play(bpf4Val);
         WRITE_VOLATILE(sharedMem::f3, bpf4Val);
+    #else
+        SaxAnalysis::parameters_t params = saxAnalysis->Process(x.L);
+        WRITE_VOLATILE_STRUCT(sharedMem::saxParams, params);
+    #endif
 
         smoother.Process(neuralNetOutputs.data(), smoothParams.data());
 
@@ -219,10 +229,15 @@ public:
     {
         AudioAppBase::Setup(sample_rate, interface);
         maxiSettings::sampleRate = sample_rate;
+    #if OLD_LISTENING_MODE
         bpf1.set(maxiBiquad::filterTypes::BANDPASS, 100.f, 5.f, 0.f);
         bpf2.set(maxiBiquad::filterTypes::BANDPASS, 300.f, 5.f, 0.f);
         bpf3.set(maxiBiquad::filterTypes::BANDPASS, 900.f, 5.f, 0.f);
         bpf4.set(maxiBiquad::filterTypes::BANDPASS, 2700.f, 5.f, 0.f);
+    #else
+        // Initialize sax analysis
+        saxAnalysis = std::make_unique<SaxAnalysis>(sample_rate);
+    #endif
     }
 
     void ProcessParams(const std::vector<float>& params) override
@@ -235,11 +250,15 @@ protected:
 
     std::vector<float> neuralNetOutputs, smoothParams;
 
+#if OLD_LISTENING_MODE
     //listening
     maxiBiquad bpf1;
     maxiBiquad bpf2;
     maxiBiquad bpf3;
     maxiBiquad bpf4;
+#else
+    std::unique_ptr<SaxAnalysis> saxAnalysis;
+#endif
 
     maxiEnvelopeFollowerF bpfEnv1;
     maxiEnvelopeFollowerF bpfEnv2;

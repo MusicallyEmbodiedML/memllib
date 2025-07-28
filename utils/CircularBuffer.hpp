@@ -4,6 +4,7 @@
 #include <array>
 #include <vector>
 
+
 template<typename T, size_t N>
 class CircularBuffer {
 private:

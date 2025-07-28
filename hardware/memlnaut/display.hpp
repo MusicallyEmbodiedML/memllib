@@ -1,6 +1,8 @@
 #ifndef __DISPLAY_H
 #define __DISPLAY_H
 
+#include <Arduino.h>
+
 #include <TFT_eSPI.h>
 #include <deque>
 

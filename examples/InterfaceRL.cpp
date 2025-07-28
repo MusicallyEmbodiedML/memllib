@@ -8,6 +8,11 @@
 // PERIODIC_DEBUG is likely defined in PicoDefs.hpp or sharedMem.hpp, included via InterfaceRL.hpp
 
 
+#if XIASRI
+#include "../synth/SaxAnalysis.hpp"
+#endif
+
+
 // Protected helper method implementations
 void InterfaceRL::_perform_like_action() {
     if (!m_scr_ptr) return; // Guard against null pointer
@@ -180,7 +185,7 @@ void InterfaceRL::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf)
 void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
 {
 #if XIASRI
-    const size_t nAudioAnalysisInputs = 4;
+    const size_t nAudioAnalysisInputs = SaxAnalysis::kN_Params;
 #else
     const size_t nAudioAnalysisInputs = 0;
 #endif
@@ -431,10 +436,26 @@ void InterfaceRL::optimise() {
 void InterfaceRL::readAnalysisParameters() {
     //read analysis parameters
 #if XIASRI
+#if OLD_LISTENING_MODE
     actorControlInput[0] = READ_VOLATILE(sharedMem::f0);
     actorControlInput[1] = READ_VOLATILE(sharedMem::f1);
     actorControlInput[2] = READ_VOLATILE(sharedMem::f2);
     actorControlInput[3] = READ_VOLATILE(sharedMem::f3);
+#else
+    union {
+        SaxAnalysis::parameters_t p;
+        float v[SaxAnalysis::kN_Params];
+    } param_u;
+    param_u.p = READ_VOLATILE_STRUCT(sharedMem::saxParams);
+    for(size_t i = 0; i < SaxAnalysis::kN_Params; i++) {
+        actorControlInput[i] = param_u.v[i];
+    }
+    // Ensure the bias is set correctly
+    if (actorControlInput.size() < SaxAnalysis::kN_Params + bias) {
+        actorControlInput.resize(stateSize + bias, 0.0f);
+    }
+    actorControlInput[actorControlInput.size()-1] = 1.f; // bias
+#endif
     PERIODIC_DEBUG(40, { // Ensure PERIODIC_DEBUG is defined (e.g. in PicoDefs.hpp or sharedMem.hpp)
         DEBUG_PRINTLN(actorControlInput[0]);
     })

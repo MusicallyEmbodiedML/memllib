@@ -19,6 +19,27 @@
 #define WRITE_VOLATILE(var, val) do { MEMORY_BARRIER(); (var) = (val); MEMORY_BARRIER(); } while (0)
 #define READ_VOLATILE(var) ({ MEMORY_BARRIER(); typeof(var) __temp = (var); MEMORY_BARRIER(); __temp; })
 
+template<typename T>
+inline void write_volatile_struct(volatile T& dest, const T& src) {
+    MEMORY_BARRIER();
+    memcpy((void*)&dest, &src, sizeof(T));
+    MEMORY_BARRIER();
+}
+
+#define WRITE_VOLATILE_STRUCT(var, val) write_volatile_struct((var), (val))
+
+// Add this template function after write_volatile_struct:
+template<typename T>
+inline T read_volatile_struct(const volatile T& src) {
+    MEMORY_BARRIER();
+    T temp;
+    memcpy(&temp, (const void*)&src, sizeof(T));
+    MEMORY_BARRIER();
+    return temp;
+}
+
+#define READ_VOLATILE_STRUCT(var) read_volatile_struct(var)
+
 #define ALLOW_DEBUG
 
 #ifdef ALLOW_DEBUG
@@ -26,9 +47,9 @@
 #define DEBUG_PRINT(...) Serial.print(__VA_ARGS__)
 #define DEBUG_PRINTLN(...) Serial.println(__VA_ARGS__)
 #else
-#define DEBUG_PRINT(...)  
-#define DEBUG_PRINTLN(...)  
-#define DEBUG_PRINTF(...)  
+#define DEBUG_PRINT(...)
+#define DEBUG_PRINTLN(...)
+#define DEBUG_PRINTF(...)
 #endif
 
 

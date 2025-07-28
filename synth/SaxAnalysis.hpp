@@ -1,16 +1,15 @@
 #ifndef __SAX_ANALYSIS_HPP__
 #define __SAX_ANALYSIS_HPP__
 
-#include <Arduino.h>
-
 #include "maximilian.h"
 #include "../audio/AudioDriver.hpp"
 #include "../utils/MedianFilter.h"
 #include "../utils/CircularBuffer.hpp"
 
 #include <cstdint>
-#include <cstddef>
+#include <stddef.h>
 #include <cmath>
+
 
 
 class SaxAnalysis {
