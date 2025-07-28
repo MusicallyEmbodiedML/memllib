@@ -415,6 +415,8 @@ void IMLInterface::bindInterface(bool disable_joystick)
                 }
                 
                 Serial.println("SD card write test completed");
+
+                SD.end();
                 
             }
 

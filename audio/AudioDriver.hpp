@@ -60,6 +60,7 @@ class AudioDriver {
     }
 
     static inline size_t GetSampleRate() { return kSampleRate; }
+    static size_t GetSysClockSpeed() {return 132000 * 2; } // 264MHz
 
     AudioDriver() = delete;
 

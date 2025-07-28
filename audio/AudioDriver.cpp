@@ -186,9 +186,14 @@ bool AudioDriver::Setup(const codec_config_t &config) {
          DEBUG_PRINTLN("AUDIO- Failed to setup I2C with codec!");
     }
 
-    set_sys_clock_khz(132000*2, true);
+    // set_sys_clock_khz(132000*2, true);
     // set_sys_clock_khz(129600, true);
-     DEBUG_PRINTF("System Clock: %lu\n", clock_get_hz(clk_sys));
+    DEBUG_PRINTF("System Clock: %lu\n", clock_get_hz(clk_sys));
+
+    size_t sys_clk_hz = clock_get_hz(clk_sys);
+    if (sys_clk_hz != AudioDriver::GetSysClockSpeed() * 1000) {
+        DEBUG_PRINTLN("Error: audio driver: system clock must be set externally (see ::GetDesiredClockSpeed)");
+    }   
 
     i2s_config picoI2SConfig {
         kSampleRate, // 48000,
