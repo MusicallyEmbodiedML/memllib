@@ -440,15 +440,15 @@ void InterfaceRL::readAnalysisParameters() {
     })
     newInput = true;
     if (m_scr_ptr) {
-        m_scr_ptr->statusPost(String(actorControlInput[0], 4), 0);
         // Calculate argmax of actorControlInput
         size_t maxIndex = 0;
-        for (size_t i = 1; i < actorControlInput.size(); ++i) {
+        for (size_t i = 1; i < actorControlInput.size()-1; ++i) {
             if (actorControlInput[i] > actorControlInput[maxIndex]) {
                 maxIndex = i;
             }
         }
-        m_scr_ptr->statusPost("Max:" + String(maxIndex), 1);
+        //m_scr_ptr->statusPost("Max:" + String(maxIndex), 1);
+        //m_scr_ptr->statusPost(String(actorControlInput[maxIndex], 4), 0);
     }
 #endif
     generateAction(true);
@@ -469,6 +469,8 @@ void InterfaceRL::generateAction(bool donthesitate) {
             }
         }
 
+        m_scr_ptr->statusPost(String(actorOutput[0], 4), 0);
+        m_scr_ptr->statusPost(String(actorOutput[1], 4), 1);
         SendParamsToQueue(actorOutput);
         action = actorOutput;
 
