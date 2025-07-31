@@ -193,6 +193,7 @@ bool AudioDriver::Setup(const codec_config_t &config) {
     size_t sys_clk_hz = clock_get_hz(clk_sys);
     if (sys_clk_hz != AudioDriver::GetSysClockSpeed() * 1000) {
         DEBUG_PRINTLN("Error: audio driver: system clock must be set externally (see ::GetDesiredClockSpeed)");
+        DEBUG_PRINTLN("After 'setup()) {', add: 'set_sys_clock_khz(AudioDriver::GetSysClockSpeed(), true);'");
     }   
 
     i2s_config picoI2SConfig {

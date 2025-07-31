@@ -71,6 +71,8 @@ private:
     //encoder
     static void encoder1_callback();
 
+    
+
 
 public:
     static __attribute__((always_inline)) MEMLNaut* Instance() {
