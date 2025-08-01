@@ -39,9 +39,9 @@ void IMLInterface::setup(size_t n_inputs, size_t n_outputs)
 
     msgView = std::make_shared<MessageView>("Messages");
     MEMLNaut::Instance()->disp->AddView(msgView);
-    fileSaveView = std::make_shared<BlockSelectView>("Save Model");
+    fileSaveView = std::make_shared<BlockSelectView>("Save Model", TFT_BLUE);
     MEMLNaut::Instance()->disp->AddView(fileSaveView);
-    fileLoadView = std::make_shared<BlockSelectView>("Load Model");
+    fileLoadView = std::make_shared<BlockSelectView>("Load Model", TFT_PURPLE);
     MEMLNaut::Instance()->disp->AddView(fileLoadView);
 
 }
