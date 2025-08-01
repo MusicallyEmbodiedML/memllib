@@ -51,7 +51,7 @@ public:
     }  
 
 
-    void HandleTouch(size_t x, size_t y) override {
+    void OnTouchDown(size_t x, size_t y) override {
 
     }
     void HandleRelease() override 

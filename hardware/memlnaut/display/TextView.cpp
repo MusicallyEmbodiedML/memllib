@@ -51,7 +51,7 @@ void TextView::OnDraw() {
     // fl.Draw();
 }
 
-void TextView::HandleTouch(size_t x, size_t y) {
+void TextView::OnTouchDown(size_t x, size_t y) {
     // Serial.print("TextView HandleTouch at: ");
     // Serial.print(x);
     // Serial.print(", ");

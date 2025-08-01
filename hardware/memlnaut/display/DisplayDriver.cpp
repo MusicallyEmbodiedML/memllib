@@ -135,16 +135,16 @@ void DisplayDriver::PollTouch() {
             if (y <= leftButton.height()) {
                 if (x < leftButton.width() && currentViewIndex_ > 0) {
                     // Send a handle touch outside the screen and handle release to current view
-                    views_[currentViewIndex_]->HandleTouch(9999,9999);
-                    views_[currentViewIndex_]->HandleRelease();
+                    // views_[currentViewIndex_]->HandleTouch(9999,9999);
+                    // views_[currentViewIndex_]->HandleRelease();
                     // Navigate to previous view
                     currentViewIndex_--;
                     redraw_internal_ = true;
                 }
                 else if (x > tft_.width() - rightButton.width() && currentViewIndex_ < views_.size() - 1) {
                     // Send a handle touch outside the screen and handle release to current view
-                    views_[currentViewIndex_]->HandleTouch(9999,9999);
-                    views_[currentViewIndex_]->HandleRelease();
+                    // views_[currentViewIndex_]->HandleTouch(9999,9999);
+                    // views_[currentViewIndex_]->HandleRelease();
                     // Navigate to next view
                     currentViewIndex_++;
                     redraw_internal_ = true;

@@ -13,9 +13,9 @@ public:
     void Setup(TFT_eSPI* tft, rect bounds);  // No longer virtual
     virtual void OnSetup() = 0;  // New virtual setup hook
     virtual void OnDraw() = 0;  
+    virtual void OnTouchDown(size_t x, size_t y) = 0;  
     bool NeedRedraw();
     inline String GetName() const { return name_; } // Changed return type
-    virtual void HandleTouch(size_t x, size_t y) = 0; // Handle touch events
     virtual void HandleRelease() = 0; // Handle release events
     inline void SetGrid(const GridDef &grid) { grid_ = grid; }
     void setBounds(rect newBounds) {
@@ -36,6 +36,21 @@ public:
                 subview->Draw();
             }
         }
+    }
+
+    void HandleTouch(size_t x, size_t y) {
+        Serial.print("HandleTouch at: ");
+        Serial.print(x);
+        Serial.print(", ");     
+        Serial.println(y);
+        for(auto& subview: subviews) {
+            if (subview->area.x <= x && x < subview->area.x + subview->area.w &&
+                subview->area.y <= y && y < subview->area.y + subview->area.h) {
+                Serial.println("Subview touched");
+                subview->HandleTouch(x,y);
+            }
+        }
+        OnTouchDown(x,y);
     }
 
     void AddSubView(const std::shared_ptr<ViewBase> &view, rect bounds)
