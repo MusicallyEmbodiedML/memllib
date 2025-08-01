@@ -8,15 +8,21 @@
 
 class BlockSelectView : public ViewBase {
 public:
-    BlockSelectView(const char* name)
+    BlockSelectView(String name)
         : ViewBase(name)
     {}
 
     void OnSetup() override {
-        // Initialize button1 with a specific position and size
-        button1 = std::make_shared<ButtonView>("Button 1");
-        rect bounds = { area.x + 10, area.y + 10, 100, 50 }; // Example bounds
-        AddSubView(button1, bounds);
+        int idx=1;
+        for(int i=0; i < 4; i++) {
+            for(int j=0; j < 2; i++) {
+
+                auto button = std::make_shared<ButtonView>(String(idx), idx, TFT_BLUE);
+                rect bounds = { area.x + 10 + (i * 60), area.y + 10 + (j*60), 50, 50 }; // Example bounds
+                AddSubView(button, bounds);
+                buttons.push_back(button);
+            }
+        }
     }  
 
     void OnDraw() override {
@@ -33,7 +39,7 @@ public:
 
 
 private:
-    std::shared_ptr<ButtonView> button1;
+    std::vector<std::shared_ptr<ButtonView>> buttons;
 
 };
 

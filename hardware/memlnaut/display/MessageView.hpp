@@ -7,7 +7,7 @@
 
 class MessageView : public ViewBase {
 public:
-    MessageView(const char* name)
+    MessageView(String name)
         : ViewBase(name)
     {}
 

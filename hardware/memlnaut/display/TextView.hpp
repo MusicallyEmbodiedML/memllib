@@ -7,7 +7,7 @@
 
 class TextView : public ViewBase {
 public:
-    TextView(const char* name,      // Changed parameter type
+    TextView(String name,      // Changed parameter type
              const char* content,    // Changed parameter type
              uint16_t color);
 

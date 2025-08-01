@@ -92,7 +92,7 @@ void DisplayDriver::Draw() {
         title.fillSprite(TFT_WHITE);
         // Draw title of current view between arrows
         if (currentViewIndex_ < views_.size()) {
-            const std::string &viewName = views_[currentViewIndex_]->GetName();
+            const String &viewName = views_[currentViewIndex_]->GetName();
             title.drawString(viewName.c_str(), 3,3);
 
             // tft_.drawString(viewName.c_str(), grid_.widthStep, grid_.heightStep / 2);

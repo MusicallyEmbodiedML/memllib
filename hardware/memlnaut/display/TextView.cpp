@@ -1,6 +1,6 @@
 #include "TextView.hpp"
 
-TextView::TextView(const char* name, const char* content, uint16_t color)
+TextView::TextView(String name, const char* content, uint16_t color)
     : ViewBase(name)
     , button("Press Me", 0x041f, false)
     , toggle("Toggle Me", 0x041f, true)

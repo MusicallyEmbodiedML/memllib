@@ -7,7 +7,7 @@
 
 class SystemView : public ViewBase {
 public:
-    SystemView(const char* name)
+    SystemView(String name)
         : ViewBase(name)
     {}
 
