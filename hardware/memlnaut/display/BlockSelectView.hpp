@@ -8,9 +8,15 @@
 
 class BlockSelectView : public ViewBase {
 public:
+    using OnSelectCallback = std::function<void(size_t)>;
+
     BlockSelectView(String name, int _buttonColour_ = TFT_BLUE)
         : ViewBase(name), buttonColour(_buttonColour_)
     {}
+
+    void SetOnSelectCallback(OnSelectCallback _cb_) {
+        cb = _cb_;
+    }
 
     void OnSetup() override {
         int idx=1;
@@ -20,6 +26,11 @@ public:
                 auto button = std::make_shared<ButtonView>(String(idx), idx, buttonColour);
                 rect bounds = { area.x + 10 + (i * 60), area.y + 10 + (j*60), 50, 50 }; // Example bounds
                 AddSubView(button, bounds);
+                button->SetReleaseCallback([this](size_t id) { 
+                    Serial.print("Button pressed: ");
+                    Serial.println(id);
+                    cb(id);
+                });
                 buttons.push_back(button);
                 idx++;
             }
@@ -34,6 +45,7 @@ public:
 private:
     std::vector<std::shared_ptr<ButtonView>> buttons;
     int buttonColour;
+    OnSelectCallback cb = nullptr;
 
 };
 

@@ -17,7 +17,7 @@ public:
 
     };  
     virtual void OnTouchUp(size_t x, size_t y) {
-        
+
     };  
     bool NeedRedraw();
     inline String GetName() const { return name_; } // Changed return type
@@ -34,11 +34,11 @@ public:
     }
 
     void Draw() {
-        OnDraw();
+        if (NeedRedraw()) {
+            OnDraw();
+        }
         for(auto& subview: subviews) {
-            if (subview->NeedRedraw()) {
-                subview->Draw();
-            }
+            subview->Draw();
         }
     }
 

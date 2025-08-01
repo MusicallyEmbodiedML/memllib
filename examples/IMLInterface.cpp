@@ -40,7 +40,12 @@ void IMLInterface::setup(size_t n_inputs, size_t n_outputs)
     msgView = std::make_shared<MessageView>("Messages");
     MEMLNaut::Instance()->disp->AddView(msgView);
     fileSaveView = std::make_shared<BlockSelectView>("Save Model", TFT_BLUE);
+    fileSaveView->SetOnSelectCallback([] (size_t id) {
+        Serial.println("Save");
+        Serial.println(id);
+    });
     MEMLNaut::Instance()->disp->AddView(fileSaveView);
+
     fileLoadView = std::make_shared<BlockSelectView>("Load Model", TFT_PURPLE);
     MEMLNaut::Instance()->disp->AddView(fileLoadView);
 

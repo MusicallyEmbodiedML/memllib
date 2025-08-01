@@ -104,9 +104,9 @@ void DisplayDriver::Draw() {
         views_[currentViewIndex_]->redraw();
     }
     if (currentViewIndex_ < views_.size()) {
-        if (views_[currentViewIndex_]->NeedRedraw()) {
-            views_[currentViewIndex_]->Draw();  
-        }
+        // if (views_[currentViewIndex_]->NeedRedraw()) {
+        views_[currentViewIndex_]->Draw();  
+        // }
     }
     redraw_internal_ = false;
 
