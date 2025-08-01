@@ -67,14 +67,7 @@ void DisplayDriver::Draw() {
 
     // Check if any of the views need redrawing
     bool needRedraw = false;
-    for (const auto &view : views_) {
-        if (view->NeedRedraw()) {
-            needRedraw = true;
-            break;
-        }
-    }
-    if (needRedraw || redraw_internal_) {
-        redraw_internal_ = false;
+    if (redraw_internal_) {
 
         // Clear screen
         // tft_.fillScreen(TFT_BLACK);
@@ -109,11 +102,21 @@ void DisplayDriver::Draw() {
         }
         title.pushSprite(40, 0);
 
-        // Draw current view
-        if (currentViewIndex_ < views_.size()) {
-            views_[currentViewIndex_]->Draw();  // No longer passing tft_
+    }
+    if (currentViewIndex_ < views_.size()) {
+        if (views_[currentViewIndex_]->NeedRedraw() || redraw_internal_) {
+            views_[currentViewIndex_]->Draw();  
         }
     }
+    redraw_internal_ = false;
+
+    // for (const auto &view : views_) {
+    //     if (view->NeedRedraw()) {
+    //         view->Draw();  // No longer passing tft_
+    //         break;
+    //     }
+    // }
+
 }
 
 void DisplayDriver::PollTouch() {

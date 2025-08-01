@@ -32,6 +32,7 @@ public:
             view->Setup(&tft_, mainArea);
             Serial.println("View setup");
         }
+        redraw_internal_ = true;
     }
     void PollTouch();
     unsigned long GetLastTouchTime() const { return lastTouchTime_; }
