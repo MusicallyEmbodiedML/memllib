@@ -39,14 +39,6 @@ public:
     }
 
 
-    void OnTouchDown(size_t x, size_t y) override {
-
-    }
-    void HandleRelease() override 
-    {
-
-    }
-
 
 private:
     std::deque<String> lines;

@@ -30,14 +30,6 @@ public:
     }  
 
 
-    void OnTouchDown(size_t x, size_t y) override {
-
-    }
-    void HandleRelease() override 
-    {
-
-    }
-
 
 private:
     std::vector<std::shared_ptr<ButtonView>> buttons;

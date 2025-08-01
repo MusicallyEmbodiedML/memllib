@@ -14,7 +14,7 @@ public:
     void OnSetup() override;  // Changed from Setup to OnSetup
     void OnDraw() override;  // No longer takes TFT pointer
     void OnTouchDown(size_t x, size_t y) override;
-    void HandleRelease() override;
+    void OnTouchUp(size_t x, size_t y) override;
 
     Button button{"Press Me", 0x041F, false};  // Navy blue to deep blue, non-toggle
     Button toggle{"Toggle Me", 0x041F, true};  // Navy blue to deep blue, toggle

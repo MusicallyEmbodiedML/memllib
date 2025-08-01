@@ -32,9 +32,13 @@ public:
     void OnTouchDown(size_t x, size_t y) override {
 
     }
-    void HandleRelease() override 
-    {
 
+    void OnTouchUp(size_t x, size_t y) override {
+        Serial.print("ButtonView OnTouchUp at: ");
+        Serial.print(x);
+        Serial.print(", ");     
+        Serial.println(y);
+        // Handle touch release events here if needed
     }
 
 

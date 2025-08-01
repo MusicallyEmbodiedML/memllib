@@ -157,8 +157,19 @@ void DisplayDriver::PollTouch() {
                 }
             }
         } else if (isTouchPressed_) {
+            //drag event
+        } 
+        if (!pressed && isTouchPressed_) {
+            // If touch was released, handle release
+            // views_[currentViewIndex_]->HandleRelease();
             // If released, check if any button was released
-            views_[currentViewIndex_]->HandleRelease();
+            views_[currentViewIndex_]->HandleTouchRelease(x,y);
+            // Serial.println("Touch released");   
+            // Serial.print("x: ");
+            // Serial.print(x);
+            // Serial.print(", y: ");
+            // Serial.println(y);
+            Serial.println("Touch released");
         }
     }
 

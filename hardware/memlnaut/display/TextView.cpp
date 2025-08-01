@@ -63,7 +63,7 @@ void TextView::OnTouchDown(size_t x, size_t y) {
     fl.Interact(x, y);
 }
 
-void TextView::HandleRelease() {
+void TextView::OnTouchUp(size_t x, size_t y) {
     // Serial.println("TextView HandleRelease");
     // Handle release events for the button
     //button_.Interact(0, 0); // Pass dummy coordinates since release doesn't need them

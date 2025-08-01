@@ -38,26 +38,9 @@ public:
             textSprite.drawString(lines[i].c_str(), 0, 0);
             textSprite.pushSprite(area.x + 10,area.y + (i*lineheight));
         }
-    Serial.println("Firmware Build Info:");
-    Serial.print("Build Date: ");
-    Serial.println(__DATE__);
-    Serial.print("Build Time: ");
-    Serial.println(__TIME__);
-    Serial.print("Combined: ");
-    Serial.print(__DATE__);
-    Serial.print(" ");
-    Serial.println(__TIME__);        
 
     }  
 
-
-    void OnTouchDown(size_t x, size_t y) override {
-
-    }
-    void HandleRelease() override 
-    {
-
-    }
 
 
 private:
