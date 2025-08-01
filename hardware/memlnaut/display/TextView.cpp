@@ -34,7 +34,7 @@ void TextView::OnSetup() {
     // });
 }
 
-void TextView::Draw() {
+void TextView::OnDraw() {
     scr->setTextColor(color_);
     // Draw the content at the third row, first column of the grid
     size_t gridX = 0;

@@ -7,6 +7,7 @@
 #include "../../memlp/MLP.h"
 #include "../../memlp/Dataset.hpp"
 #include "../hardware/memlnaut/display/MessageView.hpp"
+#include "../hardware/memlnaut/display/BlockSelectView.hpp"
 
 // Forward declarations
 class Dataset;
@@ -75,6 +76,8 @@ protected:
     // Display reference for binding methods
     std::shared_ptr<display> disp_;
     std::shared_ptr<MessageView> msgView;
+    std::shared_ptr<BlockSelectView> fileSaveView;
+    std::shared_ptr<BlockSelectView> fileLoadView;
 
     // Zooming
     bool zoom_enabled_;

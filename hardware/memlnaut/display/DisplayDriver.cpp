@@ -70,7 +70,7 @@ void DisplayDriver::Draw() {
     if (redraw_internal_) {
 
         // Clear screen
-        // tft_.fillScreen(TFT_BLACK);
+        tft_.fillScreen(TFT_BLACK);
         // tft_.setTextColor(TFT_WHITE);
         tft_.fillRect(0, 0, tft_.width(), 30, TFT_WHITE);
 
@@ -101,10 +101,10 @@ void DisplayDriver::Draw() {
             // tft_.drawString("No View", grid_.widthStep, grid_.heightStep / 2, 2);
         }
         title.pushSprite(40, 0);
-
+        views_[currentViewIndex_]->redraw();
     }
     if (currentViewIndex_ < views_.size()) {
-        if (views_[currentViewIndex_]->NeedRedraw() || redraw_internal_) {
+        if (views_[currentViewIndex_]->NeedRedraw()) {
             views_[currentViewIndex_]->Draw();  
         }
     }

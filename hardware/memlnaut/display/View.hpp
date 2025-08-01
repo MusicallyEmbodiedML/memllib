@@ -12,7 +12,7 @@ public:
     virtual ~ViewBase() = default; // Virtual destructor
     void Setup(TFT_eSPI* tft, rect bounds);  // No longer virtual
     virtual void OnSetup() = 0;  // New virtual setup hook
-    virtual void Draw() = 0;  // No longer needs TFT pointer
+    virtual void OnDraw() = 0;  
     bool NeedRedraw();
     inline const char* GetName() const { return name_; } // Changed return type
     virtual void HandleTouch(size_t x, size_t y) = 0; // Handle touch events
@@ -21,9 +21,33 @@ public:
     void setBounds(rect newBounds) {
         area = newBounds;
     }
+    
     inline void redraw() {
         needRedraw_ = true;
+        for(auto& subview: subviews) {
+            subview->redraw();
+        }
     }
+
+    void Draw() {
+        OnDraw();
+        for(auto& subview: subviews) {
+            if (subview->NeedRedraw()) {
+                subview->Draw();
+            }
+        }
+    }
+
+    void AddSubView(const std::shared_ptr<ViewBase> &view, rect bounds)
+    {
+        subviews.push_back(view);
+        Serial.println("Added sub view");
+        if (scr) {
+            view->Setup(scr, bounds);
+            Serial.println("View setup");
+        }
+        redraw();
+    }    
 
 protected:
     explicit ViewBase(const char* name)  // Changed parameter type
@@ -37,6 +61,8 @@ protected:
     bool needRedraw_;      // 3rd initialized
     TFT_eSPI* scr;       // 4th initialized
     rect area;
+    std::vector<std::shared_ptr<ViewBase>> subviews;
+
 };
 
 

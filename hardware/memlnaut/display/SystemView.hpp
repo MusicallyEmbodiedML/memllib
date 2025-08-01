@@ -14,7 +14,7 @@ public:
     void OnSetup() override {
     }  
     
-    void Draw() override {
+    void OnDraw() override {
         TFT_eSprite textSprite(scr);
         textSprite.createSprite(320, 20);
         textSprite.setTextFont(2);

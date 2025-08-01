@@ -12,7 +12,7 @@ public:
              uint16_t color);
 
     void OnSetup() override;  // Changed from Setup to OnSetup
-    void Draw() override;  // No longer takes TFT pointer
+    void OnDraw() override;  // No longer takes TFT pointer
     void HandleTouch(size_t x, size_t y) override;
     void HandleRelease() override;
 
