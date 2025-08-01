@@ -6,6 +6,7 @@
 #include "../../utils/MedianFilter.h"
 #include <functional>
 #include <array>
+#include "display/DisplayDriver.hpp"
 
 
 class MEMLNaut {
@@ -91,6 +92,8 @@ public:
 
     MEMLNaut();
 
+    
+
     // Set callbacks for momentary switches
     void setMomA1Callback(ButtonCallback cb);
     void setMomA2Callback(ButtonCallback cb);
@@ -130,6 +133,11 @@ public:
     void SyncOnBoot();
 
     void loop();
+
+    //display
+    std::unique_ptr<DisplayDriver> disp;
+
+
 };
 
 #endif // __MEMLNAUT_HPP__

@@ -15,12 +15,16 @@ struct GridDef {
     size_t heightStep;
 };
 
+struct rect {
+    int x,  y,  w,  h;
+};
+
 class UIElementBase {
 public:
     UIElementBase() = delete; // Prevent instantiation of base class
     virtual ~UIElementBase() = default; // Virtual destructor
     void Setup(TFT_eSPI* tft) {  // Changed to non-virtual like ViewBase
-        tft_ = tft;
+        scr = tft;
         OnSetup();  // Call virtual setup hook
     }
     virtual void OnSetup() = 0;  // New virtual setup hook
@@ -33,12 +37,12 @@ public:
         pos_y_ = pos_y;
     }
 protected:
-    explicit UIElementBase(const char* label) : label_(label), tft_(nullptr) {}  // Changed to const char*
+    explicit UIElementBase(const char* label) : label_(label), scr(nullptr) {}  // Changed to const char*
     GridDef grid_; // Grid definition for layout
     size_t pos_x_{0}; // Position in grid X
     size_t pos_y_{0}; // Position in grid Y
     const char* label_;  // Changed to const char*
-    TFT_eSPI* tft_;  // Added tft pointer
+    TFT_eSPI* scr;  // Added tft pointer
 };
 
 
@@ -100,29 +104,29 @@ public:
 
     void Draw() override
     {
-        if (tft_ == nullptr) {
+        if (scr == nullptr) {
             return;  // Ensure tft is initialized
         }
 
         // Calculate background color
-        uint16_t bgColor = selected_ ? tft_->color565(64, 80, 96) : TFT_BLACK;
+        uint16_t bgColor = selected_ ? scr->color565(64, 80, 96) : TFT_BLACK;
 
         // Fill background
-        tft_->fillRect(current_x_, current_y_, current_w_, current_h_, bgColor);
+        scr->fillRect(current_x_, current_y_, current_w_, current_h_, bgColor);
 
         // Draw the label with consistent background
-        tft_->setTextSize(kTextSize);
-        tft_->setTextColor(TFT_WHITE, bgColor);
-        tft_->setTextDatum(TC_DATUM); // Center text
-        tft_->drawString(labelBuffer_, current_x_ + (current_w_ >> 1), current_y_ + kSpacingTop);
-        tft_->setTextSize(kValueSize);
+        scr->setTextSize(kTextSize);
+        scr->setTextColor(TFT_WHITE, bgColor);
+        scr->setTextDatum(TC_DATUM); // Center text
+        scr->drawString(labelBuffer_, current_x_ + (current_w_ >> 1), current_y_ + kSpacingTop);
+        scr->setTextSize(kValueSize);
         // Draw the value in the line below
         char valueBuffer[6];
         formatNumber(valueBuffer, value_);  // Format the value
         size_t y = current_y_ + kSpacingTop + kTextSize * 8 + kSpacingBottom;
-        tft_->drawString(valueBuffer, current_x_ + (current_w_ >> 1), y);
-        tft_->setTextSize(1);  // Reset text size
-        tft_->setTextDatum(TL_DATUM); // Reset text datum
+        scr->drawString(valueBuffer, current_x_ + (current_w_ >> 1), y);
+        scr->setTextSize(1);  // Reset text size
+        scr->setTextDatum(TL_DATUM); // Reset text datum
     }
     void OnSetup() override
     {

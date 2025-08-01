@@ -29,7 +29,7 @@ void Button::OnSetup() {
     current_w_ = grid_.widthStep;
     current_h_ = grid_.heightStep;
 
-    button_ = std::make_unique<ButtonWidget>(tft_);
+    button_ = std::make_unique<ButtonWidget>(scr);
     button_->initButtonUL(current_x_, current_y_, current_w_, current_h_,
                          TFT_WHITE, color_, TFT_BLACK, labelBuffer_, kTextSize);
     button_->drawSmoothButton(pressed_, kBorder, TFT_BLACK);

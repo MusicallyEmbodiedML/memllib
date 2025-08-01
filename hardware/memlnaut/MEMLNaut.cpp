@@ -7,6 +7,20 @@ MEMLNaut* MEMLNaut::instance = nullptr;
 
 #define FAST_MEM __not_in_flash("memlnaut")
 
+struct repeating_timer FAST_MEM timerDisplay;
+inline bool __not_in_flash_func(displayUpdate)(__unused struct repeating_timer *t) {
+    MEMLNaut::Instance()->disp->Draw();
+    return true;
+}
+
+struct repeating_timer FAST_MEM timerTouch;
+inline bool __not_in_flash_func(touchUpdate)(__unused struct repeating_timer *t) {
+    // scr->update();
+    MEMLNaut::Instance()->disp->PollTouch();
+    return true;
+}
+
+
 // Static interrupt handlers implementation
 void __not_in_flash_func(MEMLNaut::handleMomA1)() {
     if (instance && instance->debouncers[0].debounce() && instance->momA1Callback) {
@@ -153,7 +167,11 @@ MEMLNaut::MEMLNaut() {
     SPI1.setTX(Pins::SD_MOSI);
     SPI1.setSCK(Pins::SD_SCK);  
 
+    disp = std::make_unique<DisplayDriver>();
+    disp->Setup();
 
+    add_repeating_timer_ms(39, displayUpdate, NULL, &timerDisplay);
+    add_repeating_timer_ms(10, touchUpdate, NULL, &timerTouch);
 
 }
 

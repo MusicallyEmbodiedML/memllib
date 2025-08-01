@@ -14,6 +14,13 @@
 
 class DisplayDriver {
 public:
+    DisplayDriver() :        
+        leftButton(&tft_),
+        title(&tft_),
+        rightButton(&tft_)
+    {
+    }
+
     void Setup();
     void Draw();
     inline void AddView(const std::shared_ptr<ViewBase> &view)
@@ -22,7 +29,7 @@ public:
         view->SetGrid(grid_);
         Serial.println("Added view");
         if (tft_initialized_) {
-            view->Setup(&tft_);
+            view->Setup(&tft_, mainArea);
             Serial.println("View setup");
         }
     }
@@ -33,6 +40,7 @@ public:
 private:
     // Internal TFT hardware instance
     TFT_eSPI tft_;
+    
 
     // Views
     std::vector<std::shared_ptr<ViewBase>> views_;
@@ -42,10 +50,10 @@ private:
     uint16_t calData_[5] = { 421, 3470, 270, 3492, 7 };
 
     // Grid
-    static constexpr size_t kGridWidthElements = 4;
-    static constexpr size_t kGridHeightElements = 4;
-    size_t screenWidth_;
-    size_t screenHeight_;
+    static constexpr size_t kGridWidthElements = 16;
+    static constexpr size_t kGridHeightElements = 12;
+    int screenWidth_;
+    int screenHeight_;
     GridDef grid_;
 
     bool redraw_internal_{false};
@@ -53,6 +61,11 @@ private:
     unsigned long lastDrawTime_{0};
     bool tft_initialized_{false};
     bool isTouchPressed_{false};
+
+    //top bar
+    TFT_eSprite leftButton, title, rightButton;
+    rect mainArea;
+
 };
 
 
