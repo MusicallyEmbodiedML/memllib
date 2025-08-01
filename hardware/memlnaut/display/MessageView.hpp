@@ -13,7 +13,7 @@ public:
 
     void OnSetup() override {
     }  
-    
+
     void Draw() override {
         TFT_eSprite textSprite(scr);
         textSprite.createSprite(320, 20);
@@ -25,10 +25,6 @@ public:
             textSprite.fillRect(0,0,320,20,TFT_BLACK);
             textSprite.drawString(lines[i].c_str(), 0, 0);
             textSprite.pushSprite(area.x + 10,area.y + (i*lineheight));
-            Serial.print("MessageView line ");
-            Serial.print(i);
-            Serial.print(": ");            Serial.println(lines[i]);
-            // scr->drawString(lines[i].c_str(), area.x + 10, area.y + (i * lineheight), 2);
 
         }
 

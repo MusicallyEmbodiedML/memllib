@@ -7,6 +7,7 @@
 #include <functional>
 #include <array>
 #include "display/DisplayDriver.hpp"
+#include "display/SystemView.hpp"
 
 
 class MEMLNaut {
@@ -92,6 +93,11 @@ public:
 
     MEMLNaut();
 
+    void addSystemInfoView() {
+        sysView = std::make_shared<SystemView>("System Info");
+        disp->AddView(sysView);
+    }
+
     
 
     // Set callbacks for momentary switches
@@ -136,6 +142,7 @@ public:
 
     //display
     std::unique_ptr<DisplayDriver> disp;
+    std::shared_ptr<SystemView> sysView;
 
 
 };
