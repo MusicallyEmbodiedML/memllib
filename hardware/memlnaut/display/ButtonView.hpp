@@ -14,8 +14,6 @@ public:
         : ViewBase(name), fillColour(_fillcolour_),
         id(_id_)
     {
-        Serial.print("Creating ButtonView: ");
-        Serial.println(name);
     }
 
     void SetReleaseCallback(ButtonCallback __callback) {
@@ -34,8 +32,6 @@ public:
         }
         scr->setTextColor(TFT_WHITE);
         scr->setTextFont(4);
-        Serial.print("Drawing ButtonView: ");
-        Serial.println(name_);
         scr->drawString(this->name_, area.x + 10, area.y + 10);
         // scr->drawString("1", area.x + 10, area.y + 10);
     }  
@@ -44,18 +40,10 @@ public:
     void OnTouchDown(size_t x, size_t y) override {
         pressed = true;
         redraw();
-        Serial.print("ButtonView OnTouchDown at: ");
-        Serial.print(x);
-        Serial.print(", ");     
-        Serial.println(y);
         // Check if the touch is within the button area
     }
 
     void OnTouchUp(size_t x, size_t y) override {
-        Serial.print("ButtonView OnTouchUp at: ");
-        Serial.print(x);
-        Serial.print(", ");     
-        Serial.println(y);
         if (callback) {
             callback(id);
         }

@@ -13,6 +13,13 @@ public:
 
     void OnSetup() override {
     }  
+
+    void OnDisplay() override {
+        freeHeap = rp2040.getFreeHeap();
+        totalHeap = rp2040.getTotalHeap();
+        usedHeap = totalHeap - freeHeap;
+    };
+
     
     void OnDraw() override {
         TFT_eSprite textSprite(scr);
@@ -28,7 +35,10 @@ public:
         lines.push_back("");
         lines.push_back("Build: " + String(__DATE__) + " " + String(__TIME__));
         uint32_t sys_clk = clock_get_hz(clk_sys);        
-        lines.push_back("System Clock: " + String(sys_clk) + " Hz");
+        lines.push_back("System Clock: " + String(sys_clk/1000000.f) + " MHz");
+        lines.push_back("Heap: " + String(freeHeap/1024) + "k free, " +
+                       String(totalHeap/1024) + "k total, " +
+                       String(usedHeap/1024) + "k used");
         lines.push_back("");
         lines.push_back("Made by Chris Kiefer and Andrea Martelloni");
         lines.push_back("Emute Lab, University of Sussex, UK");
@@ -44,6 +54,10 @@ public:
 
 
 private:
+    uint32_t freeHeap = 0;
+    uint32_t totalHeap = 0;
+    uint32_t usedHeap = 0;
+
 };
 
 #endif 

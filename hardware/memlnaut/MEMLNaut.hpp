@@ -8,6 +8,8 @@
 #include <array>
 #include "display/DisplayDriver.hpp"
 #include "display/SystemView.hpp"
+#include "SD.h"
+
 
 
 class MEMLNaut {
@@ -144,6 +146,18 @@ public:
     std::unique_ptr<DisplayDriver> disp;
     std::shared_ptr<SystemView> sysView;
 
+    // SD
+    bool startSD() {
+        if (!SD.begin(Pins::SD_CS, SPI1)) {
+            return false;
+        }
+        return true;
+    }
+    bool stopSD() {
+        SD.end();
+        Serial.println("SD card stopped");
+        return true;
+    }
 
 };
 

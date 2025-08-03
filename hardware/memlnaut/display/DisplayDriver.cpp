@@ -129,7 +129,7 @@ void DisplayDriver::PollTouch() {
         // Calculate grid position
         size_t gridX = x / grid_.widthStep;
         size_t gridY = y / grid_.heightStep;
-
+        bool viewChange = false;
         if (pressed && !isTouchPressed_) {
             // If within first row, handle navigation
             if (y <= leftButton.height()) {
@@ -140,6 +140,7 @@ void DisplayDriver::PollTouch() {
                     // Navigate to previous view
                     currentViewIndex_--;
                     redraw_internal_ = true;
+                    viewChange = true;
                 }
                 else if (x > tft_.width() - rightButton.width() && currentViewIndex_ < views_.size() - 1) {
                     // Send a handle touch outside the screen and handle release to current view
@@ -148,6 +149,7 @@ void DisplayDriver::PollTouch() {
                     // Navigate to next view
                     currentViewIndex_++;
                     redraw_internal_ = true;
+                    viewChange = true;
                 }
             } else {
                 // Handle touch in the current view
@@ -155,6 +157,10 @@ void DisplayDriver::PollTouch() {
                     // Pass raw coordinates to the current view for precise detection
                     views_[currentViewIndex_]->HandleTouch(x, y);
                 }
+            }
+            if (viewChange) {
+                // If view changed, redraw the new view
+                views_[currentViewIndex_]->OnDisplay();  // Call OnDisplay for the new view
             }
         } else if (isTouchPressed_) {
             //drag event
@@ -169,7 +175,6 @@ void DisplayDriver::PollTouch() {
             // Serial.print(x);
             // Serial.print(", y: ");
             // Serial.println(y);
-            Serial.println("Touch released");
         }
     }
 

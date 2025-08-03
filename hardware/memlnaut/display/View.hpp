@@ -18,7 +18,11 @@ public:
     };  
     virtual void OnTouchUp(size_t x, size_t y) {
 
-    };  
+    };
+    //called when a view is displayed  
+    virtual void OnDisplay() {
+
+    };
     bool NeedRedraw();
     inline String GetName() const { return name_; } // Changed return type
     inline void SetGrid(const GridDef &grid) { grid_ = grid; }
@@ -43,10 +47,6 @@ public:
     }
 
     void HandleTouch(size_t x, size_t y) {
-        Serial.print("HandleTouch at: ");
-        Serial.print(x);
-        Serial.print(", ");     
-        Serial.println(y);
         for(auto& subview: subviews) {
             if (subview->area.x <= x && x < subview->area.x + subview->area.w &&
                 subview->area.y <= y && y < subview->area.y + subview->area.h) {
@@ -75,10 +75,8 @@ public:
     void AddSubView(const std::shared_ptr<ViewBase> &view, rect bounds)
     {
         subviews.push_back(view);
-        Serial.println("Added sub view");
         if (scr) {
             view->Setup(scr, bounds);
-            Serial.println("View setup");
         }
         redraw();
     }    

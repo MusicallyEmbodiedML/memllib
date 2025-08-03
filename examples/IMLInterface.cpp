@@ -29,24 +29,49 @@ void IMLInterface::setup(size_t n_inputs, size_t n_outputs)
     zoom_enabled_ = false;
     zoom_factor_ = 0.5f;
 
-     DEBUG_PRINTLN("IMLInterface setup done");
-     DEBUG_PRINT("Address of n_inputs_: ");
-     DEBUG_PRINTLN(reinterpret_cast<uintptr_t>(&n_inputs_));
-     DEBUG_PRINT("Inputs: ");
-     DEBUG_PRINT(n_inputs_);
-     DEBUG_PRINT(", Outputs: ");
-     DEBUG_PRINTLN(n_outputs_);
+    DEBUG_PRINTLN("IMLInterface setup done");
+    DEBUG_PRINT("Address of n_inputs_: ");
+    DEBUG_PRINTLN(reinterpret_cast<uintptr_t>(&n_inputs_));
+    DEBUG_PRINT("Inputs: ");
+    DEBUG_PRINT(n_inputs_);
+    DEBUG_PRINT(", Outputs: ");
+    DEBUG_PRINTLN(n_outputs_);
 
+    
+    String FILENAMEROOT="mlp_iml_";
     msgView = std::make_shared<MessageView>("Messages");
     MEMLNaut::Instance()->disp->AddView(msgView);
     fileSaveView = std::make_shared<BlockSelectView>("Save Model", TFT_BLUE);
-    fileSaveView->SetOnSelectCallback([] (size_t id) {
-        Serial.println("Save");
-        Serial.println(id);
+    fileSaveView->SetOnSelectCallback([this,FILENAMEROOT] (size_t id) {
+        fileSaveView->SetMessage("Saving model " + String(id));
+        if (MEMLNaut::Instance()->startSD()) {
+            if (mlp_->SaveMLPNetworkSD((FILENAMEROOT + String(id) + String(".bin")).c_str())) {
+                fileSaveView->SetMessage("Model saved successfully to slot " + String(id));
+            } else {
+                fileSaveView->SetMessage("Failed to save model");
+            }
+            MEMLNaut::Instance()->stopSD();
+        } else {
+            fileSaveView->SetMessage("SD card error - is it inserted and formatted?");
+        }
     });
     MEMLNaut::Instance()->disp->AddView(fileSaveView);
 
     fileLoadView = std::make_shared<BlockSelectView>("Load Model", TFT_PURPLE);
+    fileLoadView->SetOnSelectCallback([this,FILENAMEROOT] (size_t id) {
+        fileLoadView->SetMessage("Loading model " + String(id));
+        if (MEMLNaut::Instance()->startSD()) {
+            if (mlp_->LoadMLPNetworkSD((FILENAMEROOT + String(id) + String(".bin")).c_str())) {
+                fileLoadView->SetMessage("Model loaded successfully ");
+            } else {
+                fileLoadView->SetMessage("Failed to load model");
+            }
+            MEMLNaut::Instance()->stopSD();
+        } else {
+            fileLoadView->SetMessage("SD card error - is it inserted and formatted?");
+        }
+
+    });
     MEMLNaut::Instance()->disp->AddView(fileLoadView);
 
 }
@@ -59,12 +84,13 @@ void IMLInterface::setup(size_t n_inputs, size_t n_outputs)
 
 bool IMLInterface::SetTrainingMode(training_mode_t training_mode)
 {
-     DEBUG_PRINT("Training mode: ");
-     DEBUG_PRINTLN(training_mode == INFERENCE_MODE ? "Inference" : "Training");
+    // DEBUG_PRINT("Training mode: ");
+    // DEBUG_PRINTLN(training_mode == INFERENCE_MODE ? "Inference" : "Training");
 
     bool has_trained = false;
 
     if (training_mode == INFERENCE_MODE && training_mode_ == TRAINING_MODE) {
+        msgView->post("Optimising... ");
         // Train the network!
         has_trained = MLTraining_();
     }
@@ -77,22 +103,22 @@ void IMLInterface::ProcessInput()
 {
     // Check if input is updated
     if (perform_inference_ && input_updated_) {
-         DEBUG_PRINT("Input state: ");
+        //  DEBUG_PRINT("Input state: ");
         // for (auto val : input_state_) {
         //     DEBUG_PRINT(val);
         //     DEBUG_PRINT(" ");
         // }
-         DEBUG_PRINTLN();
+        //  DEBUG_PRINTLN();
         // Only zoom here
         std::vector<float> zoomed_input = input_state_;
         if (zoom_enabled_) {
             zoomed_input = ZoomCoordinates(input_state_, zoom_centre_, zoom_factor_);
-             DEBUG_PRINT("Zoomed input: ");
+            //  DEBUG_PRINT("Zoomed input: ");
             // for (auto val : zoomed_input) {
             //     DEBUG_PRINT(val);
             //     DEBUG_PRINT(" ");
             // }
-             DEBUG_PRINTLN();
+            //  DEBUG_PRINTLN();
         }
         MLInference_(zoomed_input);
         input_updated_ = false;
@@ -270,6 +296,7 @@ bool IMLInterface::MLTraining_()
 {
     if (!mlp_) {
         DEBUG_PRINTLN("ML not initialized!");
+        msgView->post("ML not initialized!");
         return false;
     }
     // Restore old weights
@@ -277,6 +304,7 @@ bool IMLInterface::MLTraining_()
         mlp_->SetWeights(mlp_stored_weights_);
     }
     randomised_state_ = false;
+    msgView->post("Preparing for training...");
 
     // Prepare for training
     // Extract dataset to training pair
@@ -288,6 +316,7 @@ bool IMLInterface::MLTraining_()
     DEBUG_PRINTLN(dataset.second.size());
     if (!dataset.first.size() || !dataset.second.size()) {
         DEBUG_PRINTLN("Empty dataset!");
+        msgView->post("Empty dataset!");
         return false;
     }
     DEBUG_PRINT("Feature dim ");
@@ -298,18 +327,21 @@ bool IMLInterface::MLTraining_()
         DEBUG_PRINTLN("Empty dataset dimensions!");
         return false;
     }
+    msgView->post("Training with " + String(dataset.first.size()) + " examples");
 
-    // Training loop
+    // // Training loop
     DEBUG_PRINT("Training for max ");
     DEBUG_PRINT(n_iterations_);
     DEBUG_PRINTLN(" iterations...");
+    msgView->post("Max " + String(n_iterations_) + " iterations");
     float loss = mlp_->Train(dataset,
             1.,
             n_iterations_,
             0.00001,
             false);
-    DEBUG_PRINT("Trained, loss = ");
-    DEBUG_PRINTLN(loss, 10);
+    // DEBUG_PRINT("Trained, loss = ");
+    // DEBUG_PRINTLN(loss, 10);
+    msgView->post("Trained, loss = " + String(loss, 10));
     return true;
 }
 
@@ -331,10 +363,11 @@ void IMLInterface::bindInterface(bool disable_joystick)
     MEMLNaut::Instance()->setTogA1Callback([this](bool state) {
         msgView->post(state ? "Training mode" : "Inference mode");
         bool trained = this->SetTrainingMode(state ? TRAINING_MODE : INFERENCE_MODE);
-        if (state == false && trained) {
-            msgView->post("Model trained");
-        }
+        // if (state == false && trained) {
+        //     msgView->post("Model trained");
+        // }
     });
+
     MEMLNaut::Instance()->setTogB2Callback([this](bool state) {
         this->SetZoomEnabled(state);
     });

@@ -1,7 +1,6 @@
 #include "MEMLNaut.hpp"
 #include "../../audio/AudioDriver.hpp"
 #include "Arduino.h"
-#include "SD.h"
 
 MEMLNaut* MEMLNaut::instance = nullptr;
 
@@ -167,6 +166,8 @@ MEMLNaut::MEMLNaut() {
     SPI1.setTX(Pins::SD_MOSI);
     SPI1.setSCK(Pins::SD_SCK);  
 
+  
+
     disp = std::make_unique<DisplayDriver>();
     disp->Setup();
 
@@ -174,6 +175,7 @@ MEMLNaut::MEMLNaut() {
     add_repeating_timer_ms(10, touchUpdate, NULL, &timerTouch);
 
 }
+
 
 // Momentary switch callback setters
 void MEMLNaut::setMomA1Callback(ButtonCallback cb) { momA1Callback = cb; }

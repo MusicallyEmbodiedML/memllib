@@ -38,7 +38,21 @@ public:
     }  
 
     void OnDraw() override {
+        TFT_eSprite textSprite(scr);
+        textSprite.createSprite(320, 20);
+        textSprite.setTextFont(2);
+        scr->fillRect(area.x, area.y, area.w, area.h, TFT_BLACK);
+        constexpr int32_t lineheight = 20;
+        textSprite.setTextColor(TFT_WHITE, TFT_BLACK);
+        textSprite.fillRect(0,0,320,20,TFT_BLACK);
+        textSprite.drawString(msg, 3, 0);
+        textSprite.pushSprite(area.x,area.y + area.h - 25);
     }  
+
+    void SetMessage(const String &__msg) {
+        msg = __msg;
+        redraw();
+    }
 
 
 
@@ -46,6 +60,7 @@ private:
     std::vector<std::shared_ptr<ButtonView>> buttons;
     int buttonColour;
     OnSelectCallback cb = nullptr;
+    String msg;
 
 };
 

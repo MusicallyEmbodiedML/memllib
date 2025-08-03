@@ -27,10 +27,8 @@ public:
     {
         views_.push_back(view);
         view->SetGrid(grid_);
-        Serial.println("Added view");
         if (tft_initialized_) {
             view->Setup(&tft_, mainArea);
-            Serial.println("View setup");
         }
         redraw_internal_ = true;
     }
