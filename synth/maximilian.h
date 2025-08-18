@@ -43,7 +43,7 @@
 #include "../utils/MedianFilter.h"
 #include "../utils/CircularBuffer.hpp"
 
-using namespace std;
+//using namespace std;
 
 #ifndef PI
 #define PI 3.1415926f
@@ -62,9 +62,9 @@ using namespace std;
 #endif
 
 
-#define DOUBLEARRAY_REF vector<MAXITYPE> &
-#define DOUBLEARRAY vector<MAXITYPE>
-#define NORMALISE_ARRAY_TYPE(invar, outvar) vector<MAXITYPE> outvar = vector<MAXITYPE>(invar.begin(), invar.end()); //emplace into new variable
+#define DOUBLEARRAY_REF std::vector<MAXITYPE> &
+#define DOUBLEARRAY std::vector<MAXITYPE>
+#define NORMALISE_ARRAY_TYPE(invar, outvar) std::vector<MAXITYPE> outvar = std::vector<MAXITYPE>(invar.begin(), invar.end()); //emplace into new variable
 #define DECLARE_F64_ARRAY(x) std::vector<MAXITYPE> x;
 #define F64_ARRAY_SIZE(x) x.size()
 #define F64_ARRAY_SETFROM(to,from) to = from;
@@ -742,7 +742,7 @@ public:
         return *this;
     }
 
-    string myPath;
+    std::string myPath;
     int myChunkSize;
     int mySubChunk1Size;
     int readChannel;
@@ -895,7 +895,7 @@ public:
      */
     static float inline linlin(float val, float inMin, float inMax, float outMin, float outMax)
     {
-        val = max(min(val, inMax), inMin);
+        val = std::max(std::min(val, inMax), inMin);
         return ((val - inMin) / (inMax - inMin) * (outMax - outMin)) + outMin;
     }
 
@@ -910,8 +910,8 @@ public:
     static float inline linexp(float val, float inMin, float inMax, float outMin, float outMax)
     {
         //clipping
-        val = max(min(val, inMax), inMin);
-        return pow((outMax / outMin), (val - inMin) / (inMax - inMin)) * outMin;
+        val = std::max(std::min(val, inMax), inMin);
+        return std::pow((outMax / outMin), (val - inMin) / (inMax - inMin)) * outMin;
     }
 
     /** Map from one range to another, converting from an exponential value to a linear one
@@ -925,8 +925,8 @@ public:
     static float inline explin(float val, float inMin, float inMax, float outMin, float outMax)
     {
         //clipping
-        val = max(min(val, inMax), inMin);
-        return (log(val / inMin) / log(inMax / inMin) * (outMax - outMin)) + outMin;
+        val = std::max(std::min(val, inMax), inMin);
+        return (std::log(val / inMin) / std::log(inMax / inMin) * (outMax - outMin)) + outMin;
     }
 
     /** Restrict a signal to upper and lower bounds
@@ -1666,13 +1666,13 @@ public:
      * \param ch2 a vector containing left and right components of channel 2
      * \param xfader the cross-fader position, -1=100% ch1, 1=100% ch2, 0=an equal mix of both channels
      */
-    static vector<float> xfade(vector<float> &ch1, vector<float> &ch2, float xfader)
+    static std::vector<float> xfade(std::vector<float> &ch1, std::vector<float> &ch2, float xfader)
     {
         xfader = maxiMap::clamp(xfader, -1, 1);
         float xfNorm = maxiMap::linlin(xfader, -1, 1, 0, 1);
         float gainCh1 = sqrt(1.0 - xfNorm);
         float gainCh2 = sqrt(xfNorm);
-        vector<float> output(ch1.size(), 0.0);
+        std::vector<float> output(ch1.size(), 0.0);
         for (size_t i = 0; i < output.size(); i++)
         {
             output[i] = (ch1[i] * gainCh1) + (ch2[i] * gainCh2);
@@ -1687,8 +1687,8 @@ public:
      */
     static float xfade(float ch1, float ch2, float xfader)
     {
-        vector<float> vch1 = {ch1};
-        vector<float> vch2 = {ch2};
+        std::vector<float> vch1 = {ch1};
+        std::vector<float> vch2 = {ch2};
         return maxiXFade::xfade(vch1, vch2, xfader)[0];
     }
 };
@@ -2689,7 +2689,7 @@ class maxiEnvGen {
             size_t counter;
             bool hold;
         };
-        vector<envStage> stages;
+        std::vector<envStage> stages;
 
         maxiTrigger trigDetector;
         maxiTrigger holdDetector;
@@ -3011,7 +3011,7 @@ class maxiDynamics {
          */
         void setLookAhead(float length) {
             lookAheadSize = maxiConvert::msToSamps(length);
-            lookAheadSize = min(lookAheadSize, lookAheadDelay.size());
+            lookAheadSize = std::min(lookAheadSize, lookAheadDelay.size());
         }
         /**
          * \returns the look ahead time (in milliseconds)
@@ -3025,7 +3025,7 @@ class maxiDynamics {
          * \param winSize The size of the window (in milliseconds)
          */
         void setRMSWindowSize(float winSize) {
-            rms.setWindowSize(min(winSize, 500.f));
+            rms.setWindowSize(std::min(winSize, 500.f));
         }
 
         /**

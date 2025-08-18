@@ -1,7 +1,7 @@
 #include "SaxAnalysis.hpp"
 
 #include <array>
-#include <cstddef>
+#include <cmath>
 
 
 SaxAnalysis::SaxAnalysis(const float sample_rate) :
@@ -30,18 +30,33 @@ SaxAnalysis::SaxAnalysis(const float sample_rate) :
 
 
 inline float logEnvelopeFast(float linearEnv) {
-    static constexpr float MIN_ENV = 1e-4f;
-    static constexpr float SCALE = 6.64385619e-8f;  // Magic constant
-    static constexpr float OFFSET = 2.0f;
+    // -60 dBFS corresponds to a linear amplitude ratio of 10^(-60/20) = 10^(-3) = 0.001
+    static constexpr float MIN_ENV = 1e-3f;  // 10^(-60dB/20dB) = 0.001 linear
+    
+    // Mathematical derivation:
+    // We want to map linear amplitude [0.001, 1.0] to normalized range [0, 1]
+    // where 0.001 corresponds to -60 dBFS and 1.0 corresponds to 0 dBFS
+    //
+    // Using logarithmic mapping: output = (log2(input) - log2(min)) / (log2(max) - log2(min))
+    // log2(0.001) = log2(10^-3) = -3 * log2(10) ≈ -9.966
+    // log2(1.0) = 0
+    // Range = 0 - (-9.966) = 9.966
+    
+    static constexpr float LOG2_MIN_ENV = -3.0f * 3.321928095f;  // -3 * log2(10) ≈ -9.966
+    static constexpr float LOG2_MAX_ENV = 0.0f;                  // log2(1.0) = 0
+    static constexpr float LOG_RANGE = LOG2_MAX_ENV - LOG2_MIN_ENV;  // 9.966
+    static constexpr float INV_LOG_RANGE = 1.0f / LOG_RANGE;    // 1 / 9.966 ≈ 0.1003
 
-    // Clamp input
+    // Clamp input to minimum envelope value  
     linearEnv = (linearEnv > MIN_ENV) ? linearEnv : MIN_ENV;
 
-    // Ultra-fast log approximation using only integer operations
-    union { float f; uint32_t i; } vx = { linearEnv };
-    float y = (float)vx.i * SCALE - OFFSET;
+    // Precise logarithmic conversion
+    float log2_val = std::log2f(linearEnv);
+    
+    // Map to [0,1]: (log2_val - log2_min) / (log2_max - log2_min)
+    float y = (log2_val - LOG2_MIN_ENV) * INV_LOG_RANGE;
 
-    // Single branch-free clamp
+    // Clamp to [0,1] range (should be unnecessary given our math, but safety first)
     y = (y > 1.0f) ? 1.0f : y;
     y = (y < 0.0f) ? 0.0f : y;
 
@@ -84,7 +99,7 @@ float medianAbsoluteDeviation(std::array<float, N>& data) noexcept {
 }
 
 
-SaxAnalysis::parameters_t SaxAnalysis::Process(float x) {
+SaxAnalysis::parameters_t SaxAnalysis::Process(const float x) {
     parameters_t params = {};
 
     // Pre-filter
@@ -96,7 +111,7 @@ SaxAnalysis::parameters_t SaxAnalysis::Process(float x) {
     if (positive_zero_crossing) {
         size_t median_elapsed_samples = zc_median_filter_.process(elapsed_samples_);
         zc_buffer_.push(median_elapsed_samples);
-
+        elapsed_samples_ = 0;
     }
     // Convert zero crossing value to pitch
     size_t zc_value = zc_buffer_[zc_buffer_.size() - 1];
@@ -161,6 +176,7 @@ SaxAnalysis::parameters_t SaxAnalysis::Process(float x) {
     params.energy = ef_y;
     params.attack = ef_d_dy;
     params.brightness = br_high;
+    params.energy_crude = std::abs(x);
 
     return params;
 }

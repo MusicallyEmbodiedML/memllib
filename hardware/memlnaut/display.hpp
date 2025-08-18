@@ -13,8 +13,9 @@ extern TFT_eSPI tft;  // Invoke custom library
 
 class display {
 public:
-    display() : textSprite(&tft) {
-
+    display() : textSprite(&tft),
+        status_text{ "NoValue", "NoValue", "NoValue",
+                     "NoValue", "NoValue", "NoValue" } {
     }
 
     void setup() {
@@ -24,7 +25,7 @@ public:
         textSprite.setFreeFont(&FreeMono9pt7b);
         // tft.setTextFont(4);
         // tft.setTextColor(0xFC9F);
-        textSprite.createSprite(320, 20);
+        textSprite.createSprite(320, 40);
 
     }
 
@@ -55,19 +56,29 @@ public:
             for(size_t i=0; i < lines.size(); i++) {
                 textSprite.fillRect(0,0,320,20,TFT_BLACK);
                 textSprite.drawString(lines[i].c_str(), 0, 0);
-                textSprite.pushSprite(10,i*lineheight);
+                textSprite.pushSprite(4,i*lineheight);
             }
         }
 
         if (status_redraw) {
             status_redraw = false;
-            tft.fillRect(0, 220, 320, 20, TFT_BLACK);
-            textSprite.fillRect(0,0,320,20,TFT_BLACK);
-            textSprite.setTextColor(TFT_YELLOW, TFT_BLACK);
-            textSprite.drawString(status_text[0].c_str(), 0, 0);
-            textSprite.setTextColor(TFT_GREEN, TFT_BLACK);
-            textSprite.drawString(status_text[1].c_str(), 160, 0);
-            textSprite.pushSprite(10,220);
+            tft.fillRect(0, 200, 320, 40, TFT_BLACK);
+            textSprite.fillRect(0,0,320,40,TFT_BLACK);
+            static constexpr unsigned int status_colours[kNStatuses] = {
+                TFT_WHITE, TFT_RED, TFT_GREEN,
+                TFT_MAGENTA, TFT_YELLOW, TFT_CYAN
+            };
+            static constexpr unsigned int status_x[kNStatuses] = {
+                0, 104, 208, 0, 104, 208
+            };
+            static constexpr unsigned int status_y[kNStatuses] = {
+                0, 0, 0, 20, 20, 20
+            };
+            for (unsigned int n = 0; n < kNStatuses; ++n) {
+                textSprite.setTextColor(status_colours[n], TFT_BLACK);
+                textSprite.drawString(status_text[n].c_str(), status_x[n], status_y[n]);
+            }
+            textSprite.pushSprite(4,200);
             textSprite.setTextColor(TFT_WHITE, TFT_BLACK);
         }
     }
@@ -75,7 +86,7 @@ private:
     std::deque<String> lines;
     bool redraw=false;
     bool status_redraw = false;
-    static constexpr size_t kNStatuses = 2;
+    static constexpr size_t kNStatuses = 6;
     String status_text[kNStatuses];
     TFT_eSprite textSprite;
 };

@@ -138,14 +138,14 @@ public:
         bpf4Val = bpfEnv4.play(bpf4Val);
         WRITE_VOLATILE(sharedMem::f3, bpf4Val);
     #else
-        SaxAnalysis::parameters_t params = saxAnalysis->Process(x.L);
+        SaxAnalysis::parameters_t params = saxAnalysis->Process(x.L + x.R);
         WRITE_VOLATILE_STRUCT(sharedMem::saxParams, params);
     #endif
 
+/*
         smoother.Process(neuralNetOutputs.data(), smoothParams.data());
 
         // Process drum machine
-
 #if BREAKBEAT
         //cast phase with rounding
         size_t currentSegment = static_cast<size_t>(phase / sample_info.sample_count / segLength);
@@ -221,6 +221,8 @@ public:
         }
 
         stereosample_t ret { y, y };
+*/
+        stereosample_t ret {0,0};
 
         return ret;
     }

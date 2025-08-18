@@ -249,12 +249,6 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
 void InterfaceRL::setup(size_t n_inputs, size_t n_outputs, std::shared_ptr<display> disp) {
     this->setup(n_inputs, n_outputs);
     m_scr_ptr = disp.get(); // Store the pointer to the display object
-#if XIASRI
-    if (m_scr_ptr) {
-        m_scr_ptr->statusPost("No value", 0);
-        m_scr_ptr->statusPost("No value", 1);
-    }
-#endif
 }
 
 void InterfaceRL::optimise() {
@@ -447,14 +441,15 @@ void InterfaceRL::readAnalysisParameters() {
         float v[SaxAnalysis::kN_Params];
     } param_u;
     param_u.p = READ_VOLATILE_STRUCT(sharedMem::saxParams);
-    for(size_t i = 0; i < SaxAnalysis::kN_Params; i++) {
-        actorControlInput[i] = param_u.v[i];
-    }
     // Ensure the bias is set correctly
     if (actorControlInput.size() < SaxAnalysis::kN_Params + bias) {
         actorControlInput.resize(stateSize + bias, 0.0f);
     }
     actorControlInput[actorControlInput.size()-1] = 1.f; // bias
+    // Load numbers
+    for(size_t i = 0; i < SaxAnalysis::kN_Params; i++) {
+        actorControlInput[i] = param_u.v[i];
+    }
 #endif
     PERIODIC_DEBUG(40, { // Ensure PERIODIC_DEBUG is defined (e.g. in PicoDefs.hpp or sharedMem.hpp)
         DEBUG_PRINTLN(actorControlInput[0]);
@@ -490,8 +485,12 @@ void InterfaceRL::generateAction(bool donthesitate) {
             }
         }
 
-        m_scr_ptr->statusPost(String(actorOutput[0], 4), 0);
-        m_scr_ptr->statusPost(String(actorOutput[1], 4), 1);
+        // Display input parameters
+        for (unsigned int n = 0; n < SaxAnalysis::kN_Params; ++n) {
+            if (m_scr_ptr) {
+                m_scr_ptr->statusPost(String(actorControlInput[n], 4), n);
+            }
+        }
         SendParamsToQueue(actorOutput);
         action = actorOutput;
 
