@@ -6,11 +6,11 @@ MEMLNaut* MEMLNaut::instance = nullptr;
 
 #define FAST_MEM __not_in_flash("memlnaut")
 
-struct repeating_timer FAST_MEM timerDisplay;
-inline bool __not_in_flash_func(displayUpdate)(__unused struct repeating_timer *t) {
-    MEMLNaut::Instance()->disp->Draw();
-    return true;
-}
+// struct repeating_timer FAST_MEM timerDisplay;
+// inline bool __not_in_flash_func(displayUpdate)(__unused struct repeating_timer *t) {
+//     MEMLNaut::Instance()->disp->Draw();
+//     return true;
+// }
 
 struct repeating_timer FAST_MEM timerTouch;
 inline bool __not_in_flash_func(touchUpdate)(__unused struct repeating_timer *t) {
@@ -171,8 +171,8 @@ MEMLNaut::MEMLNaut() {
     disp = std::make_unique<DisplayDriver>();
     disp->Setup();
 
-    add_repeating_timer_ms(39, displayUpdate, NULL, &timerDisplay);
-    add_repeating_timer_ms(10, touchUpdate, NULL, &timerTouch);
+    // add_repeating_timer_ms(39, displayUpdate, NULL, &timerDisplay);
+    // add_repeating_timer_ms(10, touchUpdate, NULL, &timerTouch);
 
 }
 
@@ -272,6 +272,11 @@ void MEMLNaut::loop() {
     if (loopCallback) {
         loopCallback();
     }
+
+
+
+    PERIODIC_RUN(MEMLNaut::Instance()->disp->PollTouch();, 10);
+    PERIODIC_RUN(MEMLNaut::Instance()->disp->Draw();, 39);
 }
 
 void MEMLNaut::SyncOnBoot() {

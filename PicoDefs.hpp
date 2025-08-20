@@ -31,5 +31,16 @@
 #define DEBUG_PRINTF(...)  
 #endif
 
+#define PERIODIC_RUN(code, freq_ms) \
+{ \
+    static __not_in_flash("periodicupdate") size_t lastUpdate = 0; \
+    size_t now = millis(); \
+    if (now - lastUpdate > (freq_ms)) { \
+        lastUpdate = now; \
+        code; \
+    } \
+}  
+
+
 
 #endif  // __MEML_PICO_HPP__
