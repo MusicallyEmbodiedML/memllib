@@ -74,6 +74,9 @@ void IMLInterface::setup(size_t n_inputs, size_t n_outputs)
     });
     MEMLNaut::Instance()->disp->AddView(fileLoadView);
 
+    nnOutputsGraphView = std::make_shared<BarGraphView>("NN Outputs", n_outputs, 4, TFT_GREEN, 0.f, 1.f);
+    MEMLNaut::Instance()->disp->AddView(nnOutputsGraphView);
+
 }
 
 // void IMLInterface::setup(size_t n_inputs, size_t n_outputs, std::shared_ptr<display> disp)
@@ -96,6 +99,8 @@ bool IMLInterface::SetTrainingMode(training_mode_t training_mode)
         has_trained = MLTraining_();
     }
     training_mode_ = training_mode;
+
+    resetMinMaxFlag = true; // Reset min/max for bar graph
 
     return has_trained;
 }
@@ -281,6 +286,8 @@ void IMLInterface::MLInference_(std::vector<float> input)
     // Process inferenced data
     output_state_ = output;
     SendParamsToQueue(output);
+    nnOutputsGraphView->UpdateValues(output, resetMinMaxFlag);
+    resetMinMaxFlag= false;
 }
 
 void IMLInterface::MLRandomise_()
@@ -294,6 +301,7 @@ void IMLInterface::MLRandomise_()
     mlp_stored_weights_ = mlp_->GetWeights();
     mlp_->DrawWeights(randomScale * randomScale);
     randomised_state_ = true;
+    resetMinMaxFlag = true; // Reset min/max for bar graph
 }
 
 bool IMLInterface::MLTraining_()
