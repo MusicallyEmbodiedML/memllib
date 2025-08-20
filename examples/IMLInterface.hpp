@@ -89,6 +89,8 @@ protected:
     void MLRandomise_();
     bool MLTraining_();
     std::vector<float> ZoomCoordinates(const std::vector<float>& coord, const std::vector<float>& zoom_centre, float factor);
+
+    float randomScale=1.f;
 };
 
 #endif  // __IML_INTERFACE_HPP__

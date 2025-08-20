@@ -110,17 +110,11 @@ void DisplayDriver::Draw() {
     }
     redraw_internal_ = false;
 
-    // for (const auto &view : views_) {
-    //     if (view->NeedRedraw()) {
-    //         view->Draw();  // No longer passing tft_
-    //         break;
-    //     }
-    // }
 
 }
 
 void DisplayDriver::PollTouch() {
-    lastTouchTime_ = millis();
+    // lastTouchTime_ = millis();
 
     uint16_t x, y;
     bool pressed = tft_.getTouch(&x, &y);
@@ -162,6 +156,7 @@ void DisplayDriver::PollTouch() {
                 // If view changed, redraw the new view
                 views_[currentViewIndex_]->OnDisplay();  // Call OnDisplay for the new view
             }
+            isTouchPressed_ = true;
         } else if (isTouchPressed_) {
             //drag event
         } 
@@ -175,8 +170,8 @@ void DisplayDriver::PollTouch() {
             // Serial.print(x);
             // Serial.print(", y: ");
             // Serial.println(y);
+            isTouchPressed_ = false;
         }
     }
 
-    isTouchPressed_ = pressed;
 }

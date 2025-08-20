@@ -234,6 +234,7 @@ void MEMLNaut::setLoopCallback(LoopCallback cb) {
 }
 
 
+size_t displayTS=0;
 
 void MEMLNaut::loop() {
 
@@ -259,6 +260,14 @@ void MEMLNaut::loop() {
             state.lastValue = currentValue;
         }
     }
+
+    // auto now = millis();
+    // if (now - displayTS > 35) {
+    //     displayTS = now;
+    //     if (disp) {
+    //         disp->Draw();
+    //     }
+    // }
 
     if (loopCallback) {
         loopCallback();

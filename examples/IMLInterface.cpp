@@ -91,6 +91,7 @@ bool IMLInterface::SetTrainingMode(training_mode_t training_mode)
 
     if (training_mode == INFERENCE_MODE && training_mode_ == TRAINING_MODE) {
         msgView->post("Optimising... ");
+        delay(200);
         // Train the network!
         has_trained = MLTraining_();
     }
@@ -191,12 +192,15 @@ bool IMLInterface::ClearData()
 bool IMLInterface::Randomise()
 {
     if (training_mode_ == TRAINING_MODE) {
-        DEBUG_PRINTLN("Randomising weights...");
+        DEBUG_PRINTLN("Randomising weights (scale = " + String(randomScale) + ")");
         MLRandomise_();
         MLInference_(input_state_);
         return true;
     } else {
-        DEBUG_PRINTLN("Switch to training mode first.");
+        //randomise the inference model
+        mlp_->DrawWeights(1.f * randomScale);
+        mlp_stored_weights_ = mlp_->GetWeights();
+        msgView->post("Randomising inference model (scale = " + String(randomScale) + ")");
         return false;
     }
 }
@@ -288,7 +292,7 @@ void IMLInterface::MLRandomise_()
 
     // Randomize weights
     mlp_stored_weights_ = mlp_->GetWeights();
-    mlp_->DrawWeights();
+    mlp_->DrawWeights(randomScale * randomScale);
     randomised_state_ = true;
 }
 
@@ -405,6 +409,11 @@ void IMLInterface::bindInterface(bool disable_joystick)
         // Scale value from 0-1 range to 0-1
         this->SetZoomFactor(value);
         msgView->post("Zoom factor = " + String(value));
+    });
+    MEMLNaut::Instance()->setRVY1Callback([this](float value) {
+        // Scale random purturbations from 0-1 range to 0-1
+        this->randomScale = value;
+        msgView->post("Random scaling = " + String(value));
     });
 
     // Set up loop callback

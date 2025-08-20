@@ -231,7 +231,7 @@ bool AudioDriver::Setup() {
     config.mic_input = false;
     config.line_level = 3;
     config.mic_gain_dB = 0;
-    config.output_volume = 0.5;
+    config.output_volume = 0.8;
 
     return Setup(config);
 }

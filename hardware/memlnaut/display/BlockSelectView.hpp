@@ -24,12 +24,12 @@ public:
             for(int j=0; j < 2; j++) {
 
                 auto button = std::make_shared<ButtonView>(String(idx), idx, buttonColour);
-                rect bounds = { area.x + 10 + (i * 60), area.y + 10 + (j*60), 50, 50 }; // Example bounds
+                rect bounds = { area.x + 10 + (i * 60), area.y + 10 + (j*60), 50, 50 };
                 AddSubView(button, bounds);
                 button->SetReleaseCallback([this](size_t id) { 
-                    Serial.print("Button pressed: ");
-                    Serial.println(id);
-                    cb(id);
+                    if (cb) {
+                        cb(id);
+                    }
                 });
                 buttons.push_back(button);
                 idx++;

@@ -17,7 +17,7 @@ public:
     void OnDraw() override {
         TFT_eSprite textSprite(scr);
         textSprite.createSprite(320, 20);
-        textSprite.setFreeFont(&FreeMono9pt7b);
+        textSprite.setTextFont(2);
         scr->fillRect(area.x, area.y, area.w, area.h, TFT_BLACK);
         constexpr int32_t lineheight = 20;
         textSprite.setTextColor(TFT_WHITE, TFT_BLACK);
@@ -32,9 +32,22 @@ public:
 
     void post(String str) {
         lines.push_back(str);
-        if(lines.size() > 9) {
+        if(lines.size() > maxLines) {
             lines.pop_front();
         }
+        redraw();
+    }
+
+    void setMaxLines(size_t max) {
+        maxLines = max;
+        if (lines.size() > maxLines) {
+            lines.resize(maxLines);
+        }
+        redraw();
+    }
+
+    void setLineWidth(int width) {
+        lineWidth = width;
         redraw();
     }
 
@@ -42,6 +55,8 @@ public:
 
 private:
     std::deque<String> lines;
+    size_t maxLines = 9; // Maximum number of lines to display
+    int lineWidth = 320; // Width of each line in pixels
 };
 
 #endif 
