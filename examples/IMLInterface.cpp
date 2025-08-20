@@ -29,33 +29,78 @@ void IMLInterface::setup(size_t n_inputs, size_t n_outputs)
     zoom_enabled_ = false;
     zoom_factor_ = 0.5f;
 
-     DEBUG_PRINTLN("IMLInterface setup done");
-     DEBUG_PRINT("Address of n_inputs_: ");
-     DEBUG_PRINTLN(reinterpret_cast<uintptr_t>(&n_inputs_));
-     DEBUG_PRINT("Inputs: ");
-     DEBUG_PRINT(n_inputs_);
-     DEBUG_PRINT(", Outputs: ");
-     DEBUG_PRINTLN(n_outputs_);
+    DEBUG_PRINTLN("IMLInterface setup done");
+    DEBUG_PRINT("Address of n_inputs_: ");
+    DEBUG_PRINTLN(reinterpret_cast<uintptr_t>(&n_inputs_));
+    DEBUG_PRINT("Inputs: ");
+    DEBUG_PRINT(n_inputs_);
+    DEBUG_PRINT(", Outputs: ");
+    DEBUG_PRINTLN(n_outputs_);
+
+    
+    String FILENAMEROOT="mlp_iml_";
+    msgView = std::make_shared<MessageView>("Messages");
+    MEMLNaut::Instance()->disp->AddView(msgView);
+    fileSaveView = std::make_shared<BlockSelectView>("Save Model", TFT_BLUE);
+    fileSaveView->SetOnSelectCallback([this,FILENAMEROOT] (size_t id) {
+        fileSaveView->SetMessage("Saving model " + String(id));
+        if (MEMLNaut::Instance()->startSD()) {
+            if (mlp_->SaveMLPNetworkSD((FILENAMEROOT + String(id) + String(".bin")).c_str())) {
+                fileSaveView->SetMessage("Model saved successfully to slot " + String(id));
+            } else {
+                fileSaveView->SetMessage("Failed to save model");
+            }
+            MEMLNaut::Instance()->stopSD();
+        } else {
+            fileSaveView->SetMessage("SD card error - is it inserted and formatted?");
+        }
+    });
+    MEMLNaut::Instance()->disp->AddView(fileSaveView);
+
+    fileLoadView = std::make_shared<BlockSelectView>("Load Model", TFT_PURPLE);
+    fileLoadView->SetOnSelectCallback([this,FILENAMEROOT] (size_t id) {
+        fileLoadView->SetMessage("Loading model " + String(id));
+        if (MEMLNaut::Instance()->startSD()) {
+            if (mlp_->LoadMLPNetworkSD((FILENAMEROOT + String(id) + String(".bin")).c_str())) {
+                fileLoadView->SetMessage("Model loaded successfully ");
+            } else {
+                fileLoadView->SetMessage("Failed to load model");
+            }
+            MEMLNaut::Instance()->stopSD();
+        } else {
+            fileLoadView->SetMessage("SD card error - is it inserted and formatted?");
+        }
+
+    });
+    MEMLNaut::Instance()->disp->AddView(fileLoadView);
+
+    nnOutputsGraphView = std::make_shared<BarGraphView>("NN Outputs", n_outputs, 4, TFT_GREEN, 0.f, 1.f);
+    MEMLNaut::Instance()->disp->AddView(nnOutputsGraphView);
+
 }
 
-void IMLInterface::setup(size_t n_inputs, size_t n_outputs, std::shared_ptr<display> disp)
-{
-    setup(n_inputs, n_outputs);
-    disp_ = disp;
-}
+// void IMLInterface::setup(size_t n_inputs, size_t n_outputs, std::shared_ptr<display> disp)
+// {
+//     setup(n_inputs, n_outputs);
+//     disp_ = disp;
+// }
 
 bool IMLInterface::SetTrainingMode(training_mode_t training_mode)
 {
-     DEBUG_PRINT("Training mode: ");
-     DEBUG_PRINTLN(training_mode == INFERENCE_MODE ? "Inference" : "Training");
+    // DEBUG_PRINT("Training mode: ");
+    // DEBUG_PRINTLN(training_mode == INFERENCE_MODE ? "Inference" : "Training");
 
     bool has_trained = false;
 
     if (training_mode == INFERENCE_MODE && training_mode_ == TRAINING_MODE) {
+        msgView->post("Optimising... ");
+        delay(200);
         // Train the network!
         has_trained = MLTraining_();
     }
     training_mode_ = training_mode;
+
+    resetMinMaxFlag = true; // Reset min/max for bar graph
 
     return has_trained;
 }
@@ -64,22 +109,22 @@ void IMLInterface::ProcessInput()
 {
     // Check if input is updated
     if (perform_inference_ && input_updated_) {
-         DEBUG_PRINT("Input state: ");
+        //  DEBUG_PRINT("Input state: ");
         // for (auto val : input_state_) {
         //     DEBUG_PRINT(val);
         //     DEBUG_PRINT(" ");
         // }
-         DEBUG_PRINTLN();
+        //  DEBUG_PRINTLN();
         // Only zoom here
         std::vector<float> zoomed_input = input_state_;
         if (zoom_enabled_) {
             zoomed_input = ZoomCoordinates(input_state_, zoom_centre_, zoom_factor_);
-             DEBUG_PRINT("Zoomed input: ");
+            //  DEBUG_PRINT("Zoomed input: ");
             // for (auto val : zoomed_input) {
             //     DEBUG_PRINT(val);
             //     DEBUG_PRINT(" ");
             // }
-             DEBUG_PRINTLN();
+            //  DEBUG_PRINTLN();
         }
         MLInference_(zoomed_input);
         input_updated_ = false;
@@ -152,12 +197,15 @@ bool IMLInterface::ClearData()
 bool IMLInterface::Randomise()
 {
     if (training_mode_ == TRAINING_MODE) {
-        DEBUG_PRINTLN("Randomising weights...");
+        DEBUG_PRINTLN("Randomising weights (scale = " + String(randomScale) + ")");
         MLRandomise_();
         MLInference_(input_state_);
         return true;
     } else {
-        DEBUG_PRINTLN("Switch to training mode first.");
+        //randomise the inference model
+        mlp_->DrawWeights(1.f * randomScale);
+        mlp_stored_weights_ = mlp_->GetWeights();
+        msgView->post("Randomising inference model (scale = " + String(randomScale) + ")");
         return false;
     }
 }
@@ -172,9 +220,7 @@ void IMLInterface::SetIterations(size_t iterations)
 void IMLInterface::SetZoomEnabled(bool enabled)
 {
     zoom_enabled_ = enabled;
-    if (disp_) {
-        disp_->post(enabled ? "Zoom enabled" : "Zoom disabled");
-    }
+    msgView->post(enabled ? "Zoom enabled" : "Zoom disabled");
     if (enabled) {
         zoom_centre_ = input_state_;
         DEBUG_PRINTLN("Zoom centre: ");
@@ -240,6 +286,8 @@ void IMLInterface::MLInference_(std::vector<float> input)
     // Process inferenced data
     output_state_ = output;
     SendParamsToQueue(output);
+    nnOutputsGraphView->UpdateValues(output, resetMinMaxFlag);
+    resetMinMaxFlag= false;
 }
 
 void IMLInterface::MLRandomise_()
@@ -251,14 +299,16 @@ void IMLInterface::MLRandomise_()
 
     // Randomize weights
     mlp_stored_weights_ = mlp_->GetWeights();
-    mlp_->DrawWeights();
+    mlp_->DrawWeights(randomScale * randomScale);
     randomised_state_ = true;
+    resetMinMaxFlag = true; // Reset min/max for bar graph
 }
 
 bool IMLInterface::MLTraining_()
 {
     if (!mlp_) {
         DEBUG_PRINTLN("ML not initialized!");
+        msgView->post("ML not initialized!");
         return false;
     }
     // Restore old weights
@@ -266,6 +316,7 @@ bool IMLInterface::MLTraining_()
         mlp_->SetWeights(mlp_stored_weights_);
     }
     randomised_state_ = false;
+    msgView->post("Preparing for training...");
 
     // Prepare for training
     // Extract dataset to training pair
@@ -277,6 +328,7 @@ bool IMLInterface::MLTraining_()
     DEBUG_PRINTLN(dataset.second.size());
     if (!dataset.first.size() || !dataset.second.size()) {
         DEBUG_PRINTLN("Empty dataset!");
+        msgView->post("Empty dataset!");
         return false;
     }
     DEBUG_PRINT("Feature dim ");
@@ -287,18 +339,21 @@ bool IMLInterface::MLTraining_()
         DEBUG_PRINTLN("Empty dataset dimensions!");
         return false;
     }
+    msgView->post("Training with " + String(dataset.first.size()) + " examples");
 
-    // Training loop
+    // // Training loop
     DEBUG_PRINT("Training for max ");
     DEBUG_PRINT(n_iterations_);
     DEBUG_PRINTLN(" iterations...");
+    msgView->post("Max " + String(n_iterations_) + " iterations");
     float loss = mlp_->Train(dataset,
             1.,
             n_iterations_,
             0.00001,
             false);
-    DEBUG_PRINT("Trained, loss = ");
-    DEBUG_PRINTLN(loss, 10);
+    // DEBUG_PRINT("Trained, loss = ");
+    // DEBUG_PRINTLN(loss, 10);
+    msgView->post("Trained, loss = " + String(loss, 10));
     return true;
 }
 
@@ -306,34 +361,33 @@ void IMLInterface::bindInterface(bool disable_joystick)
 {
     // Set up momentary switch callbacks
     MEMLNaut::Instance()->setMomA1Callback([this]() {
-        if (this->Randomise() && disp_) {
-            disp_->post("Randomised");
+        if (this->Randomise()) {
+            msgView->post("Randomised");
         }
     });
     MEMLNaut::Instance()->setMomA2Callback([this]() {
-        if (this->ClearData() && disp_) {
-            disp_->post("Dataset cleared");
+        if (this->ClearData()) {
+            msgView->post("Dataset cleared");
         }
     });
 
     // Set up toggle switch callbacks
     MEMLNaut::Instance()->setTogA1Callback([this](bool state) {
-        if (disp_) {
-            disp_->post(state ? "Training mode" : "Inference mode");
-        }
+        msgView->post(state ? "Training mode" : "Inference mode");
         bool trained = this->SetTrainingMode(state ? TRAINING_MODE : INFERENCE_MODE);
-        if (disp_ && state == false && trained) {
-            disp_->post("Model trained");
-        }
+        // if (state == false && trained) {
+        //     msgView->post("Model trained");
+        // }
     });
+
     MEMLNaut::Instance()->setTogB2Callback([this](bool state) {
         this->SetZoomEnabled(state);
     });
 
     MEMLNaut::Instance()->setJoySWCallback([this](bool state) {
         bool saved = this->SaveInput(state ? STORE_VALUE_MODE : STORE_POSITION_MODE);
-        if (disp_ && saved) {
-            disp_->post(state ? "Where do you want it?" : "Here!");
+        if (saved) {
+            msgView->post(state ? "Where do you want it?" : "Here!");
         }
     });
 
@@ -357,16 +411,17 @@ void IMLInterface::bindInterface(bool disable_joystick)
         value = 1.0f + (value * 2999.0f);
         const size_t valInt = static_cast<size_t>(value);
         this->SetIterations(valInt);
-        if (disp_) {
-            disp_->post("Training iterations = " + String(valInt));
-        }
+        msgView->post("Training iterations = " + String(valInt));
     });
     MEMLNaut::Instance()->setRVX1Callback([this](float value) {
         // Scale value from 0-1 range to 0-1
         this->SetZoomFactor(value);
-        if (disp_) {
-            disp_->post("Zoom factor = " + String(value));
-        }
+        msgView->post("Zoom factor = " + String(value));
+    });
+    MEMLNaut::Instance()->setRVY1Callback([this](float value) {
+        // Scale random purturbations from 0-1 range to 0-1
+        this->randomScale = value;
+        msgView->post("Random scaling = " + String(value));
     });
 
     // Set up loop callback
@@ -424,9 +479,7 @@ void IMLInterface::bindInterface(bool disable_joystick)
     });
 
     MEMLNaut::Instance()->setReSWCallback([this]() {
-        if (disp_) {
-            disp_->post("Re switch pressed");
-        }
+        msgView->post("Re switch pressed");
 
         sdtest=true;
     });

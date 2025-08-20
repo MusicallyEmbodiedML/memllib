@@ -80,7 +80,7 @@ void MIDIInOut::Setup(size_t n_outputs,
 
 void MIDIInOut::Poll()
 {
-    RefreshUART_(); // Refresh UART if needed
+    // RefreshUART_(); // Refresh UART if needed
 
     MIDI.read();
 }
