@@ -4,14 +4,6 @@
 #include "../hardware/memlnaut/MEMLNaut.hpp" // Required for MEMLNaut::Instance()
 // display.hpp is included via InterfaceRL.hpp
 
-// XIASRI and bias are defined in InterfaceRL.hpp, so they are available here.
-// PERIODIC_DEBUG is likely defined in PicoDefs.hpp or sharedMem.hpp, included via InterfaceRL.hpp
-
-
-#if XIASRI
-#include "../synth/SaxAnalysis.hpp"
-#endif
-
 
 // Protected helper method implementations
 void InterfaceRL::_perform_like_action() {
@@ -184,14 +176,9 @@ void InterfaceRL::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf)
 
 void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
 {
-#if XIASRI
-    const size_t nAudioAnalysisInputs = SaxAnalysis::kN_Params;
-#else
-    const size_t nAudioAnalysisInputs = 0;
-#endif
-    controlSize = n_inputs + nAudioAnalysisInputs;
-    InterfaceBase::setup(controlSize, n_outputs);
+    controlSize = n_inputs; // control inputs only
 
+    InterfaceBase::setup(controlSize, n_outputs);
 
     stateSize = controlSize; //state = control inputs + synth params
 
@@ -427,46 +414,16 @@ void InterfaceRL::optimise() {
     }
 }
 
-void InterfaceRL::readAnalysisParameters() {
+void InterfaceRL::readAnalysisParameters(std::vector<float> params) {
     //read analysis parameters
-#if XIASRI
-#if OLD_LISTENING_MODE
-    actorControlInput[0] = READ_VOLATILE(sharedMem::f0);
-    actorControlInput[1] = READ_VOLATILE(sharedMem::f1);
-    actorControlInput[2] = READ_VOLATILE(sharedMem::f2);
-    actorControlInput[3] = READ_VOLATILE(sharedMem::f3);
-#else
-    union {
-        SaxAnalysis::parameters_t p;
-        float v[SaxAnalysis::kN_Params];
-    } param_u;
-    param_u.p = READ_VOLATILE_STRUCT(sharedMem::saxParams);
-    // Ensure the bias is set correctly
-    if (actorControlInput.size() < SaxAnalysis::kN_Params + bias) {
-        actorControlInput.resize(stateSize + bias, 0.0f);
+    if (params.size() != n_inputs_) {
+        DEBUG_PRINTLN("Error: Incorrect number of analysis parameters received.");
+        return;
     }
-    actorControlInput[actorControlInput.size()-1] = 1.f; // bias
-    // Load numbers
-    for(size_t i = 0; i < SaxAnalysis::kN_Params; i++) {
-        actorControlInput[i] = param_u.v[i];
-    }
-#endif
-    PERIODIC_DEBUG(40, { // Ensure PERIODIC_DEBUG is defined (e.g. in PicoDefs.hpp or sharedMem.hpp)
-        DEBUG_PRINTLN(actorControlInput[0]);
-    })
-    newInput = true;
-    if (m_scr_ptr) {
-        // Calculate argmax of actorControlInput
-        size_t maxIndex = 0;
-        for (size_t i = 1; i < actorControlInput.size()-1; ++i) {
-            if (actorControlInput[i] > actorControlInput[maxIndex]) {
-                maxIndex = i;
-            }
-        }
-        //m_scr_ptr->statusPost("Max:" + String(maxIndex), 1);
-        //m_scr_ptr->statusPost(String(actorControlInput[maxIndex], 4), 0);
-    }
-#endif
+    // Copy params and add bias efficiently
+    actorControlInput = params;
+    actorControlInput.push_back(1.0f);
+
     generateAction(true);
 }
 
@@ -485,12 +442,6 @@ void InterfaceRL::generateAction(bool donthesitate) {
             }
         }
 
-        // Display input parameters
-        for (unsigned int n = 0; n < SaxAnalysis::kN_Params; ++n) {
-            if (m_scr_ptr) {
-                m_scr_ptr->statusPost(String(actorControlInput[n], 4), n);
-            }
-        }
         SendParamsToQueue(actorOutput);
         action = actorOutput;
 

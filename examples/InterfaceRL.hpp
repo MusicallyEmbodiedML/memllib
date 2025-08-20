@@ -17,8 +17,6 @@
 
 #define RL_MEM __not_in_flash("rlmem")
 
-#define XIASRI 1
-
 struct trainRLItem {
     std::vector<float> state ;
     std::vector<float> action;
@@ -43,7 +41,7 @@ public:
         newInput = true;
     }
 
-    void readAnalysisParameters();
+    void readAnalysisParameters(std::vector<float> params);
 
     void generateAction(bool donthesitate=false);
 
@@ -133,7 +131,6 @@ private:
 
     size_t optimiseDivisor = 40;
     size_t optimiseCounter = 0;
-
     bool newInput=false;
 
     const std::vector<ACTIVATION_FUNCTIONS> layers_activfuncs = {

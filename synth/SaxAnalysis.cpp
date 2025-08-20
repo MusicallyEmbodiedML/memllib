@@ -32,7 +32,7 @@ SaxAnalysis::SaxAnalysis(const float sample_rate) :
 inline float logEnvelopeFast(float linearEnv) {
     // -60 dBFS corresponds to a linear amplitude ratio of 10^(-60/20) = 10^(-3) = 0.001
     static constexpr float MIN_ENV = 1e-3f;  // 10^(-60dB/20dB) = 0.001 linear
-    
+
     // Mathematical derivation:
     // We want to map linear amplitude [0.001, 1.0] to normalized range [0, 1]
     // where 0.001 corresponds to -60 dBFS and 1.0 corresponds to 0 dBFS
@@ -41,18 +41,18 @@ inline float logEnvelopeFast(float linearEnv) {
     // log2(0.001) = log2(10^-3) = -3 * log2(10) ≈ -9.966
     // log2(1.0) = 0
     // Range = 0 - (-9.966) = 9.966
-    
+
     static constexpr float LOG2_MIN_ENV = -3.0f * 3.321928095f;  // -3 * log2(10) ≈ -9.966
     static constexpr float LOG2_MAX_ENV = 0.0f;                  // log2(1.0) = 0
     static constexpr float LOG_RANGE = LOG2_MAX_ENV - LOG2_MIN_ENV;  // 9.966
     static constexpr float INV_LOG_RANGE = 1.0f / LOG_RANGE;    // 1 / 9.966 ≈ 0.1003
 
-    // Clamp input to minimum envelope value  
+    // Clamp input to minimum envelope value
     linearEnv = (linearEnv > MIN_ENV) ? linearEnv : MIN_ENV;
 
     // Precise logarithmic conversion
     float log2_val = std::log2f(linearEnv);
-    
+
     // Map to [0,1]: (log2_val - log2_min) / (log2_max - log2_min)
     float y = (log2_val - LOG2_MIN_ENV) * INV_LOG_RANGE;
 

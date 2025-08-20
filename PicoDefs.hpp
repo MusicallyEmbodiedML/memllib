@@ -40,7 +40,7 @@ inline T read_volatile_struct(const volatile T& src) {
 
 #define READ_VOLATILE_STRUCT(var) read_volatile_struct(var)
 
-#define ALLOW_DEBUG
+#define ALLOW_DEBUG    1
 
 #ifdef ALLOW_DEBUG
 #define DEBUG_PRINTF(...) Serial.printf(__VA_ARGS__)
