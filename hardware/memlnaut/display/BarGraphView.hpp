@@ -83,6 +83,23 @@ public:
 
             // Update running max/min
             //TODO: min/max markers
+            if (newValues[i] > runningMax[i]) {
+
+                float normalizedOldMaxValue = (runningMax[i] - rangeLow) * rangeTotalInv;
+                int oldMaxBarHeight = static_cast<int>(normalizedOldMaxValue * barSectionHeight);
+                int oldmaxy = area.y + area.h - offsetY - oldMaxBarHeight;
+                scr->drawLine(x,oldmaxy, x+barwidth, oldmaxy, TFT_BLACK);
+
+                runningMax[i] = newValues[i];
+
+                normalizedOldMaxValue = (runningMax[i] - rangeLow) * rangeTotalInv;
+                oldMaxBarHeight = static_cast<int>(normalizedOldMaxValue * barSectionHeight);
+                oldmaxy = area.y + area.h - offsetY - oldMaxBarHeight;
+                scr->drawLine(x,oldmaxy, x+barwidth, oldmaxy, TFT_RED);
+            }
+            if (newValues[i] < runningMin[i]) {
+                runningMin[i] = newValues[i];  
+            }
         }
         oldValues = newValues;  // Update old values after drawing
         drawnValues = true;
