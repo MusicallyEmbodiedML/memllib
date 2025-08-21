@@ -1,6 +1,8 @@
 #include "MIDIInOut.hpp"
 #include <Arduino.h>
 #include "../PicoDefs.hpp"
+#include <unordered_set>
+
 
 
 struct CustomMIDISettings : public midi::DefaultSettings {
@@ -39,9 +41,21 @@ void MIDIInOut::Setup(size_t n_outputs,
     delay(100); // Allow port to stabilize
 
     // Initialize CC numbers to default values [0 .. (n_outputs-1)]
-    static const size_t cc_start = 14;
-    for (size_t i = 0; i < n_outputs; i++) {
-        cc_numbers_[i] = static_cast<uint8_t>(i + cc_start);
+    std::vector<int>  midiShitList = {0, 6,7, 8, 10, 32, 38, 39,41, 43};
+
+    std::unordered_set<int> excludeSet(midiShitList.begin(), midiShitList.end());
+    std::vector<int> ccnums;
+    ccnums.reserve(127 - midiShitList.size()); // pre-allocate
+
+    for(int i = 0; i < 127; i++) {
+        if(excludeSet.find(i) == excludeSet.end()) {
+            ccnums.push_back(i);
+        }
+    }
+
+    cc_numbers_.resize(ccnums.size());
+    for(size_t i=0; i < ccnums.size();i++) {
+        cc_numbers_[i] = static_cast<uint8_t>(ccnums[i]);
     }
 
     if (midi_through) {
