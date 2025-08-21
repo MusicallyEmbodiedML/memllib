@@ -65,6 +65,8 @@ private:
     TFT_eSprite leftButton, title, rightButton;
     rect mainArea;
 
+    int lastTouchX, lastTouchY;
+
 };
 
 

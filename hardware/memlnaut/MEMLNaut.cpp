@@ -12,12 +12,12 @@ MEMLNaut* MEMLNaut::instance = nullptr;
 //     return true;
 // }
 
-struct repeating_timer FAST_MEM timerTouch;
-inline bool __not_in_flash_func(touchUpdate)(__unused struct repeating_timer *t) {
-    // scr->update();
-    MEMLNaut::Instance()->disp->PollTouch();
-    return true;
-}
+// struct repeating_timer FAST_MEM timerTouch;
+// inline bool __not_in_flash_func(touchUpdate)(__unused struct repeating_timer *t) {
+//     // scr->update();
+//     MEMLNaut::Instance()->disp->PollTouch();
+//     return true;
+// }
 
 
 // Static interrupt handlers implementation
@@ -275,7 +275,7 @@ void MEMLNaut::loop() {
 
 
 
-    PERIODIC_RUN(MEMLNaut::Instance()->disp->PollTouch();, 10);
+    PERIODIC_RUN(MEMLNaut::Instance()->disp->PollTouch();, 30);
     PERIODIC_RUN(MEMLNaut::Instance()->disp->Draw();, 39);
 }
 

@@ -117,29 +117,24 @@ void DisplayDriver::PollTouch() {
     // lastTouchTime_ = millis();
 
     uint16_t x, y;
-    bool pressed = tft_.getTouch(&x, &y);
+    bool pressed = tft_.getTouch(&x, &y, 20);
+    if(pressed) {
+        lastTouchX = x;
+        lastTouchY = y;
+    }
 
     if (currentViewIndex_ < views_.size()) {
-        // Calculate grid position
-        size_t gridX = x / grid_.widthStep;
-        size_t gridY = y / grid_.heightStep;
         bool viewChange = false;
         if (pressed && !isTouchPressed_) {
             // If within first row, handle navigation
             if (y <= leftButton.height()) {
                 if (x < leftButton.width() && currentViewIndex_ > 0) {
-                    // Send a handle touch outside the screen and handle release to current view
-                    // views_[currentViewIndex_]->HandleTouch(9999,9999);
-                    // views_[currentViewIndex_]->HandleRelease();
                     // Navigate to previous view
                     currentViewIndex_--;
                     redraw_internal_ = true;
                     viewChange = true;
                 }
                 else if (x > tft_.width() - rightButton.width() && currentViewIndex_ < views_.size() - 1) {
-                    // Send a handle touch outside the screen and handle release to current view
-                    // views_[currentViewIndex_]->HandleTouch(9999,9999);
-                    // views_[currentViewIndex_]->HandleRelease();
                     // Navigate to next view
                     currentViewIndex_++;
                     redraw_internal_ = true;
@@ -147,10 +142,10 @@ void DisplayDriver::PollTouch() {
                 }
             } else {
                 // Handle touch in the current view
-                if (gridX < grid_.widthElements && gridY < grid_.heightElements) {
-                    // Pass raw coordinates to the current view for precise detection
-                    views_[currentViewIndex_]->HandleTouch(x, y);
-                }
+                // if (gridX < grid_.widthElements && gridY < grid_.heightElements) {
+                    // Pass raw coordinates to the current view 
+                    views_[currentViewIndex_]->HandleTouch(lastTouchX, lastTouchY);
+                // }
             }
             if (viewChange) {
                 // If view changed, redraw the new view
@@ -164,12 +159,12 @@ void DisplayDriver::PollTouch() {
             // If touch was released, handle release
             // views_[currentViewIndex_]->HandleRelease();
             // If released, check if any button was released
-            views_[currentViewIndex_]->HandleTouchRelease(x,y);
-            // Serial.println("Touch released");   
-            // Serial.print("x: ");
-            // Serial.print(x);
-            // Serial.print(", y: ");
-            // Serial.println(y);
+            views_[currentViewIndex_]->HandleTouchRelease(lastTouchX,lastTouchY);
+            Serial.println("Touch released");   
+            Serial.print("x: ");
+            Serial.print(x);
+            Serial.print(", y: ");
+            Serial.println(y);
             isTouchPressed_ = false;
         }
     }
