@@ -67,6 +67,8 @@ private:
 
     int lastTouchX, lastTouchY;
 
+    const int topBarHeight = 30;
+
 };
 
 

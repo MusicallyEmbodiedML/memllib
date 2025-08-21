@@ -8,6 +8,7 @@
 class XYPadView : public ViewBase {
 public:
     using OnTouchCallback = std::function<void(float, float)>;
+    using OnTouchReleaseCallback = std::function<void(float, float)>;
 
     XYPadView(String name, int colour = TFT_GREEN)
         : ViewBase(name), colour(colour) 
@@ -16,6 +17,9 @@ public:
     }
     void SetOnTouchCallback(OnTouchCallback _cb_) {
         cb = _cb_;
+    }
+    void SetOnTouchReleaseCallback(OnTouchCallback _cb_) {
+        cbRelease = _cb_;
     }
 
 
@@ -29,9 +33,13 @@ public:
     void OnDraw() override {
         if (touchReleaseFlag) {
             touchReleaseFlag = false;
-            scr->fillRect(x, y, 10,10, TFT_BLACK);
+            if (y > area.y) {
+                scr->fillRect(x, y, 10,10, TFT_BLACK);
+            }
         }else if (touchDownFlag) {
-            scr->fillRect(x, y, 10,10, colour);
+            if (y > area.y) {
+                scr->fillRect(x, y, 10,10, colour);
+            }
             touchDownFlag = false;
         }
         Serial.printf("XYPadView OnDraw at: %d, %d\n", x, y);
@@ -44,7 +52,7 @@ public:
         touching = true;
         touchDownFlag = true;
         if(cb) {
-            cb(x / (float)area.w, 1-(y / (float)area.h));
+            cb(x / (float)area.w, 1-(y / (float)(area.h - area.y)));
         }
         redraw();
     };  
@@ -52,6 +60,9 @@ public:
     void OnTouchUp(size_t x, size_t y) override {
         touching = false;
         touchReleaseFlag = true;
+        if(cbRelease) {
+            cbRelease(x / (float)area.w, 1-(y / (float)(area.h - area.y)));
+        }
         redraw();
     };
 
@@ -64,6 +75,7 @@ private:
     bool touchReleaseFlag = false;
     bool touchDownFlag = false;
     OnTouchCallback cb = nullptr;
+    OnTouchReleaseCallback cbRelease = nullptr;
 
 };
 

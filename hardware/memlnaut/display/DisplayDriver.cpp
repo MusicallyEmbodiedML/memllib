@@ -23,7 +23,6 @@ void DisplayDriver::Setup() {
     grid_.widthStep = screenWidth_ / grid_.widthElements;
     grid_.heightStep = screenHeight_ / grid_.heightElements;
 
-    constexpr int topBarHeight = 30;
     leftButton.createSprite(30,topBarHeight);
     title.createSprite(150,topBarHeight);
     rightButton.createSprite(30,topBarHeight);
