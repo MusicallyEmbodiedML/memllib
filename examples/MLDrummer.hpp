@@ -1,6 +1,8 @@
 #ifndef __XIASRIAUDIOAPP_HPP__
 #define __XIASRIAUDIOAPP_HPP__
 
+// bettyloops100..112
+
 #include "../audio/AudioAppBase.hpp"
 #include "../audio/AudioDriver.hpp"
 #include "../utils/sharedMem.hpp"
@@ -264,6 +266,84 @@ protected:
     bool looping=true;
     bool playing = true;
 };
+
+
+#include "../synth/PlayLoop.hpp"
+
+
+class MLDrummerNew : public AudioAppBase
+{
+public:
+
+    static constexpr size_t kMixerChannels = 12;
+
+    struct {
+        float mixer[kMixerChannels];
+    } params;
+
+    static constexpr size_t kN_Params = sizeof(params) / sizeof(float);
+
+    MLDrummerNew() : AudioAppBase(),
+        smoother(150.f, kSampleRate),
+        loops {
+            PlayLoop("bettyloops100"),
+            PlayLoop("bettyloops101"),
+            PlayLoop("bettyloops102"),
+            PlayLoop("bettyloops103"),
+            PlayLoop("bettyloops104"),
+            PlayLoop("bettyloops105"),
+            PlayLoop("bettyloops106"),
+            PlayLoop("bettyloops107"),
+            PlayLoop("bettyloops108"),
+            PlayLoop("bettyloops109"),
+            PlayLoop("bettyloops110"),
+            PlayLoop("bettyloops111")
+        }
+    {
+        // Set mixer gains to 1
+        for (size_t i = 0; i < kMixerChannels; i++) {
+            params.mixer[i] = 1.f;
+        }
+    }
+
+    void ProcessParams(const std::vector<float>& p) override
+    {
+        size_t n = p.size() < kN_Params ? p.size() : kN_Params;
+        memcpy(&params, p.data(), n * sizeof(float));
+    }
+
+    stereosample_t Process(stereosample_t x)
+    {
+
+        // Smooth mixer parameters
+        float smoothed_mixer_params[kMixerChannels];
+        smoother.Process(params.mixer, smoothed_mixer_params);
+
+        // Fetch samples
+        size_t kN_playheads = 1;
+        float mix[kMixerChannels] = {0.f};
+        for (size_t i = 0; i < kN_playheads; i++) {
+            mix[i] = loops[i].Process() * params.mixer[i];
+        }
+        // Mix down
+        float out = 0.f;
+        static constexpr float gain = 1.f / kMixerChannels;
+        for (size_t i = 0; i < kN_playheads; i++) {
+            out += mix[i] * gain;
+        }
+        return { out, out };
+
+    }
+
+protected:
+
+    PlayLoop loops[kMixerChannels];
+    OnePoleSmoother<kMixerChannels> smoother;
+    maxiOsc osc;
+
+};
+
+
 
 
 #endif  // __XIASRIAUDIOAPP_HPP__

@@ -1,6 +1,6 @@
 #include "SaxAnalysis.hpp"
 
-#include <array>
+#include <vector>
 #include <cmath>
 
 
@@ -64,16 +64,15 @@ inline float logEnvelopeFast(float linearEnv) {
 }
 
 
-template<size_t N>
-float medianAbsoluteDeviation(std::array<float, N>& data) noexcept {
-    static_assert(N > 0, "Array size must be greater than 0");
+float medianAbsoluteDeviation(std::vector<float>& data) noexcept {
+    const size_t N = data.size();
 
     // Find median
-    constexpr size_t mid = N / 2;
+    const size_t mid = N >> 1;
     std::nth_element(data.begin(), data.begin() + mid, data.end());
 
     float median;
-    if constexpr (N % 2 == 0) {
+    if (!(N & 0x1)) {
         // Even size: need both middle elements
         std::nth_element(data.begin(), data.begin() + mid - 1, data.begin() + mid);
         median = (data[mid - 1] + data[mid]) * 0.5f;
@@ -90,7 +89,7 @@ float medianAbsoluteDeviation(std::array<float, N>& data) noexcept {
     // Find median of absolute deviations
     std::nth_element(data.begin(), data.begin() + mid, data.end());
 
-    if constexpr (N % 2 == 0) {
+    if (!(N & 0x1)) {
         std::nth_element(data.begin(), data.begin() + mid - 1, data.begin() + mid);
         return (data[mid - 1] + data[mid]) * 0.5f;
     } else {
@@ -127,7 +126,7 @@ SaxAnalysis::parameters_t SaxAnalysis::Process(const float x) {
     }
     elapsed_samples_++;
     // Aperiodicity calculation
-    std::array<float, kZC_ZCBufferSize> zc_copy;
+    std::vector<float> zc_copy(kZC_ZCBufferSize);
     // Copy contents of circular buffer to float array
     for (size_t i = 0; i < kZC_ZCBufferSize; ++i) {
         zc_copy[i] = static_cast<float>(zc_buffer_[i]);
