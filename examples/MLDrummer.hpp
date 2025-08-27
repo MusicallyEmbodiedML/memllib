@@ -151,7 +151,6 @@ public:
         }
     #endif
 
-/*
         smoother.Process(neuralNetOutputs.data(), smoothParams.data());
 
         // Process drum machine
@@ -230,8 +229,6 @@ public:
         }
 
         stereosample_t ret { y, y };
-*/
-        stereosample_t ret {0,0};
 
         return ret;
     }
