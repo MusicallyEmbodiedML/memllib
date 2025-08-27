@@ -175,6 +175,7 @@ bool AudioDriver::Setup(const codec_config_t &config) {
     if (nullptr == audio_callback_) {
         audio_callback_ = &silence_;
     }
+    DEBUG_PRINTF("AUDIO- Setup - Audio callback address: 0x%x\n", audio_callback_);
 
     dsp_overload = false;
     master_volume_ = 0;
@@ -193,7 +194,7 @@ bool AudioDriver::Setup(const codec_config_t &config) {
     size_t sys_clk_hz = clock_get_hz(clk_sys);
     if (sys_clk_hz != AudioDriver::GetSysClockSpeed() * 1000) {
         DEBUG_PRINTLN("Error: audio driver: system clock must be set externally (see ::GetDesiredClockSpeed)");
-    }   
+    }
 
     i2s_config picoI2SConfig {
         kSampleRate, // 48000,

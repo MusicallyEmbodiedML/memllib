@@ -64,12 +64,12 @@ void IMLInterface::ProcessInput()
 {
     // Check if input is updated
     if (perform_inference_ && input_updated_) {
-         DEBUG_PRINT("Input state: ");
+         //DEBUG_PRINT("Input state: ");
         // for (auto val : input_state_) {
         //     DEBUG_PRINT(val);
         //     DEBUG_PRINT(" ");
         // }
-         DEBUG_PRINTLN();
+        // DEBUG_PRINTLN();
         // Only zoom here
         std::vector<float> zoomed_input = input_state_;
         if (zoom_enabled_) {
@@ -88,10 +88,10 @@ void IMLInterface::ProcessInput()
 
 void IMLInterface::SetInput(size_t index, float value)
 {
-     DEBUG_PRINT("Input ");
-     DEBUG_PRINT(index);
-     DEBUG_PRINT(" set to: ");
-     DEBUG_PRINTLN(value);
+    //  DEBUG_PRINT("Input ");
+    //  DEBUG_PRINT(index);
+    //  DEBUG_PRINT(" set to: ");
+    //  DEBUG_PRINTLN(value);
 
     if (index >= n_inputs_) {
          DEBUG_PRINT("Input index ");
@@ -372,63 +372,12 @@ void IMLInterface::bindInterface(bool disable_joystick)
     // Set up loop callback
     MEMLNaut::Instance()->setLoopCallback([this]() {
         this->ProcessInput();
-        if (sdtest) {
-            sdtest=false;
-            Serial.println("Initializing SD card...");
-            
-            
-            if (!SD.begin(Pins::SD_CS, SPI1)) {
-                Serial.println("SD card initialization failed!");
-                Serial.println("Check wiring and card insertion");
-            }else{
-            
-                Serial.println("SD card initialized successfully");
-                
-                // Write files to SD card
-                for(size_t i = 0; i < 10; i++) {
-                    Serial.printf("Iteration: %d\n", i);
-                    String content = "iteration " + String(i*100);
-                    
-                    // Open file on SD card for writing
-                    File file = SD.open("/test.txt", FILE_WRITE);
-                    if (file) {
-                    file.seek(0);  // Start from beginning
-                    file.print(content);
-                    file.close();
-                    Serial.println("File written to SD card");
-                    } else {
-                    Serial.println("Error: Could not open file on SD card");
-                    break;
-                    }
-                    
-                    delay(100);
-                    
-                    // Optional: Read back to verify
-                    File readFile = SD.open("/test.txt", FILE_READ);
-                    if (readFile) {
-                    String readContent = readFile.readString();
-                    readFile.close();
-                    Serial.printf("Read back: %s\n", readContent.c_str());
-                    }
-                    
-                    delay(100);
-                }
-                
-                Serial.println("SD card write test completed");
-
-                SD.end();
-                
-            }
-
-        }        
     });
 
     MEMLNaut::Instance()->setReSWCallback([this]() {
         if (disp_) {
             disp_->post("Re switch pressed");
         }
-
-        sdtest=true;
     });
 }
 
@@ -506,4 +455,23 @@ std::vector<float> IMLInterface::ZoomCoordinates(const std::vector<float>& coord
     }
 
     return result;
+}
+
+
+void IMLInterface::readAnalysisParameters(std::vector<float> params)
+{
+    // Expecting params size to match n_inputs_
+    if (params.size() != n_inputs_) {
+        DEBUG_PRINT("Parameter size mismatch - ");
+        DEBUG_PRINT("Expected: ");
+        DEBUG_PRINT(n_inputs_);
+        DEBUG_PRINT(", Got: ");
+        DEBUG_PRINTLN(params.size());
+        return;
+    }
+
+    // Set inputs
+    for (size_t i = 0; i < n_inputs_; ++i) {
+        SetInput(i, params[i]);
+    }
 }

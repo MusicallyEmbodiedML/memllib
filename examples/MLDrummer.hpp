@@ -3,12 +3,11 @@
 
 #include "../audio/AudioAppBase.hpp"
 #include "../audio/AudioDriver.hpp"
-#include "../../../sharedMem.hpp"
+#include "../utils/sharedMem.hpp"
 #include "../PicoDefs.hpp"
 #include "../synth/OnePoleSmoother.hpp"
 #include "../synth/maximilian.h"
 
-#include "../synth/SaxAnalysis.hpp"
 #include "../utils/sharedMem.hpp"
 
 // Flash memory address where audio data is loaded
@@ -136,19 +135,6 @@ public:
         float bpf4Val = bpf4.play(mix) * boost;
         bpf4Val = bpfEnv4.play(bpf4Val);
         WRITE_VOLATILE(sharedMem::f3, bpf4Val);
-    #else
-        union {
-            SaxAnalysis::parameters_t p;
-            float v[SaxAnalysis::kN_Params];
-        } param_u;
-        param_u.p = saxAnalysis->Process(x.L + x.R);
-        //WRITE_VOLATILE_STRUCT(sharedMem::saxParams, params);
-        // Write params into shared_buffer
-        if (shared_buffer_) {
-            shared_buffer_->writeNonBlocking(param_u.v, SaxAnalysis::kN_Params);
-        } else {
-            DEBUG_PRINTLN("Error: shared_buffer_ is null in MLDrummer::Process");
-        }
     #endif
 
         smoother.Process(neuralNetOutputs.data(), smoothParams.data());
@@ -233,7 +219,7 @@ public:
         return ret;
     }
 
-    void Setup(float sample_rate, std::shared_ptr<InterfaceBase> interface, SharedBuffer<float, SaxAnalysis::kN_Params> *ml_buf)
+    void Setup(float sample_rate, std::shared_ptr<InterfaceBase> interface)
     {
         AudioAppBase::Setup(sample_rate, interface);
         maxiSettings::sampleRate = sample_rate;
@@ -242,11 +228,7 @@ public:
         bpf2.set(maxiBiquad::filterTypes::BANDPASS, 300.f, 5.f, 0.f);
         bpf3.set(maxiBiquad::filterTypes::BANDPASS, 900.f, 5.f, 0.f);
         bpf4.set(maxiBiquad::filterTypes::BANDPASS, 2700.f, 5.f, 0.f);
-    #else
-        // Initialize sax analysis
-        saxAnalysis = std::make_unique<SaxAnalysis>(sample_rate);
     #endif
-        shared_buffer_ = ml_buf;
     }
 
     void ProcessParams(const std::vector<float>& params) override
@@ -265,8 +247,6 @@ protected:
     maxiBiquad bpf2;
     maxiBiquad bpf3;
     maxiBiquad bpf4;
-#else
-    std::unique_ptr<SaxAnalysis> saxAnalysis;
 #endif
 
     maxiEnvelopeFollowerF bpfEnv1;
@@ -283,8 +263,6 @@ protected:
     float segmentPhase = 0.f;
     bool looping=true;
     bool playing = true;
-
-    SharedBuffer<float, SaxAnalysis::kN_Params> *shared_buffer_;
 };
 
 
