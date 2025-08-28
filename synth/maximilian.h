@@ -1524,7 +1524,7 @@ public:
     };
 
     /*! Process a signal through the filter \param input A signal*/
-    float __attribute__((always_inline)) play(const float input)
+    inline float __attribute__((always_inline)) play(const float input)
     {
         v0_ = input - (b1 * v1_) - (b2 * v2_);
         const float y = (a0 * v0_) + (a1 * v1_) + (a2 * v2_);

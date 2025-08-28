@@ -20,29 +20,29 @@ public:
     }
 
     // O(1) push operation - always overwrites oldest value
-    void __attribute__((always_inline)) push(T value) {
+    inline void __attribute__((always_inline)) push(T value) {
         buffer[head] = value;
         head = (head + 1) & (N - 1);
     }
 
     // Copy contents to external array - no allocations
-    void __attribute__((always_inline)) copyTo(T dest[]) const {
+    inline void __attribute__((always_inline)) copyTo(T dest[]) const {
         for (size_t i = 0; i < N; i++) {
             dest[i] = buffer[(head + i) & (N - 1)];
         }
     }
 
     // Direct array-like access
-    T& __attribute__((always_inline)) operator[](size_t index) {
+    inline T& __attribute__((always_inline)) operator[](size_t index) {
         return buffer[(head + index) & (N - 1)];
     }
 
-    const __attribute__((always_inline)) T& operator[](size_t index) const {
+    inline const __attribute__((always_inline)) T& operator[](size_t index) const {
         return buffer[(head + index) & (N - 1)];
     }
 
     // Always returns N since buffer is always full
-    constexpr size_t __attribute__((always_inline)) size() const {
+    inline constexpr size_t __attribute__((always_inline)) size() const {
         return N;
     }
 };

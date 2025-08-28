@@ -63,6 +63,7 @@ public:
      * @{
      */
     static constexpr uint8_t LED = 33;       ///< Status LED
+    static constexpr uint8_t LED_TIMING = 43; ///< Timing LED
     /** @} */
 
     /**
@@ -131,6 +132,7 @@ public:
 
         // Initialize LED pins
         pinMode(LED, OUTPUT);
+        pinMode(LED_TIMING, OUTPUT);
 
         // Initialize UART pins (just as digital IO)
         pinMode(DAISY_TX, OUTPUT);

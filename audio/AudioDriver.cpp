@@ -3,7 +3,6 @@
 #include "Wire.h"
 
 #include "control_sgtl5000.h"
-#include "i2s_pio/i2s.h"
 #include "../synth/maximilian.h"
 #include "hardware/dma.h"
 #include "hardware/clocks.h"
@@ -25,9 +24,13 @@ static int32_t AUDIO_MEM_2 sample = amplitude; // current sample value
 
 static AUDIO_MEM_2 AudioControlSGTL5000 codecCtl;
 
-audiocallback_fptr_t audio_callback_ = nullptr;
+audiocallback_fptr_t AUDIO_MEM audio_callback_ = nullptr;
+audiocallback_block_fptr_t AUDIO_MEM audio_callback_block_ = nullptr;
 
-static __attribute__((aligned(8))) pio_i2s i2s;
+static AUDIO_MEM float input_buffer[kNChannels][kBufferSize];
+static AUDIO_MEM float output_buffer[kNChannels][kBufferSize];
+
+static __attribute__((aligned(8))) AUDIO_MEM pio_i2s i2s;
 
 volatile bool AUDIO_MEM dsp_overload;
 
@@ -39,12 +42,12 @@ maxiOsc osc, osc2;
 float f1=20, f2=2000;
 #endif  // TEST_TONES
 
-inline float AUDIO_FUNC(_scale_down)(float x) {
+inline float __attribute__((always_inline)) _scale_down(float x) {
     // Convert from int32 range to [-1.0, 1.0]
     return x * (1.0f / (float)(1LL << 31));  // Divide by 2^31 for proper scaling
 }
 
-inline float AUDIO_FUNC(_scale_and_saturate)(float x) {
+inline float __attribute__((always_inline)) _scale_and_saturate(float x) {
     // Convert from [-1.0, 1.0] back to int32 range with saturation
     const float scaled = x * (float)(1LL << 31);
     if (scaled > INT32_MAX) return INT32_MAX;
@@ -53,7 +56,7 @@ inline float AUDIO_FUNC(_scale_and_saturate)(float x) {
 }
 
 #if TEST_TONES
-static  __attribute__((always_inline)) void AUDIO_FUNC(process_test_tones)(
+static inline __attribute__((always_inline)) void AUDIO_FUNC(process_test_tones)(
     int32_t* output, size_t i) {
     output[i*2] = osc.sinewave(f1) * sample;
     output[(i*2) + 1] = osc2.sinewave(f2) * sample;
@@ -69,7 +72,7 @@ static  __attribute__((always_inline)) void AUDIO_FUNC(process_test_tones)(
 #endif
 
 #if PASSTHROUGH
-static __attribute__((always_inline)) void AUDIO_FUNC(process_passthrough)(
+static inline __attribute__((always_inline)) void AUDIO_FUNC(process_passthrough)(
         const int32_t* input, int32_t* output, size_t i) {
     output[i*2] = input[i*2];
     output[(i*2) + 1] = input[(i*2) + 1];
@@ -94,19 +97,42 @@ static void AUDIO_FUNC(process_audio)(const int32_t* input, int32_t* output, siz
     // Timing start
     auto ts = micros();
 
-    for (size_t i = 0; i < num_frames; i++) {
-        const size_t indexL = i << 1;
-        const size_t indexR = indexL + 1;
+    if (audio_callback_block_ != nullptr) {
 
-#if TEST_TONES
-        process_test_tones(output, i);
-#else
-    #if PASSTHROUGH
-        process_passthrough(input, output, i);
+        // Convert from interleaved int32_t to deinterleaved float
+        for (size_t i = 0; i < num_frames; i++) {
+            const size_t indexL = i << 1;
+            const size_t indexR = indexL + 1;
+            input_buffer[0][i] = _scale_down(static_cast<float>(input[indexL]));
+            input_buffer[1][i] = _scale_down(static_cast<float>(input[indexR]));
+        }
+        // Call block callback
+        audio_callback_block_(input_buffer, output_buffer, kNChannels, num_frames);
+
+        // Convert from deinterleaved float to interleaved int32_t
+        for (size_t i = 0; i < num_frames; i++) {
+            const size_t indexL = i << 1;
+            const size_t indexR = indexL + 1;
+            // TODO find way to perform only one for loop
+            output[indexL] = static_cast<int32_t>(_scale_and_saturate(output_buffer[0][i] * master_volume_));
+            output[indexR] = static_cast<int32_t>(_scale_and_saturate(output_buffer[1][i] * master_volume_));
+        }
+
+    } else {
+        for (size_t i = 0; i < num_frames; i++) {
+            const size_t indexL = i << 1;
+            const size_t indexR = indexL + 1;
+
+    #if TEST_TONES
+            process_test_tones(output, i);
     #else
-        process_normal(input, output, i, indexL, indexR);
+        #if PASSTHROUGH
+            process_passthrough(input, output, i);
+        #else
+            process_normal(input, output, i, indexL, indexR);
+        #endif
     #endif
-#endif
+        }
     }
 
     // Timing end
@@ -180,6 +206,14 @@ bool AudioDriver::Setup(const codec_config_t &config) {
     dsp_overload = false;
     master_volume_ = 0;
 
+    // Zero out float buffers
+    for (size_t ch = 0; ch < kNChannels; ch++) {
+        for (size_t i = 0; i < kBufferSize; i++) {
+            input_buffer[ch][i] = 0;
+            output_buffer[ch][i] = 0;
+        }
+    }
+
     maxiSettings::setup(kSampleRate, 2, kBufferSize);
 
     if (!Wire.setSDA(i2c_sgt5000Data) ||
@@ -221,7 +255,7 @@ bool AudioDriver::Setup(const codec_config_t &config) {
     codecCtl.lineInLevel(config.line_level);
      DEBUG_PRINTF("config.mic_gain_dB = %d\n", config.mic_gain_dB);
     codecCtl.micGain(config.mic_gain_dB);
-    codecCtl.lineOutLevel(25);
+    codecCtl.lineOutLevel(13);
 
     return true;
 }

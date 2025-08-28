@@ -3,6 +3,9 @@
 #include <vector>
 #include <cmath>
 
+#include "../hardware/memlnaut/Pins.hpp"
+#include "../utils/Maths.hpp"
+
 
 SaxAnalysis::SaxAnalysis(const float sample_rate) :
     sample_rate_(sample_rate),
@@ -63,41 +66,6 @@ inline float logEnvelopeFast(float linearEnv) {
     return y;
 }
 
-
-float medianAbsoluteDeviation(std::vector<float>& data) noexcept {
-    const size_t N = data.size();
-
-    // Find median
-    const size_t mid = N >> 1;
-    std::nth_element(data.begin(), data.begin() + mid, data.end());
-
-    float median;
-    if (!(N & 0x1)) {
-        // Even size: need both middle elements
-        std::nth_element(data.begin(), data.begin() + mid - 1, data.begin() + mid);
-        median = (data[mid - 1] + data[mid]) * 0.5f;
-    } else {
-        // Odd size: just the middle element
-        median = data[mid];
-    }
-
-    // Convert to absolute deviations in-place
-    for (auto& val : data) {
-        val = std::abs(val - median);
-    }
-
-    // Find median of absolute deviations
-    std::nth_element(data.begin(), data.begin() + mid, data.end());
-
-    if (!(N & 0x1)) {
-        std::nth_element(data.begin(), data.begin() + mid - 1, data.begin() + mid);
-        return (data[mid - 1] + data[mid]) * 0.5f;
-    } else {
-        return data[mid];
-    }
-}
-
-
 SaxAnalysis::parameters_t SaxAnalysis::Process(const float x) {
     parameters_t params = {};
 
@@ -131,6 +99,7 @@ SaxAnalysis::parameters_t SaxAnalysis::Process(const float x) {
     for (size_t i = 0; i < kZC_ZCBufferSize; ++i) {
         zc_copy[i] = static_cast<float>(zc_buffer_[i]);
     }
+    digitalWrite(Pins::LED_TIMING, HIGH);
     float mad = medianAbsoluteDeviation(zc_copy);
     // Scale MAD relative to median period
     float medianPeriod = static_cast<float>(zc_value);
@@ -139,6 +108,7 @@ SaxAnalysis::parameters_t SaxAnalysis::Process(const float x) {
     // Typical relative MAD ranges from 0 to 0.3 for musical sounds
     static constexpr float ONE_OVER_RELATIVE_MAD_MAX = 1/0.3f;
     float normalizedAperiodicity = std::min(1.0f, relativeMad * ONE_OVER_RELATIVE_MAD_MAX);
+    digitalWrite(Pins::LED_TIMING, LOW);
 
     // Envelope follower
     float ef_y = ef_follower_.play(pre_filtered);

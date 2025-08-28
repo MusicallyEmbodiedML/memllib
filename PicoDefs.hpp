@@ -7,6 +7,8 @@
 #define AUDIO_MEM    __not_in_flash("audio")  ///< Macro to make variable load from mem
 #define AUDIO_MEM_2  __not_in_flash("audio2")
 #define APP_SRAM __not_in_flash("app")
+#define ML_BUFFER_MEM    __attribute__((section(".scratch_x")))
+#define AUDIO_BUFFER_MEM    __attribute__((section(".scratch_y")))
 
 #define PERIODIC_DEBUG(COUNT, FUNC) \
         static size_t ct=0; \

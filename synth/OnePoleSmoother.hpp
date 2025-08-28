@@ -18,10 +18,10 @@ class OnePoleSmoother {
         //);
         b1_ = powf(0.1f, 1.f/ (time_ms * 0.001f * sample_rate_));
     }
-    __attribute__((always_inline)) void Process(const float * x_ptr, float *y_ptr) {
+    inline __attribute__((always_inline)) void Process(const float * x_ptr, float *y_ptr) {
         float *y2_ptr = y_;
         for (unsigned int c = 0; c < n_channels; c++) {
-            const float x = *x_ptr; 
+            const float x = *x_ptr;
             *y2_ptr = *y_ptr = x + b1_ * (*y2_ptr - x);
             ++x_ptr;
             ++y_ptr;

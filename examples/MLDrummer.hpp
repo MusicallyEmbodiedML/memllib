@@ -105,17 +105,30 @@ public:
     MLDrummer() : AudioAppBase(), smoother(150.f, kSampleRate),
         neuralNetOutputs(kN_Params, 0),
         smoothParams(kN_Params, 0)
-     {
+    {
         if (!get_sample_info("afrfunk1", &sample_info)) {
             DEBUG_PRINTLN("Error: Sample  not found in audio data.");
         }else{
             DEBUG_PRINTLN("Sample found: " + String(sample_info.name) + ", count: " + String(sample_info.sample_count) + ", duration: " + String(sample_info.duration));
         }
 
-     }
+    }
 
 
 
+    inline __attribute__((always_inline)) void ProcessBlock(const float in[][kBufferSize], float out[][kBufferSize], size_t n_channels, size_t n_frames) {
+        for (size_t i = 0; i < n_frames; ++i) {
+
+            stereosample_t x {
+                in[0][i],
+                in[1][i]
+            }, y;
+
+
+            out[0][i] = y.L;
+            out[1][i] = y.R;
+        }
+    }
 
     stereosample_t __force_inline Process(const stereosample_t x) override
     {
