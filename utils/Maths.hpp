@@ -133,10 +133,45 @@ inline float __attribute__((always_inline)) __not_in_flash_func(medianAbsoluteDe
     return quickSelectMedian(work, 32);
 }
 
+// Efficient Mean Absolute Deviation function - O(n) complexity
+inline float __attribute__((always_inline)) __not_in_flash_func(meanAbsoluteDeviation)(const float* data, int size) {
+    // Calculate mean in first pass
+    float sum = 0.0f;
+
+    // Unroll loop for better performance on RP2350
+    int i = 0;
+    for (; i < size - 3; i += 4) {
+        sum += data[i] + data[i + 1] + data[i + 2] + data[i + 3];
+    }
+
+    // Handle remaining elements
+    for (; i < size; i++) {
+        sum += data[i];
+    }
+
+    float mean = sum / size;
+
+    // Calculate mean of absolute deviations in second pass
+    sum = 0.0f;
+    i = 0;
+    for (; i < size - 3; i += 4) {
+        sum += fabsf(data[i] - mean) + fabsf(data[i + 1] - mean) +
+               fabsf(data[i + 2] - mean) + fabsf(data[i + 3] - mean);
+    }
+
+    // Handle remaining elements
+    for (; i < size; i++) {
+        sum += fabsf(data[i] - mean);
+    }
+
+    return sum / size;
+}
+
 
 namespace Tests {
 
 bool testMedianAbsoluteDeviation();
+bool testMeanAbsoluteDeviation();
 
 } // namespace Tests
 

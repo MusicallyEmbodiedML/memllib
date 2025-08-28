@@ -99,8 +99,7 @@ SaxAnalysis::parameters_t SaxAnalysis::Process(const float x) {
     for (size_t i = 0; i < kZC_ZCBufferSize; ++i) {
         zc_copy[i] = static_cast<float>(zc_buffer_[i]);
     }
-    digitalWrite(Pins::LED_TIMING, HIGH);
-    float mad = medianAbsoluteDeviation(zc_copy);
+    float mad = meanAbsoluteDeviation(zc_copy.data(), zc_copy.size());
     // Scale MAD relative to median period
     float medianPeriod = static_cast<float>(zc_value);
     float relativeMad = mad / (medianPeriod + 1.0f);  // +1 to avoid div/0
@@ -108,7 +107,6 @@ SaxAnalysis::parameters_t SaxAnalysis::Process(const float x) {
     // Typical relative MAD ranges from 0 to 0.3 for musical sounds
     static constexpr float ONE_OVER_RELATIVE_MAD_MAX = 1/0.3f;
     float normalizedAperiodicity = std::min(1.0f, relativeMad * ONE_OVER_RELATIVE_MAD_MAX);
-    digitalWrite(Pins::LED_TIMING, LOW);
 
     // Envelope follower
     float ef_y = ef_follower_.play(pre_filtered);
