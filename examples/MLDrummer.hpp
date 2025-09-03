@@ -333,7 +333,7 @@ public:
         smoother.Process(params.mixer, smoothed_mixer_params);
 
         // Fetch samples
-        size_t kN_playheads = 1;
+        static const size_t kN_playheads = kMixerChannels;
         float mix[kMixerChannels] = {0.f};
         for (size_t i = 0; i < kN_playheads; i++) {
             mix[i] = loops[i].Process() * params.mixer[i];

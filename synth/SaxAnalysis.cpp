@@ -1,6 +1,5 @@
 #include "SaxAnalysis.hpp"
 
-#include <vector>
 #include <cmath>
 
 #include "../hardware/memlnaut/Pins.hpp"
@@ -94,12 +93,12 @@ SaxAnalysis::parameters_t SaxAnalysis::Process(const float x) {
     }
     elapsed_samples_++;
     // Aperiodicity calculation
-    std::vector<float> zc_copy(kZC_ZCBufferSize);
+    float zc_copy[kZC_ZCBufferSize];
     // Copy contents of circular buffer to float array
     for (size_t i = 0; i < kZC_ZCBufferSize; ++i) {
         zc_copy[i] = static_cast<float>(zc_buffer_[i]);
     }
-    float mad = meanAbsoluteDeviation(zc_copy.data(), zc_copy.size());
+    float mad = meanAbsoluteDeviation(zc_copy, kZC_ZCBufferSize);
     // Scale MAD relative to median period
     float medianPeriod = static_cast<float>(zc_value);
     float relativeMad = mad / (medianPeriod + 1.0f);  // +1 to avoid div/0
