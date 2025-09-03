@@ -325,7 +325,7 @@ public:
         memcpy(&params, p.data(), n * sizeof(float));
     }
 
-    stereosample_t Process(stereosample_t x)
+    inline stereosample_t __attribute__((always_inline)) Process(stereosample_t x)
     {
 
         // Smooth mixer parameters

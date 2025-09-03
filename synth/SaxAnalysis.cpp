@@ -4,6 +4,7 @@
 
 #include "../hardware/memlnaut/Pins.hpp"
 #include "../utils/Maths.hpp"
+#include "../PicoDefs.hpp"
 
 
 SaxAnalysis::SaxAnalysis(const float sample_rate) :
@@ -65,7 +66,7 @@ inline float logEnvelopeFast(float linearEnv) {
     return y;
 }
 
-SaxAnalysis::parameters_t SaxAnalysis::Process(const float x) {
+SaxAnalysis::parameters_t AUDIO_FUNC(SaxAnalysis::Process)(const float x) {
     parameters_t params = {};
 
     // Pre-filter
