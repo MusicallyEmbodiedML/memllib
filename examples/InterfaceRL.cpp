@@ -155,6 +155,7 @@ void InterfaceRL::bind_RL_interface(display& scr_ref, bool disable_joystick) {
 
 void InterfaceRL::setRewardScaleInterf(float value)
 {
+    return;  // bypassed for now
     this->setRewardScale(value);
     String msg = "Reward scale: " + String(value);
     if (m_scr_ptr) m_scr_ptr->post(msg);
@@ -188,16 +189,31 @@ void InterfaceRL::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf)
                 }
                 case 5:
                 {
-                    static constexpr float cc_scale = 1.f/127.f;
+                    static constexpr float cc_scale = 1.f/(127.f-20.f);
+                    // Less than 20 on cc_value is considered 0
+                    // scale [20..127] to [0.0, 1.0]
+                    if (cc_value < 20) {
+                        cc_value = 0;
+                    } else {
+                        cc_value -= 20; // Shift range to [0, 107]
+                    }
                     float scale = static_cast<float>(cc_value) * cc_scale;
-                    this->setRewardScaleInterf(scale);
+                    //this->setRewardScaleInterf(scale);
+                    this->setNoiseLevel(scale);
                     break;
                 }
                 case 6:
                 {
-                    static constexpr float cc_scale = 1.f/127.f;
+                    static constexpr float cc_scale = 1.f/(127.f-20.f);
+                    // Less than 20 on cc_value is considered 0
+                    // scale [20..127] to [0.0, 1.0]
+                    if (cc_value < 20) {
+                        cc_value = 0;
+                    } else {
+                        cc_value -= 20; // Shift range to [0, 107]
+                    }
                     float opt = static_cast<float>(cc_value) * cc_scale;
-                    this->setOptimiseDivisorInterf(opt);
+                    this->setOptimiseDivisorInterf(1.f - opt);
                     break;
                 }
             };
@@ -267,6 +283,8 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
         use_constant_weight_init,
         constant_weight_init
     );
+
+    rewardScale = 1.0f; // Default reward scale
 }
 
 void InterfaceRL::setup(size_t n_inputs, size_t n_outputs, std::shared_ptr<display> disp) {
@@ -401,7 +419,7 @@ void InterfaceRL::optimise() {
             }
 
             // Optional: notify user of instability
-            if (gradNorm > maxGradNorm * 2.0f) {
+            if (gradNorm > maxGradNorm * 5.0f) {
                 m_scr_ptr->post("Learning unstable - adjusting...");
             }
         }
