@@ -10,7 +10,6 @@
 
 // Protected helper method implementations
 void InterfaceRL::_perform_like_action() {
-    if (!m_scr_ptr) return; // Guard against null pointer
     static APP_SRAM std::vector<String> likemsgs = {
         "Wow, incredible", "Awesome", "That's amazing", "Unbelievable+",
         "I love it!!", "More of this", "Yes!!!!", "A-M-A-Z-I-N-G",
@@ -22,7 +21,7 @@ void InterfaceRL::_perform_like_action() {
     String msg = likemsgs[rand() % likemsgs.size()];
     this->storeExperience(1.f * rewardScale);
     DEBUG_PRINTLN(msg);
-    m_scr_ptr->post(msg);
+    if (m_scr_ptr) m_scr_ptr->post(msg);
 }
 
 void InterfaceRL::_perform_dislike_action() {
@@ -39,15 +38,15 @@ void InterfaceRL::_perform_dislike_action() {
     String msg = dislikemsgs[rand() % dislikemsgs.size()];
     this->storeExperience(-1.f * rewardScale);
     DEBUG_PRINTLN(msg);
-    m_scr_ptr->post(msg);
+    if (m_scr_ptr) m_scr_ptr->post(msg);
 }
 
 void InterfaceRL::_perform_randomiseRL_action() {
-    if (!m_scr_ptr) return; // Guard against null pointer
+
     this->randomiseTheActor();
     this->generateAction(true);
     DEBUG_PRINTLN("The Actor is confused");
-    m_scr_ptr->post("Actor: i'm confused");
+    if (m_scr_ptr) m_scr_ptr->post("Actor: i'm confused");
 }
 
 // Public trigger methods (updated to call protected helpers)
@@ -194,7 +193,7 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
 
     actor_layers_nodes = {
         stateSize + bias,
-        10, 12,
+        15, 8,
         actionSize
     };
 
@@ -211,7 +210,7 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
     //init networks
     actor = std::make_shared<MLP<float> > (
         actor_layers_nodes,
-        layers_activfuncs,
+        actor_activfuncs,
         loss::LOSS_MSE,
         use_constant_weight_init,
         constant_weight_init
@@ -219,7 +218,7 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
 
     actorTarget = std::make_shared<MLP<float> > (
         actor_layers_nodes,
-        layers_activfuncs,
+        actor_activfuncs,
         loss::LOSS_MSE,
         use_constant_weight_init,
         constant_weight_init
@@ -227,18 +226,21 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
 
     critic = std::make_shared<MLP<float> > (
         critic_layers_nodes,
-        layers_activfuncs,
+        critic_activfuncs,
         loss::LOSS_MSE,
         use_constant_weight_init,
         constant_weight_init
     );
     criticTarget = std::make_shared<MLP<float> > (
         critic_layers_nodes,
-        layers_activfuncs,
+        critic_activfuncs,
         loss::LOSS_MSE,
         use_constant_weight_init,
         constant_weight_init
     );
+
+    // Memory limit
+    replayMem.setMemoryLimit(memoryLimit);
 }
 
 void InterfaceRL::setup(size_t n_inputs, size_t n_outputs, std::shared_ptr<display> disp) {
@@ -253,7 +255,6 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs, std::shared_ptr<displ
 }
 
 void InterfaceRL::optimise() {
-    constexpr size_t batchSize = 8;
     std::vector<trainRLItem> sample = replayMem.sample(batchSize);
     if (sample.size() == batchSize) {
         //run sample through critic target, build training set for critic net
@@ -469,8 +470,10 @@ void InterfaceRL::generateAction(bool donthesitate) {
             }
         }
 
-        m_scr_ptr->statusPost(String(actorOutput[0], 4), 0);
-        m_scr_ptr->statusPost(String(actorOutput[1], 4), 1);
+        if (m_scr_ptr) {
+            m_scr_ptr->statusPost(String(actorOutput[0], 4), 0);
+            m_scr_ptr->statusPost(String(actorOutput[1], 4), 1);
+        }
         SendParamsToQueue(actorOutput);
         action = actorOutput;
 
@@ -495,10 +498,10 @@ void InterfaceRL::storeExperience(float reward) {
     }
 
 
-    for(size_t i=0; i < state.size(); i++) { // state here is without bias
-        DEBUG_PRINTF("%f\t", state[i]);
-    }
-    DEBUG_PRINTLN();
+    // for(size_t i=0; i < state.size(); i++) { // state here is without bias
+    //     DEBUG_PRINTF("%f\t", state[i]);
+    // }
+    // DEBUG_PRINTLN();
     // nextState in DDPG is the state resulting from taking 'action' in 'state'.
     // Here, 'state' is used as 'nextState', which is common if the environment is static
     // or if the 'nextState' is the same as the current state for the purpose of this reward.
