@@ -22,14 +22,25 @@
 #define ALLOW_DEBUG
 
 #ifdef ALLOW_DEBUG
-#define DEBUG_PRINTF(...) Serial.printf(__VA_ARGS__)
-#define DEBUG_PRINT(...) Serial.print(__VA_ARGS__)
-#define DEBUG_PRINTLN(...) Serial.println(__VA_ARGS__)
+#define DEBUG_PRINTF(...) Serial.printf(__VA_ARGS__); Serial.flush()
+#define DEBUG_PRINT(...) Serial.print(__VA_ARGS__); Serial.flush()
+#define DEBUG_PRINTLN(...) Serial.println(__VA_ARGS__); Serial.flush()
 #else
 #define DEBUG_PRINT(...)  
 #define DEBUG_PRINTLN(...)  
 #define DEBUG_PRINTF(...)  
 #endif
+
+#define PERIODIC_RUN(code, freq_ms) \
+{ \
+    static __not_in_flash("periodicupdate") size_t lastUpdate = 0; \
+    size_t now = millis(); \
+    if (now - lastUpdate > (freq_ms)) { \
+        lastUpdate = now; \
+        code; \
+    } \
+}  
+
 
 
 #endif  // __MEML_PICO_HPP__

@@ -20,7 +20,11 @@ public:
     static constexpr float segments = 16;
     static constexpr float segLength = 1.f/segments;
 
-    static constexpr size_t kN_Params = segments;
+#if BREAKBEAT
+    static constexpr size_t kN_Params = 32; // Changed from 16 to 32
+#else
+    static constexpr size_t kN_Params = 2;
+#endif
 
     // Sample information structure
     typedef struct {
@@ -110,20 +114,21 @@ public:
 
     stereosample_t __force_inline Process(const stereosample_t x) override
     {
+        constexpr float boost = 5.f;
         float mix = x.L + x.R;
-        float bpf1Val = bpf1.play(mix) * 100.f;
+        float bpf1Val = bpf1.play(mix) * boost;
         bpf1Val = bpfEnv1.play(bpf1Val);
         WRITE_VOLATILE(sharedMem::f0, bpf1Val);
 
-        float bpf2Val = bpf2.play(mix) * 100.f;
+        float bpf2Val = bpf2.play(mix) * boost;
         bpf2Val = bpfEnv2.play(bpf2Val);
         WRITE_VOLATILE(sharedMem::f1, bpf2Val);
 
-        float bpf3Val = bpf3.play(mix) * 100.f;
+        float bpf3Val = bpf3.play(mix) * boost;
         bpf3Val = bpfEnv3.play(bpf3Val);
         WRITE_VOLATILE(sharedMem::f2, bpf3Val);
 
-        float bpf4Val = bpf4.play(mix) * 100.f;
+        float bpf4Val = bpf4.play(mix) * boost;
         bpf4Val = bpfEnv4.play(bpf4Val);
         WRITE_VOLATILE(sharedMem::f3, bpf4Val);
 
@@ -131,18 +136,32 @@ public:
 
         // Process drum machine
 
+#if BREAKBEAT
         //cast phase with rounding
         size_t currentSegment = static_cast<size_t>(phase / sample_info.sample_count / segLength);
         float segmentRoot = (float)static_cast<size_t>(smoothParams[currentSegment] * segments);
 
+        // Check continue flag for current segment
+        bool continuePrevious = smoothParams[currentSegment + segments] > 0.5f;
+
+        float samplePosition;
+        if (continuePrevious) {
+            // Continue from current position, ignore segment boundaries
+            samplePosition = phase;
+        } else {
+            // Jump to segment specified by neural network
+            samplePosition = (segmentRoot * segLength * sample_info.sample_count) + segmentPhase;
+        }
+
         PERIODIC_DEBUG(44100,
             DEBUG_PRINTLN("bpf1: " + String(bpf1Val) + ", bpf2: " + String(bpf2Val) +
-                          ", root: " + String(segmentRoot) + "seg: " + String(currentSegment)
+                          ", root: " + String(segmentRoot) + "seg: " + String(currentSegment) +
+                          ", continue: " + String(continuePrevious)
                          );
         );
 
         // float y = sample_info.samples[static_cast<size_t>(phase+0.5f)];
-        float y = sample_info.samples[static_cast<size_t>((segmentRoot * segLength * sample_info.sample_count) + segmentPhase+0.5f)];
+        float y = sample_info.samples[static_cast<size_t>(samplePosition+0.5f)];
         float rateInput = 1.f;
         // if (smoothParams[1] > 0.5f) {
         //     rateInput *= -1.f;
@@ -166,6 +185,30 @@ public:
                 segmentPhase += segLengthInSamples;
             }
         }
+#else
+        // First parameter sets read speed
+        constexpr float kRateInputMin = 0.5f;
+        constexpr float kRateInputMax = 2.f;
+        float rateInput = kRateInputMin + (smoothParams[0] * (kRateInputMax - kRateInputMin));
+        // Second parameter sets direction
+        if (smoothParams[1] > 0.5f) {
+            rateInput *= -1.f;
+        }
+        // Read sample at current phase (linear interpolation, with wrap-around if across sample_count boundary)
+        float y = sample_info.samples[static_cast<size_t>(phase + 0.5f) % sample_info.sample_count];
+        // Update phase
+        phase += rateInput;
+#endif
+
+        if (rateInput >=0.f) {
+            if (phase >= sample_info.sample_count) {
+                phase -= sample_info.sample_count;
+            }
+        } else {
+            if (phase < 0) {
+                phase += sample_info.sample_count;
+            }
+        }
 
         stereosample_t ret { y, y };
 
@@ -176,10 +219,10 @@ public:
     {
         AudioAppBase::Setup(sample_rate, interface);
         maxiSettings::sampleRate = sample_rate;
-        bpf1.set(maxiBiquad::filterTypes::BANDPASS, 200.f, 5.f, 0.f);
-        bpf2.set(maxiBiquad::filterTypes::BANDPASS, 600.f, 5.f, 0.f);
-        bpf3.set(maxiBiquad::filterTypes::BANDPASS, 1800.f, 5.f, 0.f);
-        bpf4.set(maxiBiquad::filterTypes::BANDPASS, 5400.f, 5.f, 0.f);
+        bpf1.set(maxiBiquad::filterTypes::BANDPASS, 100.f, 5.f, 0.f);
+        bpf2.set(maxiBiquad::filterTypes::BANDPASS, 300.f, 5.f, 0.f);
+        bpf3.set(maxiBiquad::filterTypes::BANDPASS, 900.f, 5.f, 0.f);
+        bpf4.set(maxiBiquad::filterTypes::BANDPASS, 2700.f, 5.f, 0.f);
     }
 
     void ProcessParams(const std::vector<float>& params) override

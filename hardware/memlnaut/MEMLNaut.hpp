@@ -6,6 +6,10 @@
 #include "../../utils/MedianFilter.h"
 #include <functional>
 #include <array>
+#include "display/DisplayDriver.hpp"
+#include "display/SystemView.hpp"
+#include "SD.h"
+
 
 
 class MEMLNaut {
@@ -72,14 +76,16 @@ private:
     static void encoder1_callback();
 
 
+
+
 public:
     static __attribute__((always_inline)) MEMLNaut* Instance() {
         return instance;
     }
 
-    static void Initialize() {
+    static void Initialize(bool old_display = false) {
         if (!instance) {
-            instance = new MEMLNaut();
+            instance = new MEMLNaut(old_display);
         }
     }
 
@@ -87,7 +93,16 @@ public:
     MEMLNaut(const MEMLNaut&) = delete;
     MEMLNaut& operator=(const MEMLNaut&) = delete;
 
-    MEMLNaut();
+    MEMLNaut(bool old_display = false);
+
+    void addSystemInfoView() {
+        if (disp) {
+            sysView = std::make_shared<SystemView>("System Info");
+            disp->AddView(sysView);
+        }
+    }
+
+
 
     // Set callbacks for momentary switches
     void setMomA1Callback(ButtonCallback cb);
@@ -128,6 +143,24 @@ public:
     void SyncOnBoot();
 
     void loop();
+
+    //display
+    std::unique_ptr<DisplayDriver> disp;
+    std::shared_ptr<SystemView> sysView;
+
+    // SD
+    bool startSD() {
+        if (!SD.begin(Pins::SD_CS, SPI1)) {
+            return false;
+        }
+        return true;
+    }
+    bool stopSD() {
+        SD.end();
+        Serial.println("SD card stopped");
+        return true;
+    }
+
 };
 
 #endif // __MEMLNAUT_HPP__

@@ -125,6 +125,10 @@ public:
     void trigger_dislike();
     void trigger_randomiseRL();
 
+    inline void getAction(std::vector<float> &out_action) {
+        out_action = action;
+    }
+
 protected:
     // Helper methods for trigger actions
     void _perform_like_action();
@@ -140,7 +144,11 @@ private:
 
     bool newInput=false;
 
-    const std::vector<ACTIVATION_FUNCTIONS> layers_activfuncs = {
+    const std::vector<ACTIVATION_FUNCTIONS> actor_activfuncs = {
+        RELU, RELU, SIGMOID
+    };
+
+    const std::vector<ACTIVATION_FUNCTIONS> critic_activfuncs = {
         RELU, RELU, SIGMOID
     };
 
@@ -157,13 +165,15 @@ private:
     std::shared_ptr<MLP<float> > actor, actorTarget, critic, criticTarget;
 
     float discountFactor = 0.1f;
-    float actorLearningRate = 1e-4;
-    float criticLearningRate = 1e-4;
+    float actorLearningRate = 1e-3;
+    float criticLearningRate = 1e-3;
     float smoothingAlpha = 0.01f;
 
     std::vector<float> action;
 
     ReplayMemory<trainRLItem> replayMem;
+    static constexpr size_t memoryLimit = 32;
+    static constexpr size_t batchSize = 16;
 
     std::vector<float> actorOutput, criticOutput;
     std::vector<float> criticInput;

@@ -6,7 +6,9 @@
 #include <memory>
 #include "../../memlp/MLP.h"
 #include "../../memlp/Dataset.hpp"
-
+#include "../hardware/memlnaut/display/MessageView.hpp"
+#include "../hardware/memlnaut/display/BarGraphView.hpp"
+#include "../hardware/memlnaut/display/BlockSelectView.hpp"
 
 // Forward declarations
 class Dataset;
@@ -21,7 +23,7 @@ public:
     IMLInterface() : InterfaceBase() {}
 
     void setup(size_t n_inputs, size_t n_outputs) override;
-    void setup(size_t n_inputs, size_t n_outputs, std::shared_ptr<display> disp);
+    // void setup(size_t n_inputs, size_t n_outputs, std::shared_ptr<display> disp);
 
     enum training_mode_t {
         INFERENCE_MODE,
@@ -74,6 +76,10 @@ protected:
 
     // Display reference for binding methods
     std::shared_ptr<display> disp_;
+    std::shared_ptr<MessageView> msgView;
+    std::shared_ptr<BlockSelectView> fileSaveView;
+    std::shared_ptr<BlockSelectView> fileLoadView;
+    std::shared_ptr<BarGraphView> nnOutputsGraphView;
 
     // Zooming
     bool zoom_enabled_;
@@ -85,6 +91,10 @@ protected:
     void MLRandomise_();
     bool MLTraining_();
     std::vector<float> ZoomCoordinates(const std::vector<float>& coord, const std::vector<float>& zoom_centre, float factor);
+
+    float randomScale=1.f;
+
+    bool resetMinMaxFlag=false;
 };
 
 #endif  // __IML_INTERFACE_HPP__
