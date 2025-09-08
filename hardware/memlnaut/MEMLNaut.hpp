@@ -79,7 +79,7 @@ private:
 
 
 public:
-    static __attribute__((always_inline)) MEMLNaut* Instance() {
+    static inline __attribute__((always_inline)) MEMLNaut* Instance() {
         return instance;
     }
 

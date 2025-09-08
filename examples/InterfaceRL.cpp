@@ -4,9 +4,6 @@
 #include "../hardware/memlnaut/MEMLNaut.hpp" // Required for MEMLNaut::Instance()
 // display.hpp is included via InterfaceRL.hpp
 
-// XIASRI and bias are defined in InterfaceRL.hpp, so they are available here.
-// PERIODIC_DEBUG is likely defined in PicoDefs.hpp or sharedMem.hpp, included via InterfaceRL.hpp
-
 
 // Protected helper method implementations
 void InterfaceRL::_perform_like_action() {
@@ -220,12 +217,8 @@ void InterfaceRL::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf)
 
 void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
 {
-#if XIASRI
-    const size_t nAudioAnalysisInputs = 4;
-#else
-    const size_t nAudioAnalysisInputs = 0;
-#endif
-    controlSize = n_inputs + nAudioAnalysisInputs;
+    controlSize = n_inputs; // control inputs only
+
     InterfaceBase::setup(controlSize, n_outputs);
 
     stateSize = controlSize; //state = control inputs + synth params
@@ -288,6 +281,8 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
     // GUI
     msgView = std::make_shared<MessageView>("Messages");
     MEMLNaut::Instance()->disp->AddView(msgView);
+    nnOutputsGraphView = std::make_shared<BarGraphView>("NN Outputs", n_outputs, 4, TFT_GREEN, 0.f, 1.f);
+    MEMLNaut::Instance()->disp->AddView(nnOutputsGraphView);
 }
 
 
@@ -466,27 +461,16 @@ void InterfaceRL::optimise() {
     }
 }
 
-void InterfaceRL::readAnalysisParameters() {
+void InterfaceRL::readAnalysisParameters(std::vector<float> params) {
     //read analysis parameters
-#if XIASRI
-    actorControlInput[0] = READ_VOLATILE(sharedMem::f0);
-    actorControlInput[1] = READ_VOLATILE(sharedMem::f1);
-    actorControlInput[2] = READ_VOLATILE(sharedMem::f2);
-    actorControlInput[3] = READ_VOLATILE(sharedMem::f3);
-    PERIODIC_DEBUG(40, { // Ensure PERIODIC_DEBUG is defined (e.g. in PicoDefs.hpp or sharedMem.hpp)
-        DEBUG_PRINTLN(actorControlInput[0]);
-    })
-    newInput = true;
-    if (msgView) {
-        // Calculate argmax of actorControlInput
-        size_t maxIndex = 0;
-        for (size_t i = 1; i < actorControlInput.size()-1; ++i) {
-            if (actorControlInput[i] > actorControlInput[maxIndex]) {
-                maxIndex = i;
-            }
-        }
+    if (params.size() != n_inputs_) {
+        DEBUG_PRINTLN("Error: Incorrect number of analysis parameters received.");
+        return;
     }
-#endif
+    // Copy params and add bias efficiently
+    actorControlInput = params;
+    actorControlInput.push_back(1.0f);
+
     generateAction(true);
 }
 
@@ -508,6 +492,7 @@ void InterfaceRL::generateAction(bool donthesitate) {
 
         SendParamsToQueue(actorOutput);
         action = actorOutput;
+        nnOutputsGraphView->UpdateValues(actorOutput, false);
 
         // for(size_t i=0; i < actorOutput.size(); i++) {
         //     const float noise = ou_noise.sample() * knobL; // ou_noise and knobL are not defined here

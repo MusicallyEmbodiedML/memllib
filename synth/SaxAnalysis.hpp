@@ -1,15 +1,11 @@
 #ifndef __SAX_ANALYSIS_HPP__
 #define __SAX_ANALYSIS_HPP__
 
-#include <Arduino.h>
-
-#include "maximilian.h"
 #include "../audio/AudioDriver.hpp"
 #include "../utils/MedianFilter.h"
 #include "../utils/CircularBuffer.hpp"
+#include "maximilian.h"
 
-#include <cstdint>
-#include <cstddef>
 #include <cmath>
 
 
@@ -22,12 +18,13 @@ public:
         float energy;
         float attack;
         float brightness;
+        float energy_crude;
     };
     static constexpr size_t kN_Params = sizeof(parameters_t) / sizeof(float);
 
     SaxAnalysis(const float sample_rate);
 
-    parameters_t Process(float x);
+    parameters_t Process(const float x);
 
 protected:
     const float sample_rate_;

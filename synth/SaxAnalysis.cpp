@@ -1,7 +1,10 @@
 #include "SaxAnalysis.hpp"
 
-#include <array>
-#include <cstddef>
+#include <cmath>
+
+#include "../hardware/memlnaut/Pins.hpp"
+#include "../utils/Maths.hpp"
+#include "../PicoDefs.hpp"
 
 
 SaxAnalysis::SaxAnalysis(const float sample_rate) :
@@ -30,61 +33,40 @@ SaxAnalysis::SaxAnalysis(const float sample_rate) :
 
 
 inline float logEnvelopeFast(float linearEnv) {
-    static constexpr float MIN_ENV = 1e-4f;
-    static constexpr float SCALE = 6.64385619e-8f;  // Magic constant
-    static constexpr float OFFSET = 2.0f;
+    // -60 dBFS corresponds to a linear amplitude ratio of 10^(-60/20) = 10^(-3) = 0.001
+    static constexpr float MIN_ENV = 1e-3f;  // 10^(-60dB/20dB) = 0.001 linear
 
-    // Clamp input
+    // Mathematical derivation:
+    // We want to map linear amplitude [0.001, 1.0] to normalized range [0, 1]
+    // where 0.001 corresponds to -60 dBFS and 1.0 corresponds to 0 dBFS
+    //
+    // Using logarithmic mapping: output = (log2(input) - log2(min)) / (log2(max) - log2(min))
+    // log2(0.001) = log2(10^-3) = -3 * log2(10) ≈ -9.966
+    // log2(1.0) = 0
+    // Range = 0 - (-9.966) = 9.966
+
+    static constexpr float LOG2_MIN_ENV = -3.0f * 3.321928095f;  // -3 * log2(10) ≈ -9.966
+    static constexpr float LOG2_MAX_ENV = 0.0f;                  // log2(1.0) = 0
+    static constexpr float LOG_RANGE = LOG2_MAX_ENV - LOG2_MIN_ENV;  // 9.966
+    static constexpr float INV_LOG_RANGE = 1.0f / LOG_RANGE;    // 1 / 9.966 ≈ 0.1003
+
+    // Clamp input to minimum envelope value
     linearEnv = (linearEnv > MIN_ENV) ? linearEnv : MIN_ENV;
 
-    // Ultra-fast log approximation using only integer operations
-    union { float f; uint32_t i; } vx = { linearEnv };
-    float y = (float)vx.i * SCALE - OFFSET;
+    // Precise logarithmic conversion
+    float log2_val = std::log2f(linearEnv);
 
-    // Single branch-free clamp
+    // Map to [0,1]: (log2_val - log2_min) / (log2_max - log2_min)
+    float y = (log2_val - LOG2_MIN_ENV) * INV_LOG_RANGE;
+
+    // Clamp to [0,1] range (should be unnecessary given our math, but safety first)
     y = (y > 1.0f) ? 1.0f : y;
     y = (y < 0.0f) ? 0.0f : y;
 
     return y;
 }
 
-
-template<size_t N>
-float medianAbsoluteDeviation(std::array<float, N>& data) noexcept {
-    static_assert(N > 0, "Array size must be greater than 0");
-
-    // Find median
-    constexpr size_t mid = N / 2;
-    std::nth_element(data.begin(), data.begin() + mid, data.end());
-
-    float median;
-    if constexpr (N % 2 == 0) {
-        // Even size: need both middle elements
-        std::nth_element(data.begin(), data.begin() + mid - 1, data.begin() + mid);
-        median = (data[mid - 1] + data[mid]) * 0.5f;
-    } else {
-        // Odd size: just the middle element
-        median = data[mid];
-    }
-
-    // Convert to absolute deviations in-place
-    for (auto& val : data) {
-        val = std::abs(val - median);
-    }
-
-    // Find median of absolute deviations
-    std::nth_element(data.begin(), data.begin() + mid, data.end());
-
-    if constexpr (N % 2 == 0) {
-        std::nth_element(data.begin(), data.begin() + mid - 1, data.begin() + mid);
-        return (data[mid - 1] + data[mid]) * 0.5f;
-    } else {
-        return data[mid];
-    }
-}
-
-
-SaxAnalysis::parameters_t SaxAnalysis::Process(float x) {
+SaxAnalysis::parameters_t AUDIO_FUNC(SaxAnalysis::Process)(const float x) {
     parameters_t params = {};
 
     // Pre-filter
@@ -96,7 +78,7 @@ SaxAnalysis::parameters_t SaxAnalysis::Process(float x) {
     if (positive_zero_crossing) {
         size_t median_elapsed_samples = zc_median_filter_.process(elapsed_samples_);
         zc_buffer_.push(median_elapsed_samples);
-
+        elapsed_samples_ = 0;
     }
     // Convert zero crossing value to pitch
     size_t zc_value = zc_buffer_[zc_buffer_.size() - 1];
@@ -112,12 +94,12 @@ SaxAnalysis::parameters_t SaxAnalysis::Process(float x) {
     }
     elapsed_samples_++;
     // Aperiodicity calculation
-    std::array<float, kZC_ZCBufferSize> zc_copy;
+    float zc_copy[kZC_ZCBufferSize];
     // Copy contents of circular buffer to float array
     for (size_t i = 0; i < kZC_ZCBufferSize; ++i) {
         zc_copy[i] = static_cast<float>(zc_buffer_[i]);
     }
-    float mad = medianAbsoluteDeviation(zc_copy);
+    float mad = meanAbsoluteDeviation(zc_copy, kZC_ZCBufferSize);
     // Scale MAD relative to median period
     float medianPeriod = static_cast<float>(zc_value);
     float relativeMad = mad / (medianPeriod + 1.0f);  // +1 to avoid div/0
@@ -161,6 +143,7 @@ SaxAnalysis::parameters_t SaxAnalysis::Process(float x) {
     params.energy = ef_y;
     params.attack = ef_d_dy;
     params.brightness = br_high;
+    params.energy_crude = std::abs(x);
 
     return params;
 }
