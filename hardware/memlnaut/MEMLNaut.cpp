@@ -29,16 +29,16 @@ void MEMLNaut::handleReSW() {
         instance->reSWCallback();
     }
 }
-void MEMLNaut::handleReA() {
-    if (instance && instance->debouncers[5].debounce() && instance->reACallback) {
-        instance->reACallback();
-    }
-}
-void MEMLNaut::handleReB() {
-    if (instance && instance->debouncers[6].debounce() && instance->reBCallback) {
-        instance->reBCallback();
-    }
-}
+// void MEMLNaut::handleReA() {
+//     if (instance && instance->debouncers[5].debounce() && instance->reACallback) {
+//         instance->reACallback();
+//     }
+// }
+// void MEMLNaut::handleReB() {
+//     if (instance && instance->debouncers[6].debounce() && instance->reBCallback) {
+//         instance->reBCallback();
+//     }
+// }
 
 void MEMLNaut::handleTogA1() {
     if (instance) {
