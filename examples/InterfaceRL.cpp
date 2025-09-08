@@ -230,6 +230,9 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
     controlSize = n_inputs + nAudioAnalysisInputs;
     InterfaceBase::setup(controlSize, n_outputs);
 
+    msgView = std::make_shared<MessageView>("Messages");
+    MEMLNaut::Instance()->disp->AddView(msgView);
+
 
     stateSize = controlSize; //state = control inputs + synth params
 

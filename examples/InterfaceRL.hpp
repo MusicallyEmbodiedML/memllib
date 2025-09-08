@@ -10,7 +10,8 @@
 #include "../utils/sharedMem.hpp"
 
 #include "../PicoDefs.hpp"
-#include "../hardware/memlnaut/display.hpp" // Added include
+#include "../hardware/memlnaut/display.hpp"
+#include "../hardware/memlnaut/display/MessageView.hpp"
 
 #include "../interface/UARTInput.hpp"
 #include "../interface/MIDIInOut.hpp"
@@ -183,6 +184,9 @@ private:
     float rewardScale = 1.f;
 
     OrnsteinUhlenbeckNoise ou_noise;
+
+    std::shared_ptr<MessageView> msgView;
+
 };
 
 #endif // INTERFACERL_HPP
