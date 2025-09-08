@@ -21,11 +21,10 @@ void InterfaceRL::_perform_like_action() {
     String msg = likemsgs[rand() % likemsgs.size()];
     this->storeExperience(1.f * rewardScale);
     DEBUG_PRINTLN(msg);
-    if (m_scr_ptr) m_scr_ptr->post(msg);
+    if (msgView) msgView->post(msg);
 }
 
 void InterfaceRL::_perform_dislike_action() {
-    if (!m_scr_ptr) return; // Guard against null pointer
     static APP_SRAM std::vector<String> dislikemsgs = {
         "Awful!", "wtf? that sucks", "Get rid of this sound", "Totally shite",
         "I hate this", "Why even bother?", "New sound please!", "No, please no!!!",
@@ -38,7 +37,7 @@ void InterfaceRL::_perform_dislike_action() {
     String msg = dislikemsgs[rand() % dislikemsgs.size()];
     this->storeExperience(-1.f * rewardScale);
     DEBUG_PRINTLN(msg);
-    if (m_scr_ptr) m_scr_ptr->post(msg);
+    if (msgView) msgView->post(msg);
 }
 
 void InterfaceRL::_perform_randomiseRL_action() {
@@ -46,7 +45,7 @@ void InterfaceRL::_perform_randomiseRL_action() {
     this->randomiseTheActor();
     this->generateAction(true);
     DEBUG_PRINTLN("The Actor is confused");
-    if (m_scr_ptr) m_scr_ptr->post("Actor: i'm confused");
+    if (msgView) msgView->post("Actor: i'm confused");
 }
 
 // Public trigger methods (updated to call protected helpers)
@@ -73,14 +72,13 @@ void InterfaceRL::setOptimiseDivisorInterf(float value)
     }else{
         msg = "Optimise every " + String(divisor) + " cycles";
     }
-    if (m_scr_ptr) m_scr_ptr->post(msg);
+    if (msgView) msgView->post(msg);
     this->setOptimiseDivisor(divisor);
     DEBUG_PRINTLN(msg);
 }
 
 
-void InterfaceRL::bind_RL_interface(display& scr_ref, bool disable_joystick) {
-    m_scr_ptr = &scr_ref; // Store the pointer to the display object
+void InterfaceRL::bind_RL_interface(bool disable_joystick) {
 
     // Set up momentary switch callbacks
     MEMLNaut::Instance()->setMomA1Callback([this]() { // scr_ref no longer captured directly
@@ -96,7 +94,7 @@ void InterfaceRL::bind_RL_interface(display& scr_ref, bool disable_joystick) {
         this->randomiseTheCritic();
         this->generateAction(true);
         DEBUG_PRINTLN("The Critic is confounded");
-        if (m_scr_ptr) m_scr_ptr->post("Critic: totally confounded");
+        if (msgView) msgView->post("Critic: totally confounded");
     });
     if (!disable_joystick) {
         // Set up ADC callbacks
@@ -121,7 +119,7 @@ void InterfaceRL::bind_RL_interface(display& scr_ref, bool disable_joystick) {
             };
             String msg = forgetmsgs[rand() % forgetmsgs.size()];
 
-            if (m_scr_ptr) m_scr_ptr->post(msg);
+            if (msgView) msgView->post(msg);
 
         }
     });
@@ -138,10 +136,10 @@ void InterfaceRL::bind_RL_interface(display& scr_ref, bool disable_joystick) {
         // value *= 0.1f; // Scale down the value
         // this->setLearningRate(value);
         // String msg = "LR: " + String(value,8);
-        // if (m_scr_ptr) m_scr_ptr->post(msg);
+        // if (msgView) msgView->post(msg);
         // this->setDiscountFactor(value);
         // String msg = "Discount factor: " + String(value);
-        // if (m_scr_ptr) m_scr_ptr->post(msg);
+        // if (msgView) msgView->post(msg);
         setNoiseLevel(value);
     });
     // Set up loop callback
@@ -157,7 +155,7 @@ void InterfaceRL::setRewardScaleInterf(float value)
     return;  // bypassed for now
     this->setRewardScale(value);
     String msg = "Reward scale: " + String(value);
-    if (m_scr_ptr) m_scr_ptr->post(msg);
+    if (msgView) msgView->post(msg);
 }
 
 
@@ -230,10 +228,6 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
     controlSize = n_inputs + nAudioAnalysisInputs;
     InterfaceBase::setup(controlSize, n_outputs);
 
-    msgView = std::make_shared<MessageView>("Messages");
-    MEMLNaut::Instance()->disp->AddView(msgView);
-
-
     stateSize = controlSize; //state = control inputs + synth params
 
     actionSize = n_outputs;
@@ -290,18 +284,12 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
 
     // Memory limit
     replayMem.setMemoryLimit(memoryLimit);
+
+    // GUI
+    msgView = std::make_shared<MessageView>("Messages");
+    MEMLNaut::Instance()->disp->AddView(msgView);
 }
 
-void InterfaceRL::setup(size_t n_inputs, size_t n_outputs, std::shared_ptr<display> disp) {
-    this->setup(n_inputs, n_outputs);
-    m_scr_ptr = disp.get(); // Store the pointer to the display object
-
-    if (m_scr_ptr) {
-        m_scr_ptr->statusPost("No value", 0);
-        m_scr_ptr->statusPost("No value", 1);
-    }
-
-}
 
 void InterfaceRL::optimise() {
     std::vector<trainRLItem> sample = replayMem.sample(batchSize);
@@ -424,7 +412,7 @@ void InterfaceRL::optimise() {
 
             // Optional: notify user of instability
             if (gradNorm > maxGradNorm * 5.0f) {
-                m_scr_ptr->post("Learning unstable - adjusting...");
+                msgView->post("Learning unstable - adjusting...");
             }
         }
 
@@ -456,7 +444,7 @@ void InterfaceRL::optimise() {
         // Log the loss and total actor gradient
         // static APP_SRAM size_t msgCount = 0;
         // if (++msgCount % 20 == 0) { // Log every 10th optimisation
-        //     if (m_scr_ptr) m_scr_ptr->post("Cr: " + String(loss, 4) + " Ac: " + String(totalActorGradient, 4));
+        //     if (msgView) msgView->post("Cr: " + String(loss, 4) + " Ac: " + String(totalActorGradient, 4));
         // }
 
         //back propagate the actor loss (apply gradients)
@@ -489,7 +477,7 @@ void InterfaceRL::readAnalysisParameters() {
         DEBUG_PRINTLN(actorControlInput[0]);
     })
     newInput = true;
-    if (m_scr_ptr) {
+    if (msgView) {
         // Calculate argmax of actorControlInput
         size_t maxIndex = 0;
         for (size_t i = 1; i < actorControlInput.size()-1; ++i) {
@@ -497,8 +485,6 @@ void InterfaceRL::readAnalysisParameters() {
                 maxIndex = i;
             }
         }
-        //m_scr_ptr->statusPost("Max:" + String(maxIndex), 1);
-        //m_scr_ptr->statusPost(String(actorControlInput[maxIndex], 4), 0);
     }
 #endif
     generateAction(true);
@@ -508,13 +494,6 @@ void InterfaceRL::generateAction(bool donthesitate) {
     if (newInput || donthesitate) {
         newInput = false;
         // std::vector<float> actorOutput; // This was shadowing the member variable
-
-#if XIASRI
-#else
-        if (m_scr_ptr) {
-            m_scr_ptr->statusPost(String(actorControlInput[0], 4), 0);
-        }
-#endif
 
         actorTarget->GetOutput(actorControlInput, &actorOutput); // Use member actorOutput
         for(size_t i=0; i < actorOutput.size(); i++) {
@@ -527,10 +506,6 @@ void InterfaceRL::generateAction(bool donthesitate) {
             }
         }
 
-        if (m_scr_ptr) {
-            m_scr_ptr->statusPost(String(actorOutput[0], 4), 0);
-            m_scr_ptr->statusPost(String(actorOutput[1], 4), 1);
-        }
         SendParamsToQueue(actorOutput);
         action = actorOutput;
 
@@ -538,13 +513,6 @@ void InterfaceRL::generateAction(bool donthesitate) {
         //     const float noise = ou_noise.sample() * knobL; // ou_noise and knobL are not defined here
         //     actorOutput[i] += noise;
         // }
-
-        #if XIASRI
-#else
-        if (m_scr_ptr) {
-            m_scr_ptr->statusPost(String(action[0], 4), 1);
-        }
-#endif
     }
 }
 

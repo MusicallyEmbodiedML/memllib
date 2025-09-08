@@ -10,11 +10,15 @@
 #include "../utils/sharedMem.hpp"
 
 #include "../PicoDefs.hpp"
-#include "../hardware/memlnaut/display.hpp"
+//#include "../hardware/memlnaut/display.hpp"
 #include "../hardware/memlnaut/display/MessageView.hpp"
 
 #include "../interface/UARTInput.hpp"
 #include "../interface/MIDIInOut.hpp"
+
+#include "../hardware/memlnaut/display/MessageView.hpp"
+#include "../hardware/memlnaut/display/BarGraphView.hpp"
+#include "../hardware/memlnaut/display/BlockSelectView.hpp"
 
 #define RL_MEM __not_in_flash("rlmem")
 
@@ -35,7 +39,6 @@ public:
 
     }
     void setup(size_t n_inputs, size_t n_outputs);
-    void setup(size_t n_inputs, size_t n_outputs, std::shared_ptr<display> disp);
 
     void optimise();
 
@@ -98,23 +101,15 @@ public:
         level *= 0.5f;
         if (level < 0.05f) {
             level = 0.f;
-            if (m_scr_ptr) m_scr_ptr->post("Noise off");
+            if (msgView) msgView->post("Noise off");
         }
         String msg = "OU Sigma: " + String(level, 4);
-        if (m_scr_ptr) m_scr_ptr->post(msg);
+        if (msgView) msgView->post(msg);
         ou_noise.setSigma(level);
     }
 
-    // New methods
-    void bind_RL_interface(display& scr_ref, bool disable_joystick = false); // scr_ref is passed once here
-    void bindInterface(bool disable_joystick = false)
-    {
-        if (m_scr_ptr) {
-            bind_RL_interface(*m_scr_ptr, disable_joystick); // Use the stored pointer to display
-        } else {
-            DEBUG_PRINTLN("Display pointer is null, cannot bind interface.");
-        }
-    }
+    void bind_RL_interface(bool disable_joystick = false);
+
     void bindUARTInput(std::shared_ptr<UARTInput> uart_input,
         const std::vector<size_t>& kUARTListenInputs)
     {
@@ -137,7 +132,6 @@ protected:
     void _perform_randomiseRL_action();
 
 private:
-    display* m_scr_ptr = nullptr; // Pointer to the display object
     static constexpr size_t bias=1;
 
     size_t optimiseDivisor = 40;
@@ -185,7 +179,11 @@ private:
 
     OrnsteinUhlenbeckNoise ou_noise;
 
+    // Display views
     std::shared_ptr<MessageView> msgView;
+    std::shared_ptr<BlockSelectView> fileSaveView;
+    std::shared_ptr<BlockSelectView> fileLoadView;
+    std::shared_ptr<BarGraphView> nnOutputsGraphView;
 
 };
 
