@@ -10,6 +10,7 @@
 #ifndef __PINS_HPP__
 #define __PINS_HPP__
 #include <Arduino.h>
+#include "../../PicoDefs.hpp"
 
 /**
  * @brief Class containing all pin definitions and initialization functions
@@ -96,6 +97,9 @@ public:
     static constexpr uint8_t USEQ_SCL = 39; ///< USeq I2C SCL (CV output)
     /** @} */
 
+
+
+
     /**
      * @brief Initialize all pins with their respective modes
      */
@@ -142,7 +146,8 @@ public:
         // Set ADC resolution to 12 bits
         analogReadResolution(12);
 
-        Serial.println("Pins initialized.");
+
+        DEBUG_PRINTLN("Pins initialized.");
     }
 };
 

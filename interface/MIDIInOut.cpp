@@ -1,6 +1,8 @@
 #include "MIDIInOut.hpp"
 #include <Arduino.h>
 #include "../PicoDefs.hpp"
+#include <unordered_set>
+
 
 
 struct CustomMIDISettings : public midi::DefaultSettings {
@@ -18,7 +20,8 @@ MIDIInOut::MIDIInOut() : n_outputs_(0),
                          note_callback_(nullptr),
                          send_channel_(1),
                          note_channel_(1),
-                         refresh_uart_(false) {
+                         refresh_uart_(false),
+                         use_advanced_mappings_(false) {
     instance_ = this;
 }
 
@@ -38,9 +41,21 @@ void MIDIInOut::Setup(size_t n_outputs,
     delay(100); // Allow port to stabilize
 
     // Initialize CC numbers to default values [0 .. (n_outputs-1)]
-    static const size_t cc_start = 14;
-    for (size_t i = 0; i < n_outputs; i++) {
-        cc_numbers_[i] = static_cast<uint8_t>(i + cc_start);
+    std::vector<int>  midiShitList = {0, 6,7, 8, 10, 32, 38, 39,41, 43};
+
+    std::unordered_set<int> excludeSet(midiShitList.begin(), midiShitList.end());
+    std::vector<int> ccnums;
+    ccnums.reserve(127 - midiShitList.size()); // pre-allocate
+
+    for(int i = 0; i < 127; i++) {
+        if(excludeSet.find(i) == excludeSet.end()) {
+            ccnums.push_back(i);
+        }
+    }
+
+    cc_numbers_.resize(ccnums.size());
+    for(size_t i=0; i < ccnums.size();i++) {
+        cc_numbers_[i] = static_cast<uint8_t>(ccnums[i]);
     }
 
     if (midi_through) {
@@ -73,54 +88,113 @@ void MIDIInOut::Setup(size_t n_outputs,
     // Serial2.flush();
     // MEMORY_BARRIER();
 
-    // Serial.println("MIDI setup complete");
+     DEBUG_PRINTLN("MIDI setup complete");
     // Serial2.flush();  // Ensure the message is sent completely
 }
 
 void MIDIInOut::Poll()
 {
-    RefreshUART_(); // Refresh UART if needed
+    // RefreshUART_(); // Refresh UART if needed
 
     MIDI.read();
 }
 
 
+void MIDIInOut::warnSizeMismatch(const char* function_name, size_t expected, size_t actual) const {
+    DEBUG_PRINTF("Warning: %s size mismatch (expected %d, got %d)\n", function_name, expected, actual);
+}
+
 void MIDIInOut::SetParamCCNumbers(const std::vector<uint8_t>& cc_numbers) {
     if (cc_numbers.size() != n_outputs_) {
-        Serial.printf("Warning: CC numbers vector size mismatch (expected %d, got %d)\n",
-                     n_outputs_, cc_numbers.size());
-        return;
+        warnSizeMismatch("SetParamCCNumbers", n_outputs_, cc_numbers.size());
     }
     cc_numbers_ = cc_numbers;
 }
 
 void MIDIInOut::SendParamsAsMIDICC(const std::vector<float>& params) {
-    if (params.size() != n_outputs_) {
-        Serial.printf("Warning: Params vector size mismatch (expected %d, got %d)\n",
-                     n_outputs_, params.size());
-        return;
-    }
-
     RefreshUART_(); // Refresh UART if needed
 
     while(!Serial2) { delay(1); } // Wait for Serial2
-    for (size_t i = 0; i < n_outputs_; i++) {
-        float clamped = std::max(0.0f, std::min(1.0f, params[i]));
-        uint8_t value = static_cast<uint8_t>(clamped * 127.0f + 0.5f);
-        MIDI.sendControlChange(cc_numbers_[i], value, send_channel_);
-        //Serial2.write(0xB0 | (1 + cc_numbers_[i])); // Control Change message
-        //Serial2.write(14); // CC number
-        //Serial2.write(value); // CC value
-        //Serial2.flush();
-        //delayMicroseconds(1000); // Increase delay to 1ms for stability
+
+    if (use_advanced_mappings_) {
+        // Use advanced mappings with individual channels and custom scaling
+        size_t send_count = std::min(params.size(), std::min(advanced_mappings_.size(), n_outputs_));
+        for (size_t i = 0; i < send_count; i++) {
+            const CCMapping& mapping = advanced_mappings_[i];
+            uint8_t value = scaleValue(params[i], mapping);
+            MIDI.sendControlChange(mapping.cc_number, value, mapping.channel);
+        }
+    } else {
+        // Use simple mappings (backwards compatible)
+        size_t send_count = std::min(params.size(), std::min(cc_numbers_.size(), n_outputs_));
+        for (size_t i = 0; i < send_count; i++) {
+            float clamped = std::max(0.0f, std::min(1.0f, params[i]));
+            uint8_t value = static_cast<uint8_t>(clamped * 127.0f + 0.5f);
+            MIDI.sendControlChange(cc_numbers_[i], value, send_channel_);
+        }
     }
     MEMORY_BARRIER();
+}
+
+void MIDIInOut::SetAdvancedParamMappings(const std::vector<CCMapping>& mappings) {
+    if (mappings.size() != n_outputs_) {
+        warnSizeMismatch("SetAdvancedParamMappings", n_outputs_, mappings.size());
+    }
+
+    advanced_mappings_ = mappings;
+
+    // Validate and fix mappings for efficiency
+    for (size_t i = 0; i < advanced_mappings_.size(); i++) {
+        // Ensure valid ranges
+        if (advanced_mappings_[i].channel < 1 || advanced_mappings_[i].channel > 16) {
+            advanced_mappings_[i].channel = 1;
+        }
+        if (advanced_mappings_[i].cc_number > 127) {
+            advanced_mappings_[i].cc_number = 127;
+        }
+        if (advanced_mappings_[i].min_value > 127) {
+            advanced_mappings_[i].min_value = 127;
+        }
+        if (advanced_mappings_[i].max_value > 127) {
+            advanced_mappings_[i].max_value = 127;
+        }
+        // Recompute scale factor in case values were clamped
+        uint8_t range = advanced_mappings_[i].max_value - advanced_mappings_[i].min_value;
+        advanced_mappings_[i].scale_factor = range;
+    }
+
+    use_advanced_mappings_ = true;
+}
+
+void MIDIInOut::SetParamMapping(size_t index, uint8_t cc_number, uint8_t channel, uint8_t min_value, uint8_t max_value) {
+    if (index >= n_outputs_) {
+        DEBUG_PRINTF("Warning: Parameter index %d out of range (max %d)\n", index, n_outputs_ - 1);
+        return;
+    }
+
+    // Initialize advanced_mappings_ if not already done
+    if (advanced_mappings_.size() != n_outputs_) {
+        advanced_mappings_.resize(n_outputs_);
+    }
+
+    // Validate and clamp values using bit operations for efficiency
+    channel = (channel < 1) ? 1 : ((channel > 16) ? 16 : channel);
+    cc_number = (cc_number > 127) ? 127 : cc_number;
+    min_value = (min_value > 127) ? 127 : min_value;
+    max_value = (max_value > 127) ? 127 : max_value;
+
+    advanced_mappings_[index] = CCMapping(cc_number, channel, min_value, max_value);
+    use_advanced_mappings_ = true;
+}
+
+void MIDIInOut::ClearAdvancedMappings() {
+    use_advanced_mappings_ = false;
 }
 
 void MIDIInOut::SetMIDISendChannel(uint8_t channel) {
     // Ensure channel is in valid range (1-16)
     if (channel < 1 || channel > 16) {
-        Serial.printf("Warning: Invalid MIDI channel %d (must be 1-16)\n", channel);
+        DEBUG_PRINTF("Warning: Invalid MIDI channel %d (must be 1-16)\n", channel);
         return;
     }
     send_channel_ = channel;
@@ -129,7 +203,7 @@ void MIDIInOut::SetMIDISendChannel(uint8_t channel) {
 void MIDIInOut::SetMIDINoteChannel(uint8_t channel) {
     // Ensure channel is in valid range (1-16)
     if (channel < 1 || channel > 16) {
-        Serial.printf("Warning: Invalid MIDI note channel %d (must be 1-16)\n", channel);
+        DEBUG_PRINTF("Warning: Invalid MIDI note channel %d (must be 1-16)\n", channel);
         return;
     }
     note_channel_ = channel;
@@ -173,7 +247,7 @@ void MIDIInOut::RefreshUART_(void) {
         while(!Serial2) {} // Wait for Serial2
         WRITE_VOLATILE(refresh_uart_, true);
 
-        Serial.println("MIDI UART refreshed.");
+        DEBUG_PRINTLN("MIDI UART refreshed.");
     }
 }
 

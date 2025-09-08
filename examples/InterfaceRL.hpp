@@ -17,8 +17,7 @@
 
 #define RL_MEM __not_in_flash("rlmem")
 
-#define XIASRI    0
-
+//#define XIASRI 1
 
 struct trainRLItem {
     std::vector<float> state ;
@@ -78,6 +77,8 @@ public:
         optimiseDivisor = newDiv;
     }
 
+    void setOptimiseDivisorInterf(float value);
+
     inline void forgetMemory() {
         replayMem.clear();
     }
@@ -85,6 +86,8 @@ public:
     inline void setRewardScale(float scale) {
         rewardScale = scale;
     }
+
+    void setRewardScaleInterf(float value);
 
     inline void setDiscountFactor(float factor) {
         discountFactor = factor;
@@ -108,22 +111,23 @@ public:
         if (m_scr_ptr) {
             bind_RL_interface(*m_scr_ptr, disable_joystick); // Use the stored pointer to display
         } else {
-            Serial.println("Display pointer is null, cannot bind interface.");
+            DEBUG_PRINTLN("Display pointer is null, cannot bind interface.");
         }
     }
     void bindUARTInput(std::shared_ptr<UARTInput> uart_input,
         const std::vector<size_t>& kUARTListenInputs)
     {
-        Serial.println("bindUARTInput not implemented yet");
+        DEBUG_PRINTLN("bindUARTInput not implemented yet");
     }
-    void bindMIDI(std::shared_ptr<MIDIInOut> midi_interf)
-    {
-        Serial.println("bindMIDI not implemented yet");
-    }
+    void bindMIDI(std::shared_ptr<MIDIInOut> midi_interf);
 
     void trigger_like();
     void trigger_dislike();
     void trigger_randomiseRL();
+
+    inline void getAction(std::vector<float> &out_action) {
+        out_action = action;
+    }
 
 protected:
     // Helper methods for trigger actions
@@ -140,7 +144,11 @@ private:
 
     bool newInput=false;
 
-    const std::vector<ACTIVATION_FUNCTIONS> layers_activfuncs = {
+    const std::vector<ACTIVATION_FUNCTIONS> actor_activfuncs = {
+        RELU, RELU, SIGMOID
+    };
+
+    const std::vector<ACTIVATION_FUNCTIONS> critic_activfuncs = {
         RELU, RELU, SIGMOID
     };
 
@@ -157,13 +165,15 @@ private:
     std::shared_ptr<MLP<float> > actor, actorTarget, critic, criticTarget;
 
     float discountFactor = 0.1f;
-    float actorLearningRate = 1e-4;
-    float criticLearningRate = 1e-4;
+    float actorLearningRate = 1e-3;
+    float criticLearningRate = 1e-3;
     float smoothingAlpha = 0.01f;
 
     std::vector<float> action;
 
     ReplayMemory<trainRLItem> replayMem;
+    static constexpr size_t memoryLimit = 32;
+    static constexpr size_t batchSize = 16;
 
     std::vector<float> actorOutput, criticOutput;
     std::vector<float> criticInput;
@@ -171,7 +181,7 @@ private:
 
     //std::vector<float> criticLossLog, actorLossLog, log1;
     float rewardScale = 1.f;
-  
+
     OrnsteinUhlenbeckNoise ou_noise;
 };
 

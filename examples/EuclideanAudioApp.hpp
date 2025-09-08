@@ -170,12 +170,12 @@ protected:
             op_params.k = op_params.n;
         }
 
-        // Serial.print("Operator params: n=");
-        // Serial.print(op_params.n);
-        // Serial.print(", k=");
-        // Serial.print(op_params.k);
-        // Serial.print(", offset=");
-        // Serial.println(op_params.offset);
+         DEBUG_PRINT("Operator params: n=");
+         DEBUG_PRINT(op_params.n);
+         DEBUG_PRINT(", k=");
+         DEBUG_PRINT(op_params.k);
+         DEBUG_PRINT(", offset=");
+         DEBUG_PRINTLN(op_params.offset);
     }
 
     static bool __force_inline euclidean(float _phase, const size_t _n, const size_t _k, const size_t _offset, const float _pulseWidth)

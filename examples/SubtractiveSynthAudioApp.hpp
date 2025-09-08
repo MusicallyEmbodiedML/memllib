@@ -36,7 +36,7 @@ public:
     {
         // // Map parameters to the synth
         // synth_.mapParameters(params);
-        // //Serial.print("Params processed.");
+        // //DEBUG_PRINT("Params processed.");
         osc1freq = 50.f + (params[0] * 50.f);
         osc2freq = osc1freq * (1.f + (params[1] * 0.1f));
         osc3freq = osc1freq * (1.f + (params[2] * 0.5f));

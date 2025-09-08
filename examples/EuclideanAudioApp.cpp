@@ -13,11 +13,11 @@ void EuclideanAudioApp::Setup(float sample_rate, std::shared_ptr<InterfaceBase> 
 void EuclideanAudioApp::ProcessParams(const std::vector<float>& params) {
     // Ensure parameter size is right
     if (params.size() != kN_Params) {
-        Serial.print("Error: Incorrect number of parameters provided.");
-        Serial.print(" Expected: ");
-        Serial.print(kN_Params);
-        Serial.print(", Got: ");
-        Serial.println(params.size());
+         DEBUG_PRINT("Error: Incorrect number of parameters provided.");
+         DEBUG_PRINT(" Expected: ");
+         DEBUG_PRINT(kN_Params);
+         DEBUG_PRINT(", Got: ");
+         DEBUG_PRINTLN(params.size());
         return;
     }
 

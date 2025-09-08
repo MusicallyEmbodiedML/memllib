@@ -11,7 +11,7 @@ namespace FlashFS {
     {
         LittleFS.begin();
         VFS.root(LittleFS);
-        Serial.println("LittleFS initialized.");
+        DEBUG_PRINTLN("LittleFS initialized.");
     }
 
     bool exists(const char* filename)

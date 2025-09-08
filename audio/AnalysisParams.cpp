@@ -18,7 +18,7 @@ void AUDIO_FUNC(AnalysisParamsWrite)(std::vector<float> &params) {
         CoreMutex acquire_1to0(&mutex_0to1_);
         for (unsigned int n=0; n < params_mem_.size(); n++) {
             if (n >= params.size()) {
-                Serial.println("PANIK! Too many params for AnalysisParams");
+                 DEBUG_PRINTLN("PANIK! Too many params for AnalysisParams");
             }
             params_mem_[n] = params[n];
         }

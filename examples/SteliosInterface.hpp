@@ -1,14 +1,15 @@
-#ifndef __IML_INTERFACE_HPP__
-#define __IML_INTERFACE_HPP__
+#ifndef __STELIOS_INTERFACE_HPP__
+#define __STELIOS_INTERFACE_HPP__
 
 #include <Arduino.h>
 #include "../interface/InterfaceBase.hpp"
 #include <memory>
 #include "../../memlp/MLP.h"
 #include "../../memlp/Dataset.hpp"
-#include "../hardware/memlnaut/display/MessageView.hpp"
-#include "../hardware/memlnaut/display/BarGraphView.hpp"
-#include "../hardware/memlnaut/display/BlockSelectView.hpp"
+#include "../interface/SerialUSBInput.hpp"
+#include "../interface/SerialUSBOutput.hpp"
+#include "../interface/SDCard.hpp"
+
 
 // Forward declarations
 class Dataset;
@@ -17,29 +18,22 @@ class UARTInput;
 class MIDIInOut;
 class display;
 
-class IMLInterface : public InterfaceBase
+class SteliosInterface : public InterfaceBase
 {
 public:
-    IMLInterface() : InterfaceBase() {}
+
+    static constexpr char kFilename[] = "mlp_weights.bin";
+
+    SteliosInterface() : InterfaceBase() {}
 
     void setup(size_t n_inputs, size_t n_outputs) override;
-    // void setup(size_t n_inputs, size_t n_outputs, std::shared_ptr<display> disp);
+    void setup(size_t n_inputs, size_t n_outputs, std::shared_ptr<display> disp);
 
-    enum training_mode_t {
-        INFERENCE_MODE,
-        TRAINING_MODE
-    };
-
-    bool SetTrainingMode(training_mode_t training_mode);
     void ProcessInput();
     void SetInput(size_t index, float value);
 
-    enum saving_mode_t {
-        STORE_VALUE_MODE,
-        STORE_POSITION_MODE
-    };
-
-    bool SaveInput(saving_mode_t mode);
+    bool SaveInput(std::vector<float> category);
+    bool Train();
     bool ClearData();
     bool Randomise();
     void SetIterations(size_t iterations);
@@ -47,11 +41,9 @@ public:
     void SetZoomFactor(float factor) { zoom_factor_ = factor; }
 
     // New binding methods
-    void bindInterface(bool disable_joystick = false);
-    void bindUARTInput(std::shared_ptr<UARTInput> uart_input, const std::vector<size_t>& kUARTListenInputs);
+    void bindInterface();
+    void bindUARTInput(std::shared_ptr<SerialUSBInput> uart_input, const std::vector<size_t>& kUARTListenInputs);
     void bindMIDI(std::shared_ptr<MIDIInOut> midi_interf);
-
-    bool sdtest=false;
 
 protected:
     static constexpr float kMax = 2.0f;
@@ -60,8 +52,7 @@ protected:
     size_t n_iterations_;
 
     // State machine
-    training_mode_t training_mode_;
-    bool perform_inference_;
+    volatile bool perform_inference_;
     bool input_updated_;
 
     // Controls/sensors
@@ -76,15 +67,15 @@ protected:
 
     // Display reference for binding methods
     std::shared_ptr<display> disp_;
-    std::shared_ptr<MessageView> msgView;
-    std::shared_ptr<BlockSelectView> fileSaveView;
-    std::shared_ptr<BlockSelectView> fileLoadView;
-    std::shared_ptr<BarGraphView> nnOutputsGraphView;
 
     // Zooming
     bool zoom_enabled_;
     float zoom_factor_;
     std::vector<float> zoom_centre_;
+
+    // Category selection
+    size_t selected_category_;
+    std::vector<size_t> class_occurrences_;
 
     void MLSetup_();
     void MLInference_(std::vector<float> input);
@@ -92,9 +83,7 @@ protected:
     bool MLTraining_();
     std::vector<float> ZoomCoordinates(const std::vector<float>& coord, const std::vector<float>& zoom_centre, float factor);
 
-    float randomScale=1.f;
-
-    bool resetMinMaxFlag=false;
+    std::shared_ptr<SerialUSBOutput> uart_output;
 };
 
-#endif  // __IML_INTERFACE_HPP__
+#endif  // __STELIOS_INTERFACE_HPP__

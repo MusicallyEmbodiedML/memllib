@@ -39,14 +39,14 @@ bool USeqI2C::begin(uint8_t sda_pin, uint8_t scl_pin, uint32_t frequency) {
 
     initialized_ = true;
 
-    Serial.print("USeqI2C initialized - SDA: ");
-    Serial.print(sda_pin);
-    Serial.print(", SCL: ");
-    Serial.print(scl_pin);
-    Serial.print(", Frequency: ");
-    Serial.print(frequency);
-    Serial.print(" Hz, Slave Address: ");
-    Serial.println(slave_address_);
+    DEBUG_PRINT("USeqI2C initialized - SDA: ");
+    DEBUG_PRINT(sda_pin);
+    DEBUG_PRINT(", SCL: ");
+    DEBUG_PRINT(scl_pin);
+    DEBUG_PRINT(", Frequency: ");
+    DEBUG_PRINT(frequency);
+    DEBUG_PRINT(" Hz, Slave Address: ");
+    DEBUG_PRINTLN(slave_address_);
 
     return true;
 }

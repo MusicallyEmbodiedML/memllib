@@ -10,7 +10,6 @@
 
 // Protected helper method implementations
 void InterfaceRL::_perform_like_action() {
-    if (!m_scr_ptr) return; // Guard against null pointer
     static APP_SRAM std::vector<String> likemsgs = {
         "Wow, incredible", "Awesome", "That's amazing", "Unbelievable+",
         "I love it!!", "More of this", "Yes!!!!", "A-M-A-Z-I-N-G",
@@ -21,8 +20,8 @@ void InterfaceRL::_perform_like_action() {
     };
     String msg = likemsgs[rand() % likemsgs.size()];
     this->storeExperience(1.f * rewardScale);
-    Serial.println(msg);
-    m_scr_ptr->post(msg);
+    DEBUG_PRINTLN(msg);
+    if (m_scr_ptr) m_scr_ptr->post(msg);
 }
 
 void InterfaceRL::_perform_dislike_action() {
@@ -38,16 +37,16 @@ void InterfaceRL::_perform_dislike_action() {
     };
     String msg = dislikemsgs[rand() % dislikemsgs.size()];
     this->storeExperience(-1.f * rewardScale);
-    Serial.println(msg);
-    m_scr_ptr->post(msg);
+    DEBUG_PRINTLN(msg);
+    if (m_scr_ptr) m_scr_ptr->post(msg);
 }
 
 void InterfaceRL::_perform_randomiseRL_action() {
-    if (!m_scr_ptr) return; // Guard against null pointer
+
     this->randomiseTheActor();
     this->generateAction(true);
-    Serial.println("The Actor is confused");
-    m_scr_ptr->post("Actor: i'm confused");
+    DEBUG_PRINTLN("The Actor is confused");
+    if (m_scr_ptr) m_scr_ptr->post("Actor: i'm confused");
 }
 
 // Public trigger methods (updated to call protected helpers)
@@ -62,6 +61,23 @@ void InterfaceRL::trigger_dislike() {
 void InterfaceRL::trigger_randomiseRL() {
     _perform_randomiseRL_action();
 }
+
+
+void InterfaceRL::setOptimiseDivisorInterf(float value)
+{
+    size_t divisor = 1 + (value * 100);
+    String msg;
+    if (divisor > 90) {
+        divisor = 999999;
+        msg = "Optimisation paused";
+    }else{
+        msg = "Optimise every " + String(divisor) + " cycles";
+    }
+    if (m_scr_ptr) m_scr_ptr->post(msg);
+    this->setOptimiseDivisor(divisor);
+    DEBUG_PRINTLN(msg);
+}
+
 
 void InterfaceRL::bind_RL_interface(display& scr_ref, bool disable_joystick) {
     m_scr_ptr = &scr_ref; // Store the pointer to the display object
@@ -79,7 +95,7 @@ void InterfaceRL::bind_RL_interface(display& scr_ref, bool disable_joystick) {
     MEMLNaut::Instance()->setMomB2Callback([this]() { // scr_ref no longer captured directly
         this->randomiseTheCritic();
         this->generateAction(true);
-        Serial.println("The Critic is confounded");
+        DEBUG_PRINTLN("The Critic is confounded");
         if (m_scr_ptr) m_scr_ptr->post("Critic: totally confounded");
     });
     if (!disable_joystick) {
@@ -95,7 +111,7 @@ void InterfaceRL::bind_RL_interface(display& scr_ref, bool disable_joystick) {
         });
     }
 
-    
+
     MEMLNaut::Instance()->setTogB1Callback([this](bool state) { // scr_ref no longer captured directly
         if (state) {
             this->forgetMemory();
@@ -106,29 +122,17 @@ void InterfaceRL::bind_RL_interface(display& scr_ref, bool disable_joystick) {
             String msg = forgetmsgs[rand() % forgetmsgs.size()];
 
             if (m_scr_ptr) m_scr_ptr->post(msg);
-        
+
         }
     });
 
 
     MEMLNaut::Instance()->setRVX1Callback([this](float value) { // scr_ref no longer captured directly
-        size_t divisor = 1 + (value * 100);
-        String msg;
-        if (divisor > 90) {
-            divisor = 999999;
-            msg = "Optimisation paused";
-        }else{
-            msg = "Optimise every " + String(divisor) + " cycles";
-        }
-        if (m_scr_ptr) m_scr_ptr->post(msg);
-        this->setOptimiseDivisor(divisor);
-        Serial.println(msg);
+        this->setOptimiseDivisorInterf(value);
     });
 
     MEMLNaut::Instance()->setRVY1Callback([this](float value) { // scr_ref no longer captured directly
-        this->setRewardScale(value);
-        String msg = "Reward scale: " + String(value);
-        if (m_scr_ptr) m_scr_ptr->post(msg);
+        this->setRewardScaleInterf(value);
     });
     MEMLNaut::Instance()->setRVZ1Callback([this](float value) { // scr_ref no longer captured directly
         // value *= 0.1f; // Scale down the value
@@ -147,6 +151,75 @@ void InterfaceRL::bind_RL_interface(display& scr_ref, bool disable_joystick) {
     });
 }
 
+
+void InterfaceRL::setRewardScaleInterf(float value)
+{
+    return;  // bypassed for now
+    this->setRewardScale(value);
+    String msg = "Reward scale: " + String(value);
+    if (m_scr_ptr) m_scr_ptr->post(msg);
+}
+
+
+void InterfaceRL::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf)
+{
+    if (midi_interf) {
+        midi_interf->SetCCCallback([this] (uint8_t cc_number, uint8_t cc_value) {
+            Serial.printf("MIDI CC %d: %d\n", cc_number, cc_value);
+            switch(cc_number) {
+                case 1:
+                {
+                    this->_perform_like_action();
+                    break;
+                }
+                case 2:
+                {
+                    this->_perform_dislike_action();
+                    break;
+                }
+                case 3:
+                {
+                    this->_perform_randomiseRL_action();
+                    break;
+                }
+                case 4:
+                {
+                    break;
+                }
+                case 5:
+                {
+                    static constexpr float cc_scale = 1.f/(127.f-20.f);
+                    // Less than 20 on cc_value is considered 0
+                    // scale [20..127] to [0.0, 1.0]
+                    if (cc_value < 20) {
+                        cc_value = 0;
+                    } else {
+                        cc_value -= 20; // Shift range to [0, 107]
+                    }
+                    float scale = static_cast<float>(cc_value) * cc_scale;
+                    //this->setRewardScaleInterf(scale);
+                    this->setNoiseLevel(scale);
+                    break;
+                }
+                case 6:
+                {
+                    static constexpr float cc_scale = 1.f/(127.f-20.f);
+                    // Less than 20 on cc_value is considered 0
+                    // scale [20..127] to [0.0, 1.0]
+                    if (cc_value < 20) {
+                        cc_value = 0;
+                    } else {
+                        cc_value -= 20; // Shift range to [0, 107]
+                    }
+                    float opt = static_cast<float>(cc_value) * cc_scale;
+                    this->setOptimiseDivisorInterf(1.f - opt);
+                    break;
+                }
+            };
+        });
+    }
+}
+
 void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
 {
 #if XIASRI
@@ -158,13 +231,13 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
     InterfaceBase::setup(controlSize, n_outputs);
 
 
-    stateSize = controlSize; //state = control inputs + synth params 
+    stateSize = controlSize; //state = control inputs + synth params
 
     actionSize = n_outputs;
 
     actor_layers_nodes = {
         stateSize + bias,
-        10, 12,
+        15, 8,
         actionSize
     };
 
@@ -181,7 +254,7 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
     //init networks
     actor = std::make_shared<MLP<float> > (
         actor_layers_nodes,
-        layers_activfuncs,
+        actor_activfuncs,
         loss::LOSS_MSE,
         use_constant_weight_init,
         constant_weight_init
@@ -189,7 +262,7 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
 
     actorTarget = std::make_shared<MLP<float> > (
         actor_layers_nodes,
-        layers_activfuncs,
+        actor_activfuncs,
         loss::LOSS_MSE,
         use_constant_weight_init,
         constant_weight_init
@@ -197,27 +270,37 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
 
     critic = std::make_shared<MLP<float> > (
         critic_layers_nodes,
-        layers_activfuncs,
+        critic_activfuncs,
         loss::LOSS_MSE,
         use_constant_weight_init,
         constant_weight_init
     );
     criticTarget = std::make_shared<MLP<float> > (
         critic_layers_nodes,
-        layers_activfuncs,
+        critic_activfuncs,
         loss::LOSS_MSE,
         use_constant_weight_init,
         constant_weight_init
     );
+
+    rewardScale = 1.0f; // Default reward scale
+
+    // Memory limit
+    replayMem.setMemoryLimit(memoryLimit);
 }
 
 void InterfaceRL::setup(size_t n_inputs, size_t n_outputs, std::shared_ptr<display> disp) {
     this->setup(n_inputs, n_outputs);
     m_scr_ptr = disp.get(); // Store the pointer to the display object
+
+    if (m_scr_ptr) {
+        m_scr_ptr->statusPost("No value", 0);
+        m_scr_ptr->statusPost("No value", 1);
+    }
+
 }
 
 void InterfaceRL::optimise() {
-    constexpr size_t batchSize = 8;
     std::vector<trainRLItem> sample = replayMem.sample(batchSize);
     if (sample.size() == batchSize) {
         //run sample through critic target, build training set for critic net
@@ -274,7 +357,7 @@ void InterfaceRL::optimise() {
         for(size_t i = 0; i < sample.size(); i++) {
             //use criticTarget to estimate value of next action given next state
             for(size_t j=0; j < stateSize; j++) {
-                criticInput[j] = sample[i].state[j]; 
+                criticInput[j] = sample[i].state[j];
             }
             auto stateInput = sample[i].state;
             stateInput.push_back(1.f); // bias
@@ -291,9 +374,9 @@ void InterfaceRL::optimise() {
             criticInput[criticInput.size()-1] = 1.f; //bias
 
             critic->CalcGradients(criticInput, gradientLoss); // This calculates dQ/d(input to critic)
-            
+
             std::vector<float> l0Grads = critic->m_layers[0].GetGrads(); // Gradients of critic's first layer inputs
-            
+
             for(size_t j=0; j < actionSize; j++) {
                 accumulatedGradient[j] += l0Grads[j+stateSize];
             }
@@ -311,7 +394,7 @@ void InterfaceRL::optimise() {
             // for(auto& g : actorGradient) gradMagnitude += g*g;
             // gradMagnitude = sqrt(gradMagnitude);
 
-            // Serial.printf("Q-value: %.3f, Grad magnitude: %.3f\n", avgQ, gradMagnitude);
+            //  DEBUG_PRINTF("Q-value: %.3f, Grad magnitude: %.3f\n", avgQ, gradMagnitude);
 
 
 
@@ -321,23 +404,23 @@ void InterfaceRL::optimise() {
             accumulatedGradient[j] *= sampleSizeRecr;
         }
 
-        // Simple gradient clipping 
+        // Simple gradient clipping
         const float maxGradNorm = 0.5f;  // Start conservative
         float gradNorm = 0.0f;
-        
+
         for(auto& g : accumulatedGradient) {
             gradNorm += g * g;
         }
         gradNorm = sqrt(gradNorm);
-        
+
         if (gradNorm > maxGradNorm) {
             float scale = maxGradNorm / gradNorm;
             for(auto& g : accumulatedGradient) {
                 g *= scale;
             }
-            
+
             // Optional: notify user of instability
-            if (gradNorm > maxGradNorm * 2.0f) {
+            if (gradNorm > maxGradNorm * 5.0f) {
                 m_scr_ptr->post("Learning unstable - adjusting...");
             }
         }
@@ -355,14 +438,14 @@ void InterfaceRL::optimise() {
         float totalActorGradient = 0.0f;
         for(auto& g : accumulatedGradient) {
             totalActorGradient += std::abs(g);
-        }   
+        }
 
         // for(size_t j=0; j < actorGradient.size(); j++) {
         //     actorGradient[j] *= sampleSizeRecr; // Average gradient
         //     totalActorGradient += actorGradient[j];      // Sum of (negative) gradients
         // }
         // actorLossLog.push_back(actorLoss); // This would log a vector
-        // Serial.printf("Actor loss: %f\n", totalLoss); // This prints sum of gradients, not a scalar loss
+        //  DEBUG_PRINTF("Actor loss: %f\n", totalLoss); // This prints sum of gradients, not a scalar loss
         // auto stateInput = sample[0].state; // Could use any sample's state here
         // stateInput.push_back(1.f);
         // actor->ApplyLoss(stateInput, actorGradient, learningRate);
@@ -400,9 +483,20 @@ void InterfaceRL::readAnalysisParameters() {
     actorControlInput[2] = READ_VOLATILE(sharedMem::f2);
     actorControlInput[3] = READ_VOLATILE(sharedMem::f3);
     PERIODIC_DEBUG(40, { // Ensure PERIODIC_DEBUG is defined (e.g. in PicoDefs.hpp or sharedMem.hpp)
-        Serial.println(actorControlInput[0]);
+        DEBUG_PRINTLN(actorControlInput[0]);
     })
     newInput = true;
+    if (m_scr_ptr) {
+        // Calculate argmax of actorControlInput
+        size_t maxIndex = 0;
+        for (size_t i = 1; i < actorControlInput.size()-1; ++i) {
+            if (actorControlInput[i] > actorControlInput[maxIndex]) {
+                maxIndex = i;
+            }
+        }
+        //m_scr_ptr->statusPost("Max:" + String(maxIndex), 1);
+        //m_scr_ptr->statusPost(String(actorControlInput[maxIndex], 4), 0);
+    }
 #endif
     generateAction(true);
 }
@@ -411,6 +505,14 @@ void InterfaceRL::generateAction(bool donthesitate) {
     if (newInput || donthesitate) {
         newInput = false;
         // std::vector<float> actorOutput; // This was shadowing the member variable
+
+#if XIASRI
+#else
+        if (m_scr_ptr) {
+            m_scr_ptr->statusPost(String(actorControlInput[0], 4), 0);
+        }
+#endif
+
         actorTarget->GetOutput(actorControlInput, &actorOutput); // Use member actorOutput
         for(size_t i=0; i < actorOutput.size(); i++) {
             const float noise = ou_noise.sample() * 0.4f;
@@ -420,8 +522,12 @@ void InterfaceRL::generateAction(bool donthesitate) {
             } else if (actorOutput[i] > 1.f) {
                 actorOutput[i] = 1.f; // Ensure output does not exceed 1
             }
-        }       
+        }
 
+        if (m_scr_ptr) {
+            m_scr_ptr->statusPost(String(actorOutput[0], 4), 0);
+            m_scr_ptr->statusPost(String(actorOutput[1], 4), 1);
+        }
         SendParamsToQueue(actorOutput);
         action = actorOutput;
 
@@ -429,6 +535,13 @@ void InterfaceRL::generateAction(bool donthesitate) {
         //     const float noise = ou_noise.sample() * knobL; // ou_noise and knobL are not defined here
         //     actorOutput[i] += noise;
         // }
+
+        #if XIASRI
+#else
+        if (m_scr_ptr) {
+            m_scr_ptr->statusPost(String(action[0], 4), 1);
+        }
+#endif
     }
 }
 
@@ -446,10 +559,10 @@ void InterfaceRL::storeExperience(float reward) {
     }
 
 
-    for(size_t i=0; i < state.size(); i++) { // state here is without bias
-        Serial.printf("%f\t", state[i]);
-    }
-    Serial.println();
+    // for(size_t i=0; i < state.size(); i++) { // state here is without bias
+    //     DEBUG_PRINTF("%f\t", state[i]);
+    // }
+    // DEBUG_PRINTLN();
     // nextState in DDPG is the state resulting from taking 'action' in 'state'.
     // Here, 'state' is used as 'nextState', which is common if the environment is static
     // or if the 'nextState' is the same as the current state for the purpose of this reward.

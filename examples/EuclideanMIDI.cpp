@@ -30,16 +30,16 @@ void EuclideanMIDI::Setup(std::shared_ptr<MIDIInOut> midi_interface,
     // Set note configurations
     SetNoteNumbers(note_configs);
 
-    Serial.print("EuclideanMIDI configured with individual channels - Notes: ");
+     DEBUG_PRINT("EuclideanMIDI configured with individual channels - Notes: ");
     for (size_t i = 0; i < note_configs_.size() && i < kMaxOperators; ++i) {
-        Serial.print(note_configs_[i].note_number);
-        Serial.print("/ch");
-        Serial.print(note_configs_[i].channel);
+         DEBUG_PRINT(note_configs_[i].note_number);
+         DEBUG_PRINT("/ch");
+         DEBUG_PRINT(note_configs_[i].channel);
         if (i < note_configs_.size() - 1 && i < kMaxOperators - 1) {
-            Serial.print(", ");
+            DEBUG_PRINT(", ");
         }
     }
-    Serial.println();
+     DEBUG_PRINTLN();
 }
 
 void EuclideanMIDI::Setup(std::shared_ptr<MIDIInOut> midi_interface,
@@ -55,16 +55,16 @@ void EuclideanMIDI::Setup(std::shared_ptr<MIDIInOut> midi_interface,
     // Set note numbers with uniform channel
     SetNoteNumbers(note_numbers, midi_channel);
 
-    Serial.print("EuclideanMIDI configured - Channel: ");
-    Serial.print(midi_channel);
-    Serial.print(", Notes: ");
+     DEBUG_PRINT("EuclideanMIDI configured - Channel: ");
+     DEBUG_PRINT(midi_channel);
+     DEBUG_PRINT(", Notes: ");
     for (size_t i = 0; i < note_configs_.size() && i < kMaxOperators; ++i) {
-        Serial.print(note_configs_[i].note_number);
+        DEBUG_PRINT(note_configs_[i].note_number);
         if (i < note_configs_.size() - 1 && i < kMaxOperators - 1) {
-            Serial.print(", ");
+            DEBUG_PRINT(", ");
         }
     }
-    Serial.println();
+     DEBUG_PRINTLN();
 }
 
 void EuclideanMIDI::ProcessCV(const std::vector<float>& cv_values) {
@@ -112,7 +112,7 @@ void EuclideanMIDI::SetNoteNumbers(const std::vector<MIDINoteConfig>& note_confi
             note_configs[i].channel >= 1 && note_configs[i].channel <= 16) {
             note_configs_[i] = note_configs[i];
         } else {
-            Serial.printf("Warning: Invalid note config %d/ch%d for operator %d (using 60/ch1)\n",
+            DEBUG_PRINTF("Warning: Invalid note config %d/ch%d for operator %d (using 60/ch1)\n",
                          note_configs[i].note_number, note_configs[i].channel, i);
             note_configs_[i] = MIDINoteConfig(60, 1); // Default to middle C on channel 1
         }
@@ -134,7 +134,7 @@ void EuclideanMIDI::SetNoteNumbers(const std::vector<uint8_t>& note_numbers, uin
         if (note_numbers[i] <= 127 && midi_channel >= 1 && midi_channel <= 16) {
             note_configs_[i] = MIDINoteConfig(note_numbers[i], midi_channel);
         } else {
-            Serial.printf("Warning: Invalid note number %d or channel %d for operator %d (using 60/ch1)\n",
+            DEBUG_PRINTF("Warning: Invalid note number %d or channel %d for operator %d (using 60/ch1)\n",
                          note_numbers[i], midi_channel, i);
             note_configs_[i] = MIDINoteConfig(60, 1); // Default to middle C on channel 1
         }
