@@ -27,22 +27,14 @@ public:
     };
 
     void UpdateValues(const std::vector<float>& values, bool resetMinMax=false) {
-        newValues = values;
+        for(size_t i=0; i < values.size(); i++) {
+            newValues[i] = values[i];
+        }
         if (resetMinMax) {
             runningMax = values;
             runningMin = values;
         }
         redraw();
-        // if (drawnValues) {
-        //     if (values.size() != newValues.size()) {
-        //         // Serial.println("Error: Mismatched size in BarGraphView::UpdateValues");
-        //         return;
-        //     }
-        //     oldValues = newValues;
-        //     newValues = values;
-        //     drawnValues = false;
-        //     redraw();
-        // }
     }
 
     
@@ -82,24 +74,36 @@ public:
             scr->fillRect(x,newy, barwidth, 4, colour);
 
             // Update running max/min
-            //TODO: min/max markers
-            if (newValues[i] > runningMax[i]) {
+            //TODO: what happens after reset?
 
-                float normalizedOldMaxValue = (runningMax[i] - rangeLow) * rangeTotalInv;
-                int oldMaxBarHeight = static_cast<int>(normalizedOldMaxValue * barSectionHeight);
-                int oldmaxy = area.y + area.h - offsetY - oldMaxBarHeight;
-                scr->drawLine(x,oldmaxy, x+barwidth, oldmaxy, TFT_BLACK);
+            // if (newValues[i] > runningMax[i]) {
 
-                runningMax[i] = newValues[i];
+            //     float normalizedOldMaxValue = (runningMax[i] - rangeLow) * rangeTotalInv;
+            //     int oldMaxBarHeight = static_cast<int>(normalizedOldMaxValue * barSectionHeight);
+            //     int oldmaxy = area.y + area.h - offsetY - oldMaxBarHeight;
+            //     scr->drawLine(x,oldmaxy, x+barwidth, oldmaxy, TFT_BLACK);
 
-                normalizedOldMaxValue = (runningMax[i] - rangeLow) * rangeTotalInv;
-                oldMaxBarHeight = static_cast<int>(normalizedOldMaxValue * barSectionHeight);
-                oldmaxy = area.y + area.h - offsetY - oldMaxBarHeight;
-                scr->drawLine(x,oldmaxy, x+barwidth, oldmaxy, TFT_RED);
-            }
-            if (newValues[i] < runningMin[i]) {
-                runningMin[i] = newValues[i];  
-            }
+            //     runningMax[i] = newValues[i];
+
+            //     normalizedOldMaxValue = (runningMax[i] - rangeLow) * rangeTotalInv;
+            //     oldMaxBarHeight = static_cast<int>(normalizedOldMaxValue * barSectionHeight);
+            //     oldmaxy = area.y + area.h - offsetY - oldMaxBarHeight;
+            //     scr->drawLine(x,oldmaxy, x+barwidth, oldmaxy, TFT_PINK);
+            // }
+            // if (newValues[i] < runningMin[i]) {
+
+            //     float normalizedOldMinValue = (runningMin[i] - rangeLow) * rangeTotalInv;
+            //     int oldMinBarHeight = static_cast<int>(normalizedOldMinValue * barSectionHeight);
+            //     int oldminy = area.y + area.h - offsetY - oldMinBarHeight;
+            //     scr->drawLine(x,oldminy, x+barwidth, oldminy, TFT_BLACK);
+
+            //     runningMin[i] = newValues[i];
+
+            //     normalizedOldMinValue = (runningMin[i] - rangeLow) * rangeTotalInv;
+            //     oldMinBarHeight = static_cast<int>(normalizedOldMinValue * barSectionHeight);
+            //     oldminy = area.y + area.h - offsetY - oldMinBarHeight;
+            //     scr->drawLine(x,oldminy, x+barwidth, oldminy, TFT_PINK);
+            // }
         }
         oldValues = newValues;  // Update old values after drawing
         drawnValues = true;

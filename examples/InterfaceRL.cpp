@@ -240,7 +240,7 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
 
     critic_layers_nodes = {
         stateSize + actionSize + bias,
-        10, 10,
+        15, 10,
         1
     };
 
@@ -285,9 +285,19 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
     // Memory limit
     replayMem.setMemoryLimit(memoryLimit);
 
+    ou_noises.reserve(actionSize);
+    for(size_t i=0; i < actionSize; i++) {
+        ou_noises.push_back(std::make_unique<OrnsteinUhlenbeckNoise>(0.02f, 0.0f, 0.2f, 0.001f, 0.0f));
+    }
+
     // GUI
     msgView = std::make_shared<MessageView>("Messages");
     MEMLNaut::Instance()->disp->AddView(msgView);
+
+    nnInputsGraphView = std::make_shared<BarGraphView>("NN Inputs", controlSize, 10, TFT_YELLOW, 0.f, 1.f);
+    MEMLNaut::Instance()->disp->AddView(nnInputsGraphView);    
+    nnOutputsGraphView = std::make_shared<BarGraphView>("NN Outputs", n_outputs, 4, TFT_GREEN, 0.f, 1.f);
+    MEMLNaut::Instance()->disp->AddView(nnOutputsGraphView);    
 }
 
 
@@ -497,17 +507,20 @@ void InterfaceRL::generateAction(bool donthesitate) {
 
         actorTarget->GetOutput(actorControlInput, &actorOutput); // Use member actorOutput
         for(size_t i=0; i < actorOutput.size(); i++) {
-            const float noise = ou_noise.sample() * 0.4f;
+            const float noise = ou_noises[i]->sample();
             actorOutput[i] += noise;
             if (actorOutput[i] < 0.f) {
-                actorOutput[i] = 0.f; // Ensure output is non-negative
+                actorOutput[i] = -actorOutput[i]; // reflect
             } else if (actorOutput[i] > 1.f) {
-                actorOutput[i] = 1.f; // Ensure output does not exceed 1
+                actorOutput[i] = 1.f - fmod(actorOutput[i], 1.f); // reflect at 1.0
             }
         }
 
         SendParamsToQueue(actorOutput);
         action = actorOutput;
+        nnOutputsGraphView->UpdateValues(actorOutput, resetMinMaxFlag);
+        resetMinMaxFlag = false;
+        nnInputsGraphView->UpdateValues(actorControlInput, false);
 
         // for(size_t i=0; i < actorOutput.size(); i++) {
         //     const float noise = ou_noise.sample() * knobL; // ou_noise and knobL are not defined here

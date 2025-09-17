@@ -35,7 +35,9 @@ struct trainRLItem {
 class InterfaceRL : public InterfaceBase
 {
 public:
-   InterfaceRL() : InterfaceBase(), ou_noise(0.02f, 0.0f, 0.2f, 0.001f, 0.0f) {
+   InterfaceRL() : InterfaceBase()
+//    , ou_noise(0.02f, 0.0f, 0.2f, 0.001f, 0.0f) 
+{
 
     }
     void setup(size_t n_inputs, size_t n_outputs);
@@ -68,6 +70,7 @@ public:
         actor->DrawWeights();
         actorTarget->DrawWeights();
         newInput = true;
+        resetMinMaxFlag = true;
     }
 
     inline void randomiseTheCritic()
@@ -75,6 +78,7 @@ public:
         critic->DrawWeights();
         criticTarget->DrawWeights();
         newInput = true;
+        resetMinMaxFlag = true;
     }
 
     inline void setOptimiseDivisor(size_t newDiv) {
@@ -105,7 +109,9 @@ public:
         }
         String msg = "OU Sigma: " + String(level, 4);
         if (msgView) msgView->post(msg);
-        ou_noise.setSigma(level);
+        for(auto& ou_noise: ou_noises) {
+            ou_noise->setSigma(level);
+        }
     }
 
     void bind_RL_interface(bool disable_joystick = false);
@@ -177,13 +183,16 @@ private:
     //std::vector<float> criticLossLog, actorLossLog, log1;
     float rewardScale = 1.f;
 
-    OrnsteinUhlenbeckNoise ou_noise;
+    // OrnsteinUhlenbeckNoise ou_noise;
+    std::vector<std::unique_ptr<OrnsteinUhlenbeckNoise>> ou_noises;
 
     // Display views
     std::shared_ptr<MessageView> msgView;
     std::shared_ptr<BlockSelectView> fileSaveView;
     std::shared_ptr<BlockSelectView> fileLoadView;
+    std::shared_ptr<BarGraphView> nnInputsGraphView;
     std::shared_ptr<BarGraphView> nnOutputsGraphView;
+    bool resetMinMaxFlag = false;
 
 };
 
