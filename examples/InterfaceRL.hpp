@@ -99,6 +99,8 @@ public:
     inline void setLRScale(const float scale) {
         actorLearningRateScaled = actorLearningRate * scale;
         criticLearningRateScaled = criticLearningRate * scale;
+        String msg = "LR scale: " + String(scale);
+        if (msgView) msgView->post(msg);
     }
 
     void setRewardScaleInterf(float value);
@@ -166,8 +168,8 @@ private:
     std::shared_ptr<MLP<float> > actor, actorTarget, critic, criticTarget;
 
     float discountFactor = 0.1f;
-    float actorLearningRate = 1e-1;
-    float criticLearningRate = 1e-1;
+    float actorLearningRate = 1e-2;
+    float criticLearningRate = 1e-2;
     float smoothingAlpha = 0.01f;
     float actorLearningRateScaled = actorLearningRate;
     float criticLearningRateScaled = criticLearningRate;

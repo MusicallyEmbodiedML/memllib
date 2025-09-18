@@ -137,9 +137,11 @@ void InterfaceRL::bind_RL_interface(bool disable_joystick) {
         this->setOptimiseDivisorInterf(value);
     });
 
-    MEMLNaut::Instance()->setRVY1Callback([this](float value) { // scr_ref no longer captured directly
-        this->setRewardScaleInterf(value);
+    MEMLNaut::Instance()->setRVY1Callback([this](float value) {
+        // this->setRewardScaleInterf(value);
+        this->setLRScale(value);
     });
+
     MEMLNaut::Instance()->setRVZ1Callback([this](float value) { // scr_ref no longer captured directly
         // value *= 0.1f; // Scale down the value
         // this->setLearningRate(value);
@@ -241,7 +243,7 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
     actionSize = n_outputs;
 
     const std::vector<ACTIVATION_FUNCTIONS> actor_activfuncs = {
-        RELU, RELU, RELU, SIGMOID
+        RELU, RELU, RELU, TANH
     };
 
     const std::vector<ACTIVATION_FUNCTIONS> critic_activfuncs = {
@@ -363,7 +365,7 @@ void InterfaceRL::optimise() {
 
         //train the critic
         // float loss = critic->Train(ts, criticLearningRate, 1);
-        float loss = critic->TrainBatch(ts, criticLearningRate, 1, sample.size(), 0.f, false);
+        float loss = critic->TrainBatch(ts, criticLearningRateScaled, 1, sample.size(), 0.f, false);
 
         rlStatsView->setCriticLoss(loss);
 
@@ -408,7 +410,7 @@ void InterfaceRL::optimise() {
             }
             
             // Apply gradients for this specific state
-            actor->ApplyPolicyGradient(stateInput, actionGradients, actorLearningRate * sampleSizeRecr);
+            actor->ApplyPolicyGradient(stateInput, actionGradients, actorLearningRateScaled * sampleSizeRecr);
 
 
 
