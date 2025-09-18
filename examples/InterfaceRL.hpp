@@ -19,6 +19,7 @@
 #include "../hardware/memlnaut/display/MessageView.hpp"
 #include "../hardware/memlnaut/display/BarGraphView.hpp"
 #include "../hardware/memlnaut/display/BlockSelectView.hpp"
+#include "../hardware/memlnaut/display/RLStatsView.hpp"
 
 #define RL_MEM __not_in_flash("rlmem")
 
@@ -95,6 +96,11 @@ public:
         rewardScale = scale;
     }
 
+    inline void setLRScale(const float scale) {
+        actorLearningRateScaled = actorLearningRate * scale;
+        criticLearningRateScaled = criticLearningRate * scale;
+    }
+
     void setRewardScaleInterf(float value);
 
     inline void setDiscountFactor(float factor) {
@@ -138,6 +144,7 @@ protected:
     void _perform_randomiseRL_action();
 
 private:
+
     static constexpr size_t bias=1;
 
     size_t optimiseDivisor = 40;
@@ -145,13 +152,6 @@ private:
 
     bool newInput=false;
 
-    const std::vector<ACTIVATION_FUNCTIONS> actor_activfuncs = {
-        RELU, RELU, SIGMOID
-    };
-
-    const std::vector<ACTIVATION_FUNCTIONS> critic_activfuncs = {
-        RELU, RELU, SIGMOID
-    };
 
     size_t controlSize;
     size_t stateSize;
@@ -166,15 +166,16 @@ private:
     std::shared_ptr<MLP<float> > actor, actorTarget, critic, criticTarget;
 
     float discountFactor = 0.1f;
-    float actorLearningRate = 1e-3;
-    float criticLearningRate = 1e-3;
+    float actorLearningRate = 1e-1;
+    float criticLearningRate = 1e-1;
     float smoothingAlpha = 0.01f;
-
+    float actorLearningRateScaled = actorLearningRate;
+    float criticLearningRateScaled = criticLearningRate;
     std::vector<float> action;
 
     ReplayMemory<trainRLItem> replayMem;
-    static constexpr size_t memoryLimit = 32;
-    static constexpr size_t batchSize = 16;
+    static constexpr size_t memoryLimit = 64;
+    static constexpr size_t batchSize = 8;
 
     std::vector<float> actorOutput, criticOutput;
     std::vector<float> criticInput;
@@ -192,6 +193,7 @@ private:
     std::shared_ptr<BlockSelectView> fileLoadView;
     std::shared_ptr<BarGraphView> nnInputsGraphView;
     std::shared_ptr<BarGraphView> nnOutputsGraphView;
+    std::shared_ptr<RLStatsView> rlStatsView;
     bool resetMinMaxFlag = false;
 
 };

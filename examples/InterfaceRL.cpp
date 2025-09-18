@@ -82,19 +82,27 @@ void InterfaceRL::bind_RL_interface(bool disable_joystick) {
 
     // Set up momentary switch callbacks
     MEMLNaut::Instance()->setMomA1Callback([this]() { // scr_ref no longer captured directly
-        this->trigger_like();
+        if (MEMLNaut::Instance()->getMOMA1State()) {
+            this->trigger_like();
+        }
     });
     MEMLNaut::Instance()->setMomA2Callback([this]() { // scr_ref no longer captured directly
-        this->trigger_dislike();
+        if (MEMLNaut::Instance()->getMOMA2State()) {
+            this->trigger_dislike();
+        }
     });
     MEMLNaut::Instance()->setMomB1Callback([this]() { // scr_ref no longer captured directly
-        this->trigger_randomiseRL();
+        if (MEMLNaut::Instance()->getMOMB1State()) {
+            this->trigger_randomiseRL();
+        }
     });
     MEMLNaut::Instance()->setMomB2Callback([this]() { // scr_ref no longer captured directly
-        this->randomiseTheCritic();
-        this->generateAction(true);
-        DEBUG_PRINTLN("The Critic is confounded");
-        if (msgView) msgView->post("Critic: totally confounded");
+        if (MEMLNaut::Instance()->getMOMB2State()) {
+            this->randomiseTheCritic();
+            this->generateAction(true);
+            DEBUG_PRINTLN("The Critic is confounded");
+            if (msgView) msgView->post("Critic: totally confounded");
+        }
     });
     if (!disable_joystick) {
         // Set up ADC callbacks
@@ -232,15 +240,24 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
 
     actionSize = n_outputs;
 
+    const std::vector<ACTIVATION_FUNCTIONS> actor_activfuncs = {
+        RELU, RELU, RELU, SIGMOID
+    };
+
+    const std::vector<ACTIVATION_FUNCTIONS> critic_activfuncs = {
+        RELU, RELU, RELU, TANH
+    };
+
+
     actor_layers_nodes = {
         stateSize + bias,
-        15, 8,
+        12, 12, 14,
         actionSize
     };
 
     critic_layers_nodes = {
         stateSize + actionSize + bias,
-        15, 10,
+        12, 10, 10,
         1
     };
 
@@ -294,6 +311,8 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
     msgView = std::make_shared<MessageView>("Messages");
     MEMLNaut::Instance()->disp->AddView(msgView);
 
+    rlStatsView = std::make_shared<RLStatsView>("RL Stats");
+    MEMLNaut::Instance()->disp->AddView(rlStatsView);    
     nnInputsGraphView = std::make_shared<BarGraphView>("NN Inputs", controlSize, 10, TFT_YELLOW, 0.f, 1.f);
     MEMLNaut::Instance()->disp->AddView(nnInputsGraphView);    
     nnOutputsGraphView = std::make_shared<BarGraphView>("NN Outputs", n_outputs, 4, TFT_GREEN, 0.f, 1.f);
@@ -343,7 +362,10 @@ void InterfaceRL::optimise() {
         }
 
         //train the critic
-        float loss = critic->Train(ts, criticLearningRate, 1);
+        // float loss = critic->Train(ts, criticLearningRate, 1);
+        float loss = critic->TrainBatch(ts, criticLearningRate, 1, sample.size(), 0.f, false);
+
+        rlStatsView->setCriticLoss(loss);
 
         //TODO: size limit to this log
         // criticLossLog.push_back(loss);
@@ -378,9 +400,17 @@ void InterfaceRL::optimise() {
 
             std::vector<float> l0Grads = critic->m_layers[0].GetGrads(); // Gradients of critic's first layer inputs
 
-            for(size_t j=0; j < actionSize; j++) {
-                accumulatedGradient[j] += l0Grads[j+stateSize];
+            // Extract action gradients
+            std::vector<float> actionGradients(actionSize);
+            for(size_t j = 0; j < actionSize; j++) {
+                actionGradients[j] = l0Grads[j+stateSize]; 
+                accumulatedGradient[j] += std::abs(actionGradients[j]);
             }
+            
+            // Apply gradients for this specific state
+            actor->ApplyPolicyGradient(stateInput, actionGradients, actorLearningRate * sampleSizeRecr);
+
+
 
 
             // for(size_t j=0; j < actionSize; j++) {
@@ -401,74 +431,56 @@ void InterfaceRL::optimise() {
 
         }
 
-        for(size_t j=0; j < actionSize; j++) {
-            accumulatedGradient[j] *= sampleSizeRecr;
-        }
-
-        // Simple gradient clipping
-        const float maxGradNorm = 0.5f;  // Start conservative
         float gradNorm = 0.0f;
-
         for(auto& g : accumulatedGradient) {
             gradNorm += g * g;
         }
-        gradNorm = sqrt(gradNorm);
+        gradNorm = sqrtf(gradNorm);
 
-        if (gradNorm > maxGradNorm) {
-            float scale = maxGradNorm / gradNorm;
-            for(auto& g : accumulatedGradient) {
-                g *= scale;
-            }
+        // Log gradient statistics
+        rlStatsView->setActorGradNorm(gradNorm);
 
-            // Optional: notify user of instability
-            if (gradNorm > maxGradNorm * 5.0f) {
-                msgView->post("Learning unstable - adjusting...");
-            }
-        }
 
-        std::vector<float> avgState(stateSize, 0.0f);
-        for(size_t i = 0; i < sample.size(); i++) {
-            for(size_t j = 0; j < stateSize; j++) {
-                avgState[j] += sample[i].state[j] * sampleSizeRecr;
-            }
-        }
-        avgState.push_back(1.f); // bias
-        actor->ApplyLoss(avgState, accumulatedGradient, actorLearningRate);
-
-        // Calculate total gradient for logging
-        float totalActorGradient = 0.0f;
-        for(auto& g : accumulatedGradient) {
-            totalActorGradient += std::abs(g);
-        }
-
-        // for(size_t j=0; j < actorGradient.size(); j++) {
-        //     actorGradient[j] *= sampleSizeRecr; // Average gradient
-        //     totalActorGradient += actorGradient[j];      // Sum of (negative) gradients
-        // }
-        // actorLossLog.push_back(actorLoss); // This would log a vector
-        //  DEBUG_PRINTF("Actor loss: %f\n", totalLoss); // This prints sum of gradients, not a scalar loss
-        // auto stateInput = sample[0].state; // Could use any sample's state here
-        // stateInput.push_back(1.f);
-        // actor->ApplyLoss(stateInput, actorGradient, learningRate);
-
-        // Log the loss and total actor gradient
-        // static APP_SRAM size_t msgCount = 0;
-        // if (++msgCount % 20 == 0) { // Log every 10th optimisation
-        //     if (msgView) msgView->post("Cr: " + String(loss, 4) + " Ac: " + String(totalActorGradient, 4));
+        // for(size_t j=0; j < actionSize; j++) {
+        //     accumulatedGradient[j] *= sampleSizeRecr;
         // }
 
-        //back propagate the actor loss (apply gradients)
+        // Simple gradient clipping
+        // const float maxGradNorm = 0.5f;  // Start conservative
+        // float gradNorm = 0.0f;
+
+        // for(auto& g : accumulatedGradient) {
+        //     gradNorm += g * g;
+        // }
+        // gradNorm = sqrtf(gradNorm);
+
+        // if (gradNorm > maxGradNorm) {
+        //     float scale = maxGradNorm / gradNorm;
+        //     for(auto& g : accumulatedGradient) {
+        //         g *= scale;
+        //     }
+
+        //     // Optional: notify user of instability
+        //     if (gradNorm > maxGradNorm * 5.0f) {
+        //         msgView->post("Learning unstable - adjusting...");
+        //     }
+        // }
+
+        // std::vector<float> avgState(stateSize, 0.0f);
         // for(size_t i = 0; i < sample.size(); i++) {
-        //     auto actorInput = sample[i].state;
-        //     actorInput.push_back(bias); // Add bias to state for actor input
-
-        //     // The actorLoss vector here is dQ/da. Actor update is theta_mu' = theta_mu + alpha_mu * grad_theta_mu Q(s, mu(s|theta_mu))
-        //     // grad_theta_mu Q(s, mu(s|theta_mu)) = grad_a Q(s,a)|a=mu(s) * grad_theta_mu mu(s|theta_mu)
-        //     // MLP::ApplyLoss expects the gradient of the loss function w.r.t the output of the network.
-        //     // So, actorLoss (which is dQ/da) is the correct gradient to pass.
-        //     actor->ApplyLoss(actorInput, actorLoss, learningRate);
-        //     // delay(1); // This delay might be problematic
+        //     for(size_t j = 0; j < stateSize; j++) {
+        //         avgState[j] += sample[i].state[j] * sampleSizeRecr;
+        //     }
         // }
+        // avgState.push_back(1.f); // bias
+        // actor->ApplyPolicyGradient(avgState, accumulatedGradient, actorLearningRate);
+
+        // // Calculate total gradient for logging
+        // float totalActorGradient = 0.0f;
+        // for(auto& g : accumulatedGradient) {
+        //     totalActorGradient += std::abs(g);
+        // }
+        // rlStatsView->setActorLoss(totalActorGradient);
 
         // soft update the target networks
         criticTarget->SmoothUpdateWeights(critic, smoothingAlpha);
