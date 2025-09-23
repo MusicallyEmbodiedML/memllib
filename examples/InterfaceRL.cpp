@@ -213,6 +213,8 @@ void InterfaceRL::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf)
             };
         });
     }
+
+    midi_ = midi_interf;
 }
 
 void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
