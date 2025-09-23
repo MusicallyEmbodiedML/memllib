@@ -47,11 +47,15 @@ void InterfaceRL::_perform_randomiseRL_action() {
 
 // Public trigger methods (updated to call protected helpers)
 void InterfaceRL::trigger_like() {
+    DEBUG_PRINTLN("Like!");
     _perform_like_action();
+    DEBUG_PRINTLN("Liked!");
 }
 
 void InterfaceRL::trigger_dislike() {
+    DEBUG_PRINTLN("Dislike!");
     _perform_dislike_action();
+    DEBUG_PRINTLN("Disliked!");
 }
 
 void InterfaceRL::trigger_randomiseRL() {

@@ -39,7 +39,7 @@ private:
     std::array<ADCState, NUM_ADCS> adcStates;
     std::array<MedianFilter<uint16_t>, NUM_ADCS> adcFilters;
 
-    std::array<ButtonDebounce, NUM_BUTTONS> debouncers;
+    std::array<ToggleDebounce, NUM_BUTTONS> debouncers;
     std::array<ToggleDebounce, NUM_TOGGLES> toggleDebouncers;
 
     // Callback storage
