@@ -37,7 +37,7 @@ class InterfaceRL : public InterfaceBase
 {
 public:
    InterfaceRL() : InterfaceBase()
-//    , ou_noise(0.02f, 0.0f, 0.2f, 0.001f, 0.0f) 
+//    , ou_noise(0.02f, 0.0f, 0.2f, 0.001f, 0.0f)
 {
 
     }
@@ -144,6 +144,8 @@ protected:
     void _perform_like_action();
     void _perform_dislike_action();
     void _perform_randomiseRL_action();
+    bool _save_RL_to_SD(String id);
+    bool _load_RL_from_SD(String id);
 
 private:
 

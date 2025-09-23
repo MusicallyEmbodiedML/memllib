@@ -167,6 +167,8 @@ inline float __attribute__((always_inline)) __not_in_flash_func(meanAbsoluteDevi
     return sum / size;
 }
 
+int where(const std::vector<size_t>& integers, size_t integer);
+
 
 namespace Tests {
 

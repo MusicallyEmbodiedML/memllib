@@ -5,6 +5,9 @@
 // display.hpp is included via InterfaceRL.hpp
 
 
+static const String FILENAMEROOT("mlp_rl_");
+
+
 // Protected helper method implementations
 void InterfaceRL::_perform_like_action() {
     static APP_SRAM std::vector<String> likemsgs = {
@@ -312,12 +315,70 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
     msgView = std::make_shared<MessageView>("Messages");
     MEMLNaut::Instance()->disp->AddView(msgView);
 
+    fileSaveView = std::make_shared<BlockSelectView>("Save Model", TFT_BLUE);
+    fileSaveView->SetOnSelectCallback([this] (size_t id) {
+        fileSaveView->SetMessage("Saving model " + String(id));
+        if (MEMLNaut::Instance()->startSD()) {
+            if (this->_save_RL_to_SD(String(id))) {
+                fileSaveView->SetMessage("Model saved successfully to slot " + String(id));
+            } else {
+                fileSaveView->SetMessage("Failed to save model");
+            }
+            MEMLNaut::Instance()->stopSD();
+        } else {
+            fileSaveView->SetMessage("SD card error - is it inserted and formatted?");
+        }
+    });
+    MEMLNaut::Instance()->disp->AddView(fileSaveView);
+
+    fileLoadView = std::make_shared<BlockSelectView>("Load Model", TFT_PURPLE);
+    fileLoadView->SetOnSelectCallback([this] (size_t id) {
+        fileLoadView->SetMessage("Loading model " + String(id));
+        if (MEMLNaut::Instance()->startSD()) {
+            if (this->_load_RL_from_SD(String(id))) {
+                fileLoadView->SetMessage("Model loaded successfully ");
+            } else {
+                fileLoadView->SetMessage("Failed to load model");
+            }
+            MEMLNaut::Instance()->stopSD();
+        } else {
+            fileLoadView->SetMessage("SD card error - is it inserted and formatted?");
+        }
+
+    });
+    MEMLNaut::Instance()->disp->AddView(fileLoadView);
+
+
+
     rlStatsView = std::make_shared<RLStatsView>("RL Stats");
     MEMLNaut::Instance()->disp->AddView(rlStatsView);
     nnInputsGraphView = std::make_shared<BarGraphView>("NN Inputs", controlSize, 10, TFT_YELLOW, 0.f, 1.f);
     MEMLNaut::Instance()->disp->AddView(nnInputsGraphView);
     nnOutputsGraphView = std::make_shared<BarGraphView>("NN Outputs", n_outputs, 4, TFT_GREEN, 0.f, 1.f);
     MEMLNaut::Instance()->disp->AddView(nnOutputsGraphView);
+}
+
+
+bool InterfaceRL::_save_RL_to_SD(String id) {
+    bool success = true;
+    // Save actor and actorTarget
+    success = success && actor->SaveMLPNetworkSD((FILENAMEROOT + id + String("_actor.bin")).c_str());
+    success = success && actorTarget->SaveMLPNetworkSD((FILENAMEROOT + id + String("_actorTarget.bin")).c_str());
+    // Save critic and criticTarget
+    success = success && critic->SaveMLPNetworkSD((FILENAMEROOT + id + String("_critic.bin")).c_str());
+    success = success && criticTarget->SaveMLPNetworkSD((FILENAMEROOT + id + String("_criticTarget.bin")).c_str());
+    return success;
+}
+
+bool InterfaceRL::_load_RL_from_SD(String id) {
+    bool success = true;
+    // Load actor and actorTarget
+    success = success && actor->LoadMLPNetworkSD((FILENAMEROOT + id + String("_actor.bin")).c_str());
+    success = success && actorTarget->LoadMLPNetworkSD((FILENAMEROOT + id + String("_actorTarget.bin")).c_str());
+    // Load critic and criticTarget
+    success = success && critic->LoadMLPNetworkSD((FILENAMEROOT + id + String("_critic.bin")).c_str());
+    success = success && criticTarget->LoadMLPNetworkSD((FILENAMEROOT + id + String("_criticTarget.bin")).c_str());
+    return success;
 }
 
 

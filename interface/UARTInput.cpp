@@ -1,5 +1,6 @@
 #include "UARTInput.hpp"
 #include "../utils/SLIP.hpp"
+#include "../utils/Maths.hpp"
 
 
 UARTInput::UARTInput(const std::vector<size_t>& sensor_indexes,
@@ -117,10 +118,8 @@ void UARTInput::Parse_(spiMessage msg)
     static const float kEventThresh = 0.01;
 
     // Find if this message's index is in our tracked indexes
-    auto it = std::find(sensor_indexes_.begin(), sensor_indexes_.end(), msg.msg);
-    if (it != sensor_indexes_.end()) {
-        size_t index = std::distance(sensor_indexes_.begin(), it);
-
+    auto index = where(sensor_indexes_, msg.msg);
+    if (index >= 0) {
         // Protect against infs and nans
         if (std::isnan(msg.value) || std::isinf(msg.value)) {
             msg.value = value_states_[index];

@@ -1,5 +1,17 @@
 #include "Maths.hpp"
 
+
+int where(const std::vector<size_t>& integers, size_t integer) {
+    const size_t size = integers.size();
+    for (size_t i = 0; i < size; ++i) {
+        if (integers[i] == integer) {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+
+
 namespace Tests {
 
 // Tolerance for floating point comparisons

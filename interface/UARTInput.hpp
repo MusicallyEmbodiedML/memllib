@@ -17,7 +17,7 @@ public:
     static constexpr size_t kMaxChannels = 8;
 
     // Change to trigger debugging of single channel
-    static constexpr size_t kObservedChan = 9999;
+    static constexpr size_t kObservedChan = 3;
 
     using uart_in_callback_t = std::function<void(size_t, float)>;
     /**
