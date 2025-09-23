@@ -19,6 +19,7 @@
 #include "../hardware/memlnaut/display/MessageView.hpp"
 #include "../hardware/memlnaut/display/BarGraphView.hpp"
 #include "../hardware/memlnaut/display/BlockSelectView.hpp"
+#include "../hardware/memlnaut/display/RLStatsView.hpp"
 
 #define RL_MEM __not_in_flash("rlmem")
 
@@ -35,7 +36,9 @@ struct trainRLItem {
 class InterfaceRL : public InterfaceBase
 {
 public:
-   InterfaceRL() : InterfaceBase(), ou_noise(0.02f, 0.0f, 0.2f, 0.001f, 0.0f) {
+   InterfaceRL() : InterfaceBase()
+//    , ou_noise(0.02f, 0.0f, 0.2f, 0.001f, 0.0f) 
+{
 
     }
     void setup(size_t n_inputs, size_t n_outputs);
@@ -68,6 +71,7 @@ public:
         actor->DrawWeights();
         actorTarget->DrawWeights();
         newInput = true;
+        resetMinMaxFlag = true;
     }
 
     inline void randomiseTheCritic()
@@ -75,6 +79,7 @@ public:
         critic->DrawWeights();
         criticTarget->DrawWeights();
         newInput = true;
+        resetMinMaxFlag = true;
     }
 
     inline void setOptimiseDivisor(size_t newDiv) {
@@ -91,6 +96,13 @@ public:
         rewardScale = scale;
     }
 
+    inline void setLRScale(const float scale) {
+        actorLearningRateScaled = actorLearningRate * scale;
+        criticLearningRateScaled = criticLearningRate * scale;
+        String msg = "LR scale: " + String(scale);
+        if (msgView) msgView->post(msg);
+    }
+
     void setRewardScaleInterf(float value);
 
     inline void setDiscountFactor(float factor) {
@@ -105,7 +117,9 @@ public:
         }
         String msg = "OU Sigma: " + String(level, 4);
         if (msgView) msgView->post(msg);
-        ou_noise.setSigma(level);
+        for(auto& ou_noise: ou_noises) {
+            ou_noise->setSigma(level);
+        }
     }
 
     void bind_RL_interface(bool disable_joystick = false);
@@ -132,19 +146,13 @@ protected:
     void _perform_randomiseRL_action();
 
 private:
+
     static constexpr size_t bias=1;
 
     size_t optimiseDivisor = 40;
     size_t optimiseCounter = 0;
     bool newInput=false;
 
-    const std::vector<ACTIVATION_FUNCTIONS> actor_activfuncs = {
-        RELU, RELU, SIGMOID
-    };
-
-    const std::vector<ACTIVATION_FUNCTIONS> critic_activfuncs = {
-        RELU, RELU, SIGMOID
-    };
 
     size_t controlSize;
     size_t stateSize;
@@ -159,15 +167,16 @@ private:
     std::shared_ptr<MLP<float> > actor, actorTarget, critic, criticTarget;
 
     float discountFactor = 0.1f;
-    float actorLearningRate = 1e-3;
-    float criticLearningRate = 1e-3;
+    float actorLearningRate = 1e-2;
+    float criticLearningRate = 1e-2;
     float smoothingAlpha = 0.01f;
-
+    float actorLearningRateScaled = actorLearningRate;
+    float criticLearningRateScaled = criticLearningRate;
     std::vector<float> action;
 
     ReplayMemory<trainRLItem> replayMem;
-    static constexpr size_t memoryLimit = 32;
-    static constexpr size_t batchSize = 16;
+    static constexpr size_t memoryLimit = 64;
+    static constexpr size_t batchSize = 8;
 
     std::vector<float> actorOutput, criticOutput;
     std::vector<float> criticInput;
@@ -176,13 +185,17 @@ private:
     //std::vector<float> criticLossLog, actorLossLog, log1;
     float rewardScale = 1.f;
 
-    OrnsteinUhlenbeckNoise ou_noise;
+    // OrnsteinUhlenbeckNoise ou_noise;
+    std::vector<std::unique_ptr<OrnsteinUhlenbeckNoise>> ou_noises;
 
     // Display views
     std::shared_ptr<MessageView> msgView;
     std::shared_ptr<BlockSelectView> fileSaveView;
     std::shared_ptr<BlockSelectView> fileLoadView;
+    std::shared_ptr<BarGraphView> nnInputsGraphView;
     std::shared_ptr<BarGraphView> nnOutputsGraphView;
+    std::shared_ptr<RLStatsView> rlStatsView;
+    bool resetMinMaxFlag = false;
 
 };
 

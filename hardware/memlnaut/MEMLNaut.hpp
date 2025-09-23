@@ -102,6 +102,11 @@ public:
         }
     }
 
+    bool getMOMA1State() const {return digitalRead(Pins::MOM_A1) == LOW;}
+    bool getMOMA2State() const {return digitalRead(Pins::MOM_A2) == LOW;}
+    bool getMOMB1State() const {return digitalRead(Pins::MOM_B1) == LOW;}
+    bool getMOMB2State() const {return digitalRead(Pins::MOM_B2) == LOW;}
+    bool getMOMJOYSWState() const {return digitalRead(Pins::JOY_SW) == LOW;}
 
 
     // Set callbacks for momentary switches
