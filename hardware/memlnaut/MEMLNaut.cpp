@@ -1,8 +1,10 @@
 #include "MEMLNaut.hpp"
 #include "../../audio/AudioDriver.hpp"
 #include "Arduino.h"
+#include "pico/util/queue.h"
 
 MEMLNaut* MEMLNaut::instance = nullptr;
+queue_t queue_buttons_;
 
 #define FAST_MEM __not_in_flash("memlnaut")
 
@@ -31,8 +33,10 @@ void __not_in_flash_func(MEMLNaut::handle##handler_name)() {    \
             if (instance->debouncers[debouncer_index].getState()) { \
                 /*Serial.println(String("Pin ") + #pin_name + " getState() = 1");*/ \
                 if (instance->callback_name##Callback) { \
+                    const size_t pin = Pins::pin_name; \
+                    queue_add_blocking(&queue_buttons_, &pin); \
                     /*Serial.println(String("Pin ") + #pin_name + " callback!");*/ \
-                    instance->callback_name##Callback(); \
+                    /*instance->callback_name##Callback();*/ \
                 } \
             } else { \
                 /*Serial.println(String("Pin ") + #pin_name + " getState() = 0");*/ \
@@ -178,7 +182,7 @@ MEMLNaut::MEMLNaut(bool old_display) {
 
     // add_repeating_timer_ms(39, displayUpdate, NULL, &timerDisplay);
     // add_repeating_timer_ms(10, touchUpdate, NULL, &timerTouch);
-
+    queue_init(&queue_buttons_, sizeof(size_t), 1);
 }
 
 
@@ -247,6 +251,36 @@ void MEMLNaut::loop() {
     if (first_run) {
         first_run = false;
         SyncOnBoot();
+    }
+
+    // Process buttons
+    size_t button_index;
+    while (queue_try_remove(&queue_buttons_, &button_index)) {
+        switch (button_index) {
+            case Pins::MOM_A1:
+                if (momA1Callback) momA1Callback();
+                //Serial.println("+++ MOM_A1 asynchronous call!");
+                break;
+            case Pins::MOM_A2:
+                if (momA2Callback) momA2Callback();
+                //Serial.println("+++ MOM_A2 asynchronous call!");
+                break;
+            case Pins::MOM_B1:
+                if (momB1Callback) momB1Callback();
+                //Serial.println("+++ MOM_B1 asynchronous call!");
+                break;
+            case Pins::MOM_B2:
+                if (momB2Callback) momB2Callback();
+                //Serial.println("+++ MOM_B2 asynchronous call!");
+                break;
+            case Pins::RE_SW:
+                if (reSWCallback) reSWCallback();
+                //Serial.println("+++ RE_SW asynchronous call!");
+                break;
+            default:
+                DEBUG_PRINTLN("MEMLNaut- Unknown button asynchronous call!");
+                break;
+        }
     }
 
     const uint8_t adcPins[NUM_ADCS] = {

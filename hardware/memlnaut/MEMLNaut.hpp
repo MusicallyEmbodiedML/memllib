@@ -23,7 +23,7 @@ public:
 private:
     static MEMLNaut* __not_in_flash("memlnaut") instance;
     static constexpr size_t NUM_ADCS = 7;
-    static constexpr uint16_t DEFAULT_THRESHOLD = 10;
+    static constexpr uint16_t DEFAULT_THRESHOLD = 40;
     static constexpr size_t FILTER_SIZE = 5;
     static constexpr float ADC_SCALE = 4128.7f;
 

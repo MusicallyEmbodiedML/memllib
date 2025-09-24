@@ -117,6 +117,8 @@ void UARTInput::Parse_(spiMessage msg)
 {
     static const float kEventThresh = 0.01;
 
+    //DEBUG_PRINTLN(String("-- Chan ") + msg.msg + String(" Value ") + msg.value);
+
     // Find if this message's index is in our tracked indexes
     auto index = where(sensor_indexes_, msg.msg);
     if (index >= 0) {
