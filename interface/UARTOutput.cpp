@@ -1,7 +1,7 @@
 #include "UARTOutput.hpp"
 
 UARTOutput::UARTOutput(int txPin)
-    : pioSerial_(txPin, SerialPIO::NOPIN) // TX only, no RX pin
+    : pioSerial_(txPin, NOPIN) // TX only, no RX pin
 {
     // Start the PIO-based serial port at 115200 baud
     pioSerial_.begin(115200);

@@ -18,10 +18,10 @@ UARTInput::UARTInput(const std::vector<size_t>& sensor_indexes,
     baud_rate_(baud_rate)
 {
     // Reserve once to avoid heap fragmentation at runtime
-    filters_.reserve(sensor_indexes.size());
-    value_states_.reserve(sensor_indexes.size());
-    filters_.resize(sensor_indexes.size());
-    value_states_.resize(sensor_indexes.size(), 0.5f);
+    filters_.reserve(kMaxChannels);
+    value_states_.reserve(kMaxChannels);
+    filters_.resize(kMaxChannels);
+    value_states_.resize(kMaxChannels, 0.5f);
 
     // Tie RX to a known level to avoid floating
     pinMode(sensor_rx, INPUT_PULLDOWN);
@@ -161,9 +161,10 @@ void UARTInput::ParseBuf_(float* buf, size_t len)
     bool changed = false;
 
     for (size_t i = 0; i < len; i++) {
-        size_t chan = sensor_indexes_[i];
-        if (chan < kMaxChannels) {
-            float raw_value = buf[chan];
+        //size_t chan = sensor_indexes_[i];
+        //if (chan < kMaxChannels) {
+        if (i < kMaxChannels) {
+            float raw_value = buf[i];
 
             // Protect against infs and nans
             if (std::isnan(raw_value) || std::isinf(raw_value)) {
@@ -176,11 +177,11 @@ void UARTInput::ParseBuf_(float* buf, size_t len)
             // Trigger callback whenever any value has changed
             if (std::abs(filtered_value - prev_value) > kEventThresh) {
                 changed = true;
-                if (callback_) callback_(chan, filtered_value);
+                if (callback_) callback_(i, filtered_value);
             }
 
             // Print the value (Arduino scope) if it's the observed channel
-            if (kObservedChan == chan) {
+            if (kObservedChan == i) {
                 DEBUG_PRINT("Low:0.00,High:1.00,Value:");
                 DEBUG_PRINT(raw_value, 8);
                 DEBUG_PRINT(",FilteredValue:");
