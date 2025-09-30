@@ -123,6 +123,9 @@ public:
     }
 
     void bind_RL_interface(bool disable_joystick = false);
+    __force_inline void bindInterface(bool disable_joystick = false) {
+        bind_RL_interface(disable_joystick);
+    }
 
     void bindUARTInput(std::shared_ptr<UARTInput> uart_input,
         const std::vector<size_t>& kUARTListenInputs)

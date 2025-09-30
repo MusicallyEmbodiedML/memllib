@@ -13,10 +13,41 @@ constexpr size_t kSampleRate = 24000;
 constexpr float kSampleRateRcpr = 1.0/kSampleRate;
 const size_t kNChannels = 2;
 
-typedef struct {
+struct stereosample_t {
     float L;
     float R;
-} stereosample_t;
+
+    __force_inline stereosample_t operator+(const stereosample_t& other) const {
+        return {L + other.L, R + other.R};
+    }
+    __force_inline stereosample_t& operator+=(const stereosample_t& other) {
+        L += other.L;
+        R += other.R;
+        return *this;
+    }
+    __force_inline stereosample_t operator*(float scalar) const {
+        return {L * scalar, R * scalar};
+    }
+    __force_inline stereosample_t& operator*=(float scalar) {
+        L *= scalar;
+        R *= scalar;
+        return *this;
+    }
+    __force_inline stereosample_t operator-() const {
+        return {-L, -R};
+    }
+    __force_inline stereosample_t operator-(const stereosample_t& other) const {
+        return {L - other.L, R - other.R};
+    }
+    __force_inline stereosample_t& operator-=(const stereosample_t& other) {
+        L -= other.L;
+        R -= other.R;
+        return *this;
+    }
+    __force_inline float operator[](size_t index) const {
+        return index == 0 ? L : R;
+    }
+};
 
 using audiocallback_fptr_t = stereosample_t (*)(stereosample_t);
 using audiocallback_block_fptr_t = void (*)(float[][kBufferSize], float[][kBufferSize], size_t, size_t);
