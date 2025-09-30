@@ -102,10 +102,7 @@ void InterfaceRL::bind_RL_interface(bool disable_joystick) {
     });
     MEMLNaut::Instance()->setMomB2Callback([this]() { // scr_ref no longer captured directly
         if (MEMLNaut::Instance()->getMOMB2State()) {
-            this->randomiseTheCritic();
-            this->generateAction(true);
-            DEBUG_PRINTLN("The Critic is confounded");
-            if (msgView) msgView->post("Critic: totally confounded");
+            _randomise_critic_interf();
         }
     });
     if (!disable_joystick) {
@@ -124,15 +121,7 @@ void InterfaceRL::bind_RL_interface(bool disable_joystick) {
 
     MEMLNaut::Instance()->setTogB1Callback([this](bool state) { // scr_ref no longer captured directly
         if (state) {
-            this->forgetMemory();
-            static APP_SRAM std::vector<String> forgetmsgs = {
-                "Erasing my memory", "Forgetting everything", "Memory wiped","Thank you Susan?",
-                "Starting afresh", "Why care about the past?","Living in the moment"
-            };
-            String msg = forgetmsgs[rand() % forgetmsgs.size()];
-
-            if (msgView) msgView->post(msg);
-
+            this->_forget_replay_mem_interf();
         }
     });
 
@@ -173,6 +162,28 @@ void InterfaceRL::setRewardScaleInterf(float value)
 }
 
 
+void InterfaceRL::_randomise_critic_interf()
+{
+    this->randomiseTheCritic();
+    this->generateAction(true);
+    DEBUG_PRINTLN("The Critic is confounded");
+    if (msgView) msgView->post("Critic: totally confounded");
+}
+
+
+void InterfaceRL::_forget_replay_mem_interf()
+{
+    this->forgetMemory();
+    static APP_SRAM std::vector<String> forgetmsgs = {
+        "Erasing my memory", "Forgetting everything", "Memory wiped","Thank you Susan?",
+        "Starting afresh", "Why care about the past?","Living in the moment"
+    };
+    String msg = forgetmsgs[rand() % forgetmsgs.size()];
+
+    if (msgView) msgView->post(msg);
+}
+
+
 void InterfaceRL::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf)
 {
     if (midi_interf) {
@@ -196,6 +207,8 @@ void InterfaceRL::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf)
                 }
                 case 4:
                 {
+                    this->_randomise_critic_interf();
+                    this->_forget_replay_mem_interf();
                     break;
                 }
                 case 5:

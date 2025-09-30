@@ -53,7 +53,7 @@ public:
     void ListenToSensorIndexes(const std::vector<size_t> &indexes);
 
 protected:
-    static const size_t kSlipBufferSize_ = 64;
+    static const size_t kSlipBufferSize_ = 128;
     std::vector<size_t> sensor_indexes_;
     uint8_t slipBuffer[kSlipBufferSize_];
     std::vector<MedianFilter<float>> filters_;
@@ -77,6 +77,7 @@ protected:
     int spiIdx;
 
     void Parse_(spiMessage msg);
+    void ParseBuf_(float* buf, size_t len = kMaxChannels);
 
 private:
     //SerialPIO pioSerial_;

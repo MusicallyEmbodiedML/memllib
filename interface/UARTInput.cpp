@@ -18,10 +18,10 @@ UARTInput::UARTInput(const std::vector<size_t>& sensor_indexes,
     baud_rate_(baud_rate)
 {
     // Reserve once to avoid heap fragmentation at runtime
-    filters_.reserve(sensor_indexes.size());
-    value_states_.reserve(sensor_indexes.size());
-    filters_.resize(sensor_indexes.size());
-    value_states_.resize(sensor_indexes.size(), 0.5f);
+    filters_.reserve(kMaxChannels);
+    value_states_.reserve(kMaxChannels);
+    filters_.resize(kMaxChannels);
+    value_states_.resize(kMaxChannels, 0.5f);
 
     // Tie RX to a known level to avoid floating
     pinMode(sensor_rx, INPUT_PULLDOWN);
@@ -66,6 +66,7 @@ void UARTInput::Poll()
         int raw = Serial1.read();
         if (raw < 0) break;                           // no more data
         uint8_t spiByte = static_cast<uint8_t>(raw);
+        //DEBUG_PRINTF("%02X ", spiByte);
 
         switch(spiState) {
             case SPISTATES::WAITFOREND:
@@ -90,14 +91,21 @@ void UARTInput::Poll()
                     slipBuffer[spiIdx++] = spiByte;
 
                     if (spiByte == SLIP::END) {
+                        //DEBUG_PRINTLN(); // Newline after hex bytes
                         // Safe decode into fixed buffer
-                        uint8_t outBuf[sizeof(spiMessage)] = {0};
-                        size_t  maxOut = sizeof(spiMessage);
-                        size_t  got    = SLIP::decode(slipBuffer, spiIdx, outBuf, maxOut);
-                        if (got == maxOut) {
-                            spiMessage msg;
-                            memcpy(&msg, outBuf, maxOut);
-                            Parse_(msg);
+                        //uint8_t outBuf[sizeof(spiMessage)] = {0};
+                        //size_t  maxOut = sizeof(spiMessage);
+                        //size_t  got    = SLIP::decode(slipBuffer, spiIdx, outBuf, maxOut);
+                        float outBuf[kMaxChannels] = {0};
+                        size_t maxOut = sizeof(outBuf);
+                        size_t got = SLIP::decode(slipBuffer, spiIdx,
+                                reinterpret_cast<uint8_t*>(outBuf), maxOut);
+                        //DEBUG_PRINTF("Got %zu bytes\n", got);
+                        {
+                            //spiMessage msg;
+                            //memcpy(&msg, outBuf, maxOut);
+                            //Parse_(msg);
+                            ParseBuf_(outBuf, got >> 2);
                         }
                         // Reset for next packet
                         spiState = SPISTATES::WAITFOREND;
@@ -144,5 +152,42 @@ void UARTInput::Parse_(spiMessage msg)
         }
 
         value_states_[index] = filtered_value;
+    }
+}
+
+void UARTInput::ParseBuf_(float* buf, size_t len)
+{
+    static const float kEventThresh = 0.01f;
+    bool changed = false;
+
+    for (size_t i = 0; i < len; i++) {
+        //size_t chan = sensor_indexes_[i];
+        //if (chan < kMaxChannels) {
+        if (i < kMaxChannels) {
+            float raw_value = buf[i];
+
+            // Protect against infs and nans
+            if (std::isnan(raw_value) || std::isinf(raw_value)) {
+                raw_value = value_states_[i];
+            }
+
+            float filtered_value = filters_[i].process(raw_value);
+            float prev_value = value_states_[i];
+
+            // Trigger callback whenever any value has changed
+            if (std::abs(filtered_value - prev_value) > kEventThresh) {
+                changed = true;
+                if (callback_) callback_(i, filtered_value);
+            }
+
+            // Print the value (Arduino scope) if it's the observed channel
+            if (kObservedChan == i) {
+                DEBUG_PRINT("Low:0.00,High:1.00,Value:");
+                DEBUG_PRINT(raw_value, 8);
+                DEBUG_PRINT(",FilteredValue:");
+                DEBUG_PRINTLN(filtered_value, 8);
+            }
+            value_states_[i] = filtered_value;
+        }
     }
 }

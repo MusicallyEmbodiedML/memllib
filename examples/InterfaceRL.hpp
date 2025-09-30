@@ -149,6 +149,8 @@ protected:
     void _perform_randomiseRL_action();
     bool _save_RL_to_SD(String id);
     bool _load_RL_from_SD(String id);
+    void _randomise_critic_interf();
+    void _forget_replay_mem_interf();
 
 private:
 
