@@ -88,6 +88,10 @@ public:
 
     void setOptimiseDivisorInterf(float value);
 
+    inline size_t getOptimiseDivisor() const {
+        return optimiseDivisor;
+    }
+
     inline void forgetMemory() {
         replayMem.clear();
     }
@@ -122,7 +126,7 @@ public:
         }
     }
 
-    void bind_RL_interface(bool disable_joystick = false);
+    virtual void bind_RL_interface(bool disable_joystick = false);
     __force_inline void bindInterface(bool disable_joystick = false) {
         bind_RL_interface(disable_joystick);
     }
