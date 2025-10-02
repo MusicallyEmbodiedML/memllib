@@ -9,6 +9,56 @@
 #include <Arduino.h>
 
 
+constexpr float LinearMap(float value, float n, float m)
+{
+    // Clamp input to [0..1] range
+    value = value < 0.0f ? 0.0f : (value > 1.0f ? 1.0f : value);
+    return n + value * (m - n);
+}
+
+constexpr float ExponentialMap(float value, float fmin, float fmax)
+{
+    // Clamp input to [0..1] range
+    value = value < 0.0f ? 0.0f : (value > 1.0f ? 1.0f : value);
+    // Exponential mapping: fmin * (fmax/fmin)^value
+    return fmin * powf(fmax / fmin, value);
+}
+
+// Round frequency to nearest semitone in equal temperament (A4 = 440Hz)
+inline float roundToNearestSemitone(float frequency) {
+    if (frequency <= 0.0f) return 0.0f;
+
+    // Convert frequency to semitone number relative to A4 (440Hz)
+    float semitone = 12.0f * log2f(frequency / 440.0f);
+
+    // Round to nearest integer semitone
+    int roundedSemitone = static_cast<int>(semitone + (semitone >= 0 ? 0.5f : -0.5f));
+
+    // Convert back to frequency
+    return 440.0f * powf(2.0f, roundedSemitone / 12.0f);
+}
+
+
+__force_inline float MapToSeries(float value, const std::vector<float>& series) {
+    if (series.empty()) return 0.0f;
+    if (series.size() == 1) return series[0];
+
+    // Clamp value to [0, 1]
+    value = fmaxf(0.0f, fminf(1.0f, value));
+
+    // Calculate which segment we're in
+    float segment_size = 1.0f / static_cast<float>(series.size());
+    size_t index = static_cast<size_t>(value / segment_size);
+
+    // Handle edge case where value == 1.0
+    if (index >= series.size()) {
+        index = series.size() - 1;
+    }
+
+    return series[index];
+}
+
+
 inline float medianAbsoluteDeviation(std::vector<float>& data) noexcept {
     const size_t N = data.size();
 

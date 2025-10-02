@@ -11,6 +11,12 @@ class OnePoleSmoother {
         y_ { 0 } {
         SetTimeMs(time_ms);
     }
+
+    inline void setSampleRate(float sample_rate) {
+        sample_rate_ = sample_rate;
+        SetTimeMs(50.0f); // Default time
+    }
+
     void SetTimeMs(float time_ms) {
         //b1_ = std::exp(
         //    std::log(0.01) /
