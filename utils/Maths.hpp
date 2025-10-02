@@ -167,6 +167,23 @@ inline float __attribute__((always_inline)) __not_in_flash_func(meanAbsoluteDevi
     return sum / size;
 }
 
+// Linear mapping function: maps value from [0..1] to [n..m]
+inline float __attribute__((always_inline)) linearMap(float value, float n, float m) {
+    // Clamp input to [0..1] range
+    value = value < 0.0f ? 0.0f : (value > 1.0f ? 1.0f : value);
+    return n + value * (m - n);
+}
+
+// Exponential mapping function: maps value from [0..1] to [n..m] with exponential curve
+// exponent > 1.0 creates a curve that starts slow and accelerates
+// exponent < 1.0 creates a curve that starts fast and decelerates
+inline float __attribute__((always_inline)) exponentialMap(float value, float n, float m, float exponent = 2.0f) {
+    // Clamp input to [0..1] range
+    value = value < 0.0f ? 0.0f : (value > 1.0f ? 1.0f : value);
+    float exponentialValue = powf(value, exponent);
+    return n + exponentialValue * (m - n);
+}
+
 int where(const std::vector<size_t>& integers, size_t integer);
 
 
