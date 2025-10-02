@@ -200,7 +200,9 @@ private:
     std::vector<std::unique_ptr<OrnsteinUhlenbeckNoise>> ou_noises;
 
     // Display views
+public:
     std::shared_ptr<MessageView> msgView;
+private:
     std::shared_ptr<BlockSelectView> fileSaveView;
     std::shared_ptr<BlockSelectView> fileLoadView;
     std::shared_ptr<BarGraphView> nnInputsGraphView;
