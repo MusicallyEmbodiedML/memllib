@@ -3131,4 +3131,39 @@ private:
 
 
 };
+
+
+class maxiBitQuant
+{
+    public:
+    float play(float w, float quantFactor) {
+        w *= quantFactor;
+        w = std::floorf(w);
+        w /= quantFactor;
+        return w;
+    }
+};
+
+class maxiDownSample
+{
+public:
+    float play(float w, float period) {
+        float ret = 0;
+        if (counter == 0) {
+            latchVal = w;
+            ret = w;
+        }
+        counter += 1;
+        if (counter >= period) {
+            counter = 0;
+        }
+        return latchVal;
+        //return ret;
+    }
+private:
+    float counter=0.f;
+    float latchVal=0.f;
+};
+
+
 #endif

@@ -29,6 +29,15 @@ class OnePoleSmoother {
         }
     }
 
+    inline __attribute__((always_inline)) float Process(float x) {
+        float in[1] { x };
+        float out[1];
+
+        Process(in, out);
+
+        return out[0];
+    }
+
  protected:
     float sample_rate_;
     float b1_;

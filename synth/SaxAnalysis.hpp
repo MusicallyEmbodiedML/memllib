@@ -5,6 +5,7 @@
 #include "../utils/MedianFilter.h"
 #include "../utils/CircularBuffer.hpp"
 #include "maximilian.h"
+#include "../synth/OnePoleSmoother.hpp"
 
 #include <cmath>
 
@@ -18,7 +19,6 @@ public:
         float energy;
         float attack;
         float brightness;
-        float energy_crude;
     };
     static constexpr size_t kN_Params = sizeof(parameters_t) / sizeof(float);
 
@@ -53,6 +53,9 @@ protected:
     maxiBiquad br_lpf2_;
     maxiEnvelopeFollowerF br_follower_[kBR_NBands];
 
+    // Smooth the parameters for stability
+    maxiEnvelopeFollowerF ar_smoothers_[3];
+    OnePoleSmoother<2> smoothers_;
 };
 
 

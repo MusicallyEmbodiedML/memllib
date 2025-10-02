@@ -10,7 +10,10 @@
 SaxAnalysis::SaxAnalysis(const float sample_rate) :
     sample_rate_(sample_rate),
     one_over_sample_rate_(1.0f / sample_rate),
-    zc_median_filter_(kZC_MedianFilterSize) {
+    zc_median_filter_(kZC_MedianFilterSize),
+    ar_smoothers_{ maxiEnvelopeFollowerF(), maxiEnvelopeFollowerF() },
+    smoothers_(150.f, sample_rate)
+{
 
     // Initialize filters and detectors
     common_hpf_.set(maxiBiquad::filterTypes::HIGHPASS, 100.f, 0.707f, 0);
@@ -28,6 +31,11 @@ SaxAnalysis::SaxAnalysis(const float sample_rate) :
     for (size_t i = 0; i < kBR_NBands; ++i) {
         br_follower_[i].setAttack(10.f);
         br_follower_[i].setRelease(100.f);
+    }
+    // Param smoothing
+    for (unsigned int i = 0; i < 2; ++i) {
+        ar_smoothers_[i].setAttack(10.f);
+        ar_smoothers_[i].setRelease(200.f);
     }
 }
 
@@ -119,7 +127,7 @@ SaxAnalysis::parameters_t AUDIO_FUNC(SaxAnalysis::Process)(const float x) {
         ef_d_dy = 0;
     }
     // Scale to [0..1] range
-    ef_d_dy = std::min(ef_d_dy * 10.0f, 1.0f);
+    ef_d_dy = std::min(ef_d_dy * 100.0f, 1.0f);
 
 
     // Brightness calculation
@@ -138,12 +146,14 @@ SaxAnalysis::parameters_t AUDIO_FUNC(SaxAnalysis::Process)(const float x) {
     }
 
     // Fill parameters
-    params.pitch = normalized_pitch;
-    params.aperiodicity = normalizedAperiodicity;
-    params.energy = ef_y;
-    params.attack = ef_d_dy;
-    params.brightness = br_high;
-    params.energy_crude = std::abs(x);
+    float smoother_input[3] = { normalized_pitch, ef_y, br_high };
+    float smoother_output[3];
+    smoothers_.Process(smoother_input, smoother_output);
+    params.pitch = smoother_output[0];
+    params.aperiodicity = ar_smoothers_[0].play(normalizedAperiodicity);
+    params.energy = smoother_output[1];
+    params.attack = ar_smoothers_[1].play(ef_d_dy);
+    params.brightness = br_high;//smoother_output[2];
 
     return params;
 }
