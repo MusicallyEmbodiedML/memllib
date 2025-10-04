@@ -183,8 +183,9 @@ void InterfaceRL::_forget_replay_mem_interf()
     if (msgView) msgView->post(msg);
 }
 
+static MIDIInOut::midi_cc_callback_t extra_callback_ = nullptr;
 
-void InterfaceRL::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf)
+void InterfaceRL::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf, MIDIInOut::midi_cc_callback_t extra_callback)
 {
     if (midi_interf) {
         midi_interf->SetCCCallback([this] (uint8_t cc_number, uint8_t cc_value) {
@@ -240,8 +241,16 @@ void InterfaceRL::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf)
                     this->setOptimiseDivisorInterf(1.f - opt);
                     break;
                 }
+                default:
+                {
+                    if (extra_callback_) {
+                        extra_callback_(cc_number, cc_value);
+                    }
+                }
             };
         });
+
+        extra_callback_ = extra_callback;
     }
 
     midi_ = midi_interf;

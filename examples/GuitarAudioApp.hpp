@@ -20,26 +20,37 @@ public:
         float stepsize;
         float freq[kNSteps];
         float reso[kNSteps];
+        float envlength;
         //float gain[kNSteps];
     };
     static constexpr size_t kN_Params = sizeof(AppParams) / sizeof(float);
 
+    volatile bool switch_mode;
+
     GuitarAudioApp() :
+        switch_mode(false),
         raw_params_{0.0f},
         param_smoother_(10.0f, 48000.0f), // Default sample rate, will be updated in Setup
         osc_(),
         phasor_(0),
-        step_number_(0)
+        step_number_(0),
+        svf_(),
+        AudioAppBase()
     {
         // Constructor implementation (if needed)
     }
 
     void Setup(float sample_rate, std::shared_ptr<InterfaceBase> interface) override
     {
+        maxiSettings::setup(sample_rate, kNChannels, kBufferSize);
         AudioAppBase::Setup(sample_rate, interface);
         // Additional setup for GuitarAudioApp can be added here
         param_smoother_.setSampleRate(sample_rate);
         param_smoother_.SetTimeMs(50.0f); // Set smoothing time to 10 ms
+
+        // Setup the line envelope: from 1.0 to 0.5 over 1000ms (1 second), one-shot
+        env_.prepare(1.0f, 0.f, 100.0f, true);
+        env_.triggerEnable(1); // Enable triggering
     }
 
     __force_inline stereosample_t ProcessInline(const stereosample_t x)
@@ -58,10 +69,14 @@ public:
         size_t subdivision_samples = CalculateSubdivisionSamples(n_steps, tempo, sample_rate_);
 
         // Advance phasor and check for step change
+        float env_sig = 0;
         phasor_++;
         if (phasor_ >= subdivision_samples) {
             phasor_ = 0;
             step_number_ = (step_number_ + 1) % n_steps;
+            env_sig = 1.f; // This will trigger the envelope
+            float env_scale = LinearMap(params.p.envlength, 20.f, 300.f);
+            env_.prepare(1.f, 0, env_scale, true); // Retrigger envelope
         }
 
         // Get parameters of current step
@@ -73,14 +88,18 @@ public:
         svf_.setResonance(reso);
 
         float y = x.L + x.R;
-        if (0) {
+        float env = env_.play(env_sig);
+        if (switch_mode) {
+            static constexpr float freq_adjust = 440.f/240.f;
             // Simple synthesis: sine wave at step frequency
-            y = osc_.sinebuf(roundToNearestSemitone(freq));
+            y = osc_.sinebuf(roundToNearestSemitone(freq) * freq_adjust) * 0.15;
+            // Get the current envelope value (this runs continuously once triggered)
         } else {
             y = svf_.play(y, 0, 0, 1.f, 0);
         }
+        y *= env;
 
-        return { y * 0.5f, y * 0.5f };
+        return { y, y };
     }
 
     void ProcessParams(const std::vector<float>& params) override
@@ -99,6 +118,7 @@ protected:
     OnePoleSmoother<kN_Params> param_smoother_;
     maxiOsc osc_;
     maxiSVF svf_;
+    maxiLine env_;
 
     size_t phasor_;
     size_t step_number_;

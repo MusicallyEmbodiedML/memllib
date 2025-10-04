@@ -35,7 +35,7 @@ inline float roundToNearestSemitone(float frequency) {
     int roundedSemitone = static_cast<int>(semitone + (semitone >= 0 ? 0.5f : -0.5f));
 
     // Convert back to frequency
-    return 440.0f * powf(2.0f, roundedSemitone / 12.0f);
+    return 440.0f * powf(2.0f, static_cast<float>(roundedSemitone) / 12.0f);
 }
 
 

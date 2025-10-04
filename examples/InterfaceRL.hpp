@@ -136,7 +136,7 @@ public:
     {
         DEBUG_PRINTLN("bindUARTInput not implemented yet");
     }
-    void bindMIDI(std::shared_ptr<MIDIInOut> midi_interf);
+    void bindMIDI(std::shared_ptr<MIDIInOut> midi_interf, MIDIInOut::midi_cc_callback_t extra_callback = nullptr);
 
     void trigger_like();
     void trigger_dislike();

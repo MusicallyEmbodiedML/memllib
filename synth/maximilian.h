@@ -1764,6 +1764,11 @@ public:
     {
         return lineComplete;
     }
+    void reset()
+    {
+        triggered = false;
+        lineComplete = false;
+    }
 
 private:
     float phase = 0;
@@ -1776,11 +1781,7 @@ private:
     float lineStart = 0;
     float lineEnd = 0;
     bool oneShot = 1;
-    void reset()
-    {
-        triggered = false;
-        lineComplete = false;
-    }
+
 };
 
 // /**
