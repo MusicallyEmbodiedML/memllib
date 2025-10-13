@@ -496,24 +496,6 @@ void InterfaceRL::optimise() {
             actor->ApplyPolicyGradient(stateInput, actionGradients, actorLearningRateScaled * sampleSizeRecr);
 
 
-
-
-            // for(size_t j=0; j < actionSize; j++) {
-            //     actorGradient[j] += l0Grads[j+stateSize] * sampleSizeRecr; // Accumulate gradients for actions
-            //     totalActorGradient += actorGradient[j];      // Sum of gradients
-            // }
-
-            // actor->ApplyLoss(stateInput, actorGradient, actorLearningRate);
-
-            // float avgQ = criticOutput[0];
-            // float gradMagnitude = 0;
-            // for(auto& g : actorGradient) gradMagnitude += g*g;
-            // gradMagnitude = sqrt(gradMagnitude);
-
-            //  DEBUG_PRINTF("Q-value: %.3f, Grad magnitude: %.3f\n", avgQ, gradMagnitude);
-
-
-
         }
 
         float gradNorm = 0.0f;
@@ -616,9 +598,7 @@ void InterfaceRL::generateAction(bool donthesitate) {
 }
 
 void InterfaceRL::storeExperience(float reward) {
-    // readAnalysisParameters(); // This would recursively call generateAction(true)
     std::vector<float> state = actorControlInput; // actorControlInput already includes bias if setup correctly
-    // float bpf0 = READ_VOLATILE(sharedMem::f0); // bpf0 is read but not used
 
     //remove bias if it's part of actorControlInput for storage
     // The actorControlInput is stateSize + bias.

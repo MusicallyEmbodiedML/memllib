@@ -126,6 +126,7 @@ public:
     }
 
     void bind_RL_interface(bool disable_joystick = false);
+
     __force_inline void bindInterface(bool disable_joystick = false) {
         bind_RL_interface(disable_joystick);
     }
@@ -135,6 +136,7 @@ public:
     {
         DEBUG_PRINTLN("bindUARTInput not implemented yet");
     }
+    
     void bindMIDI(std::shared_ptr<MIDIInOut> midi_interf);
 
     void trigger_like();

@@ -4,6 +4,7 @@
 #include "View.hpp"
 #include "UIElements.hpp"
 #include <deque>
+#include "../common.hpp"
 
 
 class SystemView : public ViewBase {
@@ -19,6 +20,7 @@ public:
         freeHeap = rp2040.getFreeHeap();
         totalHeap = rp2040.getTotalHeap();
         usedHeap = totalHeap - freeHeap;
+        sys_clk = clock_get_hz(clk_sys);        
     };
 
     
@@ -30,12 +32,11 @@ public:
         constexpr int32_t lineheight = 20;
         textSprite.setTextColor(TFT_WHITE, TFT_BLACK);
         std::deque<String> lines;
-        lines.push_back("MEMLNaut v1.0.0");
+        lines.push_back(String("MEMLNaut ") + String(MEMLLIB_VERSION));
         lines.push_back("");
         lines.push_back("Info: https://musicallyembodiedml.github.io");
         lines.push_back("");
         lines.push_back("Build: " + String(__DATE__) + " " + String(__TIME__));
-        uint32_t sys_clk = clock_get_hz(clk_sys);        
         lines.push_back("System Clock: " + String(sys_clk/1000000.f) + " MHz");
         lines.push_back("Heap: " + String(freeHeap/1024) + "k free, " +
                        String(totalHeap/1024) + "k total, " +
@@ -58,6 +59,7 @@ private:
     uint32_t freeHeap = 0;
     uint32_t totalHeap = 0;
     uint32_t usedHeap = 0;
+    uint32_t sys_clk=0;
 
 };
 
