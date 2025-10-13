@@ -1,6 +1,7 @@
 #include "EuclideanAudioApp.hpp"
 #include "../PicoDefs.hpp"
 
+#if 0
 
 void EuclideanAudioApp::Setup(float sample_rate, std::shared_ptr<InterfaceBase> interface) {
     AudioAppBase::Setup(sample_rate, interface);
@@ -72,3 +73,5 @@ stereosample_t EuclideanAudioApp::Process(const stereosample_t x) {
 
     return output;
 }
+
+#endif

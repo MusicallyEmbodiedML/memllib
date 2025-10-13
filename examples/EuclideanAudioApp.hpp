@@ -1,6 +1,8 @@
 #ifndef __EUCLIDEAN_AUDIO_APP_HPP__
 #define __EUCLIDEAN_AUDIO_APP_HPP__
 
+//needs conversion to new templated base
+#if 0
 
 #include <Arduino.h>
 #include <cmath>
@@ -221,5 +223,6 @@ protected:
     }
 };
 
+#endif
 
 #endif  // __EUCLIDEAN_AUDIO_APP_HPP__

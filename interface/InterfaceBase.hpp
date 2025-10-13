@@ -40,7 +40,9 @@ public:
 
     // Queue management
     void SendParamsToQueue(const std::vector<float>& data);
-    bool ReceiveParamsFromQueue(std::vector<float>& data);
+
+    //todo: this should be std::array and this class should be templated
+    bool ReceiveParamsFromQueue(float *data);
 };
 
 #endif// __INTERFACE_BASE_HPP__

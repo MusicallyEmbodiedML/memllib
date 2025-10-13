@@ -46,13 +46,13 @@ void InterfaceBase::SendParamsToQueue(const std::vector<float>& data) {
     }
 }
 
-bool InterfaceBase::ReceiveParamsFromQueue(std::vector<float>& data) {
+bool InterfaceBase::ReceiveParamsFromQueue(float *data) {
     if (!init_done_) {
         DEBUG_PRINTLN("InterfaceBase::ReceiveParamsFromQueue - Error: Interface not initialized");
         return false;
     }
-    if (data.size() != n_outputs_) {
-        data.resize(n_outputs_);
-    }
-    return queue_try_remove(&queue_audioparam_, data.data());
+    // if (data.size() != n_outputs_) {
+    //     data.resize(n_outputs_);
+    // }
+    return queue_try_remove(&queue_audioparam_, data);
 }

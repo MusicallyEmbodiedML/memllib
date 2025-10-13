@@ -2,6 +2,8 @@
 #include "..//utils/sharedMem.hpp" // For WRITE_VOLATILE if uncommented in Process
 #include <cmath> // For tanhf
 
+#if 0
+
 stereosample_t KassiaAudioApp::Process(const stereosample_t x)
 {
     float mix = x.L + x.R;
@@ -91,3 +93,6 @@ void KassiaAudioApp::ProcessParams(const std::vector<float>& params)
 {
     neuralNetOutputs = params;
 }
+
+
+#endif

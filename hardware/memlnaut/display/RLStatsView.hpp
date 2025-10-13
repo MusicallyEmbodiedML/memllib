@@ -55,6 +55,9 @@ private:
     const int valueColour = TFT_YELLOW;
     float actorGradNorm = 0.f;
     float criticLoss = 0.f;
+    #define GRAPHSIZE 100
+    std::array<float, GRAPHSIZE> histGnorm, histCriticLoss;
+    size_t indexGnorm=0, indexCriticLoss=0;
     
 };
 

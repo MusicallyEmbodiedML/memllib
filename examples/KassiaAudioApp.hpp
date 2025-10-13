@@ -12,6 +12,8 @@
 #include "../synth/OnePoleSmoother.hpp"
 #include "../utils/sharedMem.hpp"
 
+//todo: convert to new templated base
+#if 0
 
 class KassiaAudioApp : public AudioAppBase
 {
@@ -79,6 +81,6 @@ protected:
     float wetdry_mix_{0.5f};
 };
 
-
+#endif
 
 #endif  // KASSIA_AUDIO_APP_HPP__

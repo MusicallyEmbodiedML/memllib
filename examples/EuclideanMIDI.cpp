@@ -10,6 +10,8 @@
 #include "EuclideanMIDI.hpp"
 #include <algorithm>
 
+#if 0
+
 EuclideanMIDI::EuclideanMIDI()
     : midi_interface_(nullptr) {
     // Initialize vectors with default values
@@ -194,3 +196,5 @@ void EuclideanMIDI::SendNoteOff_(size_t operator_index) {
         last_velocities_[operator_index] = 0;
     }
 }
+
+#endif

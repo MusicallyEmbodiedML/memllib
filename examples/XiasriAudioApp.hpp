@@ -8,6 +8,7 @@
 #include "../synth/OnePoleSmoother.hpp"
 #include "../synth/maximilian.h"
 
+#if 0
 
 class PAFSynthApp : public AudioAppBase
 {
@@ -137,5 +138,6 @@ protected:
 
 };
 
+#endif
 
 #endif  // __XIASRIAUDIOAPP_HPP__

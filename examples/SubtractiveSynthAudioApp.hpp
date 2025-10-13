@@ -6,6 +6,8 @@
 #include "../synth/maximilian.h"
 #include "../audio/AudioAppBase.hpp"
 
+#if 0
+
 class SubtractiveSynthAudioApp : public AudioAppBase
 {
 public:
@@ -76,6 +78,6 @@ protected:
 
 };
 
-
+#endif
 
 #endif  // __SUBTRACTIVE_SYNTH_AUDIO_APP_HPP__

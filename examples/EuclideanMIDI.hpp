@@ -16,6 +16,8 @@
 #include "../interface/MIDIInOut.hpp"
 #include "EuclideanAudioApp.hpp"
 
+
+#if 0
 /**
  * @brief MIDI note configuration structure
  *
@@ -155,5 +157,7 @@ private:
      */
     void SendNoteOff_(size_t operator_index);
 };
+
+#endif
 
 #endif // __EUCLIDEAN_MIDI_HPP__
