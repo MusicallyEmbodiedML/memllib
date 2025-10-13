@@ -213,31 +213,41 @@ void InterfaceRL::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf)
                 }
                 case 5:
                 {
-                    static constexpr float cc_scale = 1.f/(127.f-20.f);
-                    // Less than 20 on cc_value is considered 0
-                    // scale [20..127] to [0.0, 1.0]
-                    if (cc_value < 20) {
-                        cc_value = 0;
-                    } else {
-                        cc_value -= 20; // Shift range to [0, 107]
+                    if (midi5cb) {
+                        midi5cb(cc_value);
+
+                    }else{
+                        static constexpr float cc_scale = 1.f/(127.f-20.f);
+                        // Less than 20 on cc_value is considered 0
+                        // scale [20..127] to [0.0, 1.0]
+                        if (cc_value < 20) {
+                            cc_value = 0;
+                        } else {
+                            cc_value -= 20; // Shift range to [0, 107]
+                        }
+                        float scale = static_cast<float>(cc_value) * cc_scale;
+                        //this->setRewardScaleInterf(scale);
+                        this->setNoiseLevel(scale);
                     }
-                    float scale = static_cast<float>(cc_value) * cc_scale;
-                    //this->setRewardScaleInterf(scale);
-                    this->setNoiseLevel(scale);
                     break;
                 }
                 case 6:
                 {
-                    static constexpr float cc_scale = 1.f/(127.f-20.f);
-                    // Less than 20 on cc_value is considered 0
-                    // scale [20..127] to [0.0, 1.0]
-                    if (cc_value < 20) {
-                        cc_value = 0;
-                    } else {
-                        cc_value -= 20; // Shift range to [0, 107]
+                    if (midi6cb) {
+                        midi6cb(cc_value);
+
+                    }else{
+                        static constexpr float cc_scale = 1.f/(127.f-20.f);
+                        // Less than 20 on cc_value is considered 0
+                        // scale [20..127] to [0.0, 1.0]
+                        if (cc_value < 20) {
+                            cc_value = 0;
+                        } else {
+                            cc_value -= 20; // Shift range to [0, 107]
+                        }
+                        float opt = static_cast<float>(cc_value) * cc_scale;
+                        this->setOptimiseDivisorInterf(1.f - opt);
                     }
-                    float opt = static_cast<float>(cc_value) * cc_scale;
-                    this->setOptimiseDivisorInterf(1.f - opt);
                     break;
                 }
             };
