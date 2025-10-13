@@ -508,47 +508,6 @@ void InterfaceRL::optimise() {
         rlStatsView->setActorGradNorm(gradNorm);
 
 
-        // for(size_t j=0; j < actionSize; j++) {
-        //     accumulatedGradient[j] *= sampleSizeRecr;
-        // }
-
-        // Simple gradient clipping
-        // const float maxGradNorm = 0.5f;  // Start conservative
-        // float gradNorm = 0.0f;
-
-        // for(auto& g : accumulatedGradient) {
-        //     gradNorm += g * g;
-        // }
-        // gradNorm = sqrtf(gradNorm);
-
-        // if (gradNorm > maxGradNorm) {
-        //     float scale = maxGradNorm / gradNorm;
-        //     for(auto& g : accumulatedGradient) {
-        //         g *= scale;
-        //     }
-
-        //     // Optional: notify user of instability
-        //     if (gradNorm > maxGradNorm * 5.0f) {
-        //         msgView->post("Learning unstable - adjusting...");
-        //     }
-        // }
-
-        // std::vector<float> avgState(stateSize, 0.0f);
-        // for(size_t i = 0; i < sample.size(); i++) {
-        //     for(size_t j = 0; j < stateSize; j++) {
-        //         avgState[j] += sample[i].state[j] * sampleSizeRecr;
-        //     }
-        // }
-        // avgState.push_back(1.f); // bias
-        // actor->ApplyPolicyGradient(avgState, accumulatedGradient, actorLearningRate);
-
-        // // Calculate total gradient for logging
-        // float totalActorGradient = 0.0f;
-        // for(auto& g : accumulatedGradient) {
-        //     totalActorGradient += std::abs(g);
-        // }
-        // rlStatsView->setActorLoss(totalActorGradient);
-
         // soft update the target networks
         criticTarget->SmoothUpdateWeights(critic, smoothingAlpha);
         actorTarget->SmoothUpdateWeights(actor, smoothingAlpha);
