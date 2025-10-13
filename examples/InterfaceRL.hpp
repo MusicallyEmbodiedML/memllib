@@ -36,6 +36,9 @@ struct trainRLItem {
 class InterfaceRL : public InterfaceBase
 {
 public:
+
+    using OnMIDICtrlCallback = std::function<void(uint8_t)>;
+
    InterfaceRL() : InterfaceBase()
 //    , ou_noise(0.02f, 0.0f, 0.2f, 0.001f, 0.0f)
 {
@@ -142,6 +145,12 @@ public:
         out_action = action;
     }
 
+    void SetMIDI5Callback(OnMIDICtrlCallback _cb_) {
+        midi5cb = _cb_;
+    }    
+    void SetMIDI6Callback(OnMIDICtrlCallback _cb_) {
+        midi6cb = _cb_;
+    }    
 protected:
     // Helper methods for trigger actions
     void _perform_like_action();
@@ -153,6 +162,9 @@ protected:
     void _forget_replay_mem_interf();
 
 private:
+
+    OnMIDICtrlCallback midi5cb = nullptr;
+    OnMIDICtrlCallback midi6cb = nullptr;
 
     static constexpr size_t bias=1;
 
