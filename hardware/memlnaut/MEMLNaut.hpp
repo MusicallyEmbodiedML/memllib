@@ -23,16 +23,19 @@ public:
 private:
     static MEMLNaut* __not_in_flash("memlnaut") instance;
     static constexpr size_t NUM_ADCS = 7;
-    static constexpr uint16_t DEFAULT_THRESHOLD = 100;
+    static constexpr float DEFAULT_THRESHOLD = 30.f/4096.f;
     static constexpr size_t FILTER_SIZE = 5;
     static constexpr float ADC_SCALE = 4128.7f;
+    static constexpr float ADC_SCALE_INV = 1.f/4128.7f;
 
     static constexpr size_t NUM_BUTTONS = 7;
     static constexpr size_t NUM_TOGGLES = 5;
 
+    void setup_adcs();
+
     struct ADCState {
         float lastValue = 0.0f;
-        uint16_t threshold = DEFAULT_THRESHOLD;
+        float threshold = DEFAULT_THRESHOLD;
         AnalogCallback callback = nullptr;
     };
 
@@ -124,14 +127,14 @@ public:
     void setJoySWCallback(ToggleCallback cb);
 
     // ADC callback setters
-    void setJoyXCallback(AnalogCallback cb, uint16_t threshold = DEFAULT_THRESHOLD);
-    void setJoyYCallback(AnalogCallback cb, uint16_t threshold = DEFAULT_THRESHOLD);
-    void setJoyZCallback(AnalogCallback cb, uint16_t threshold = DEFAULT_THRESHOLD);
-    void setRVGain1Callback(AnalogCallback cb, uint16_t threshold = DEFAULT_THRESHOLD);
-    void setRVGain1Volume(uint16_t threshold = DEFAULT_THRESHOLD);
-    void setRVZ1Callback(AnalogCallback cb, uint16_t threshold = DEFAULT_THRESHOLD);
-    void setRVY1Callback(AnalogCallback cb, uint16_t threshold = DEFAULT_THRESHOLD);
-    void setRVX1Callback(AnalogCallback cb, uint16_t threshold = DEFAULT_THRESHOLD);
+    void setJoyXCallback(AnalogCallback cb, float threshold = DEFAULT_THRESHOLD);
+    void setJoyYCallback(AnalogCallback cb, float threshold = DEFAULT_THRESHOLD);
+    void setJoyZCallback(AnalogCallback cb, float threshold = DEFAULT_THRESHOLD);
+    void setRVGain1Callback(AnalogCallback cb, float threshold = DEFAULT_THRESHOLD);
+    void setRVGain1Volume(float threshold = DEFAULT_THRESHOLD);
+    void setRVZ1Callback(AnalogCallback cb, float threshold = DEFAULT_THRESHOLD);
+    void setRVY1Callback(AnalogCallback cb, float threshold = DEFAULT_THRESHOLD);
+    void setRVX1Callback(AnalogCallback cb, float threshold = DEFAULT_THRESHOLD);
 
     // Main loop callback setter
     void setLoopCallback(LoopCallback cb);

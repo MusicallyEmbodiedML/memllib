@@ -2,22 +2,113 @@
 #include "../../audio/AudioDriver.hpp"
 #include "Arduino.h"
 
+#include "hardware/adc.h"
+#include "hardware/dma.h"
+#include "hardware/sync.h"
+#include "hardware/irq.h"
+
+
 MEMLNaut* MEMLNaut::instance = nullptr;
 
 #define FAST_MEM __not_in_flash("memlnaut")
 
-// struct repeating_timer FAST_MEM timerDisplay;
-// inline bool __not_in_flash_func(displayUpdate)(__unused struct repeating_timer *t) {
-//     MEMLNaut::Instance()->disp->Draw();
-//     return true;
-// }
+//adc dma code - crashed, but leaving it here for later
+static uint16_t __not_in_flash("adc") capture_buf[32] __attribute__((aligned(2048)));
+static uint16_t __not_in_flash("adc") capture_buf_a[32] __attribute__((aligned(2048)));
+static uint16_t __not_in_flash("adc") capture_buf_b[32] __attribute__((aligned(2048)));
+uint __scratch_x("adc") dma_chan;
+uint __scratch_x("adc") dma_chan2;
 
-// struct repeating_timer FAST_MEM timerTouch;
-// inline bool __not_in_flash_func(touchUpdate)(__unused struct repeating_timer *t) {
-//     // scr->update();
-//     MEMLNaut::Instance()->disp->PollTouch();
-//     return true;
-// }
+void adc_dma_irq_handler() {
+  uint16_t *adcReadings = nullptr;
+  if (dma_channel_get_irq1_status(dma_chan)) {
+      dma_channel_acknowledge_irq1(dma_chan);
+      adcReadings = capture_buf_a;      
+  }
+  if (dma_channel_get_irq1_status(dma_chan2)) {
+      dma_channel_acknowledge_irq1(dma_chan2);
+      adcReadings = capture_buf_b;      
+  }
+  if (adcReadings) {
+    Serial.println(adcReadings[0]);
+  }
+}
+
+void MEMLNaut::setup_adcs() {
+  adc_init();
+  //init individual adc pins
+  for(auto &adcIdx: {40,41,42,43,44,45,46,47}) {
+      adc_gpio_init(adcIdx);
+  }
+
+  //read all adc channels
+  adc_set_round_robin(0b11111111);
+  adc_fifo_setup(
+    true,   // Write each completed conversion to the sample FIFO
+    true,   // Enable DMA data request (DREQ)
+    8,      // DREQ (and IRQ) asserted when at least 8 samples present
+    false, 
+    false   
+  );
+
+  constexpr size_t adcSystemFreq = 1000 * 8; //allow for 4 readings
+  adc_set_clkdiv((48000000 / adcSystemFreq) - 1);
+
+  //setup two dma channels in ping pong
+  dma_chan = dma_claim_unused_channel(true);
+  dma_channel_config cfg = dma_channel_get_default_config(dma_chan);
+
+  dma_chan2 = dma_claim_unused_channel(true);
+  dma_channel_config cfg2 = dma_channel_get_default_config(dma_chan2);
+
+  // Reading from constant address, writing to incrementing byte addresses
+  channel_config_set_transfer_data_size(&cfg, DMA_SIZE_16);
+  channel_config_set_read_increment(&cfg, false);
+  channel_config_set_write_increment(&cfg, true);
+//   channel_config_set_ring(&cfg, true, 4);
+
+  // Pace transfers based on availability of ADC samples
+  channel_config_set_dreq(&cfg, DREQ_ADC);
+  channel_config_set_chain_to(&cfg, dma_chan2);
+
+
+  // Reading from constant address, writing to incrementing byte addresses
+  channel_config_set_transfer_data_size(&cfg2, DMA_SIZE_16);
+  channel_config_set_read_increment(&cfg2, false);
+  channel_config_set_write_increment(&cfg2, true);
+//   channel_config_set_ring(&cfg2, true, 4);
+
+  // Pace transfers based on availability of ADC samples
+  channel_config_set_dreq(&cfg2, DREQ_ADC);
+  channel_config_set_chain_to(&cfg2, dma_chan);
+
+
+  dma_channel_configure(dma_chan, &cfg,
+                        capture_buf_a,    // dst
+                        &adc_hw->fifo,  // src
+                        8,             // transfer count
+                        false            // start immediately
+  );
+
+  dma_channel_configure(dma_chan2, &cfg2,
+                        capture_buf_b,    // dst
+                        &adc_hw->fifo,  // src
+                        8,             // transfer count
+                        false            // start immediately
+  );
+
+  dma_channel_start(dma_chan);
+
+  adc_select_input(0);
+
+  //set up interrupts
+  dma_channel_set_irq1_enabled(dma_chan, true);
+  dma_channel_set_irq1_enabled(dma_chan2, true);
+  irq_set_exclusive_handler(DMA_IRQ_1, adc_dma_irq_handler);
+  irq_set_enabled(DMA_IRQ_1, true);  
+
+  adc_run(true);
+}
 
 
 // Static interrupt handlers implementation
@@ -195,20 +286,20 @@ void MEMLNaut::setTogB2Callback(ToggleCallback cb) { togB2Callback = cb; }
 void MEMLNaut::setJoySWCallback(ToggleCallback cb) { joySWCallback = cb; }
 
 // ADC callback setters
-void MEMLNaut::setJoyXCallback(AnalogCallback cb, uint16_t threshold) {
+void MEMLNaut::setJoyXCallback(AnalogCallback cb, float threshold) {
     adcStates[0] = {analogRead(Pins::JOY_X) / ADC_SCALE, threshold, cb};
 }
-void MEMLNaut::setJoyYCallback(AnalogCallback cb, uint16_t threshold) {
+void MEMLNaut::setJoyYCallback(AnalogCallback cb, float threshold) {
     adcStates[1] = {analogRead(Pins::JOY_Y) / ADC_SCALE, threshold, cb};
 }
-void MEMLNaut::setJoyZCallback(AnalogCallback cb, uint16_t threshold) {
+void MEMLNaut::setJoyZCallback(AnalogCallback cb, float threshold) {
     adcStates[2] = {analogRead(Pins::JOY_Z) / ADC_SCALE, threshold, cb};
 }
-void MEMLNaut::setRVGain1Callback(AnalogCallback cb, uint16_t threshold) {
-    //adcStates[3] = {analogRead(Pins::RV_GAIN1) / ADC_SCALE, threshold, cb};
+void MEMLNaut::setRVGain1Callback(AnalogCallback cb, float threshold) {
+    adcStates[3] = {analogRead(Pins::RV_GAIN1) / ADC_SCALE, threshold, cb};
     DEBUG_PRINTLN("RVGain1 overridden - only controls audio volume");
 }
-void MEMLNaut::setRVGain1Volume(uint16_t threshold) {
+void MEMLNaut::setRVGain1Volume(float threshold) {
     adcStates[3] = {
         analogRead(Pins::RV_GAIN1) / ADC_SCALE,
         threshold,
@@ -217,13 +308,13 @@ void MEMLNaut::setRVGain1Volume(uint16_t threshold) {
         }
     };
 }
-void MEMLNaut::setRVZ1Callback(AnalogCallback cb, uint16_t threshold) {
+void MEMLNaut::setRVZ1Callback(AnalogCallback cb, float threshold) {
     adcStates[4] = {analogRead(Pins::RV_Z1) / ADC_SCALE, threshold, cb};
 }
-void MEMLNaut::setRVY1Callback(AnalogCallback cb, uint16_t threshold) {
+void MEMLNaut::setRVY1Callback(AnalogCallback cb, float threshold) {
     adcStates[5] = {analogRead(Pins::RV_Y1) / ADC_SCALE, threshold, cb};
 }
-void MEMLNaut::setRVX1Callback(AnalogCallback cb, uint16_t threshold) {
+void MEMLNaut::setRVX1Callback(AnalogCallback cb, float threshold) {
     adcStates[6] = {analogRead(Pins::RV_X1) / ADC_SCALE, threshold, cb};
 }
 
@@ -255,10 +346,10 @@ void MEMLNaut::loop() {
     for (size_t i = 0; i < NUM_ADCS; i++) {
         uint16_t rawValue = analogRead(adcPins[i]);
         uint16_t filteredValue = adcFilters[i].process(rawValue);
-        float currentValue = filteredValue / ADC_SCALE;
+        float currentValue = filteredValue * ADC_SCALE_INV;
         auto& state = adcStates[i];
 
-        if (state.callback && abs(static_cast<int>(filteredValue - (state.lastValue * ADC_SCALE))) > state.threshold) {
+        if (state.callback && fabs(currentValue - state.lastValue) > state.threshold) {
             state.callback(currentValue);
             state.lastValue = currentValue;
         }
