@@ -4,8 +4,8 @@
 #include "../hardware/memlnaut/MEMLNaut.hpp" // Required for MEMLNaut::Instance()
 // display.hpp is included via InterfaceRL.hpp
 
-// XIASRI and bias are defined in InterfaceRL.hpp, so they are available here.
-// PERIODIC_DEBUG is likely defined in PicoDefs.hpp or sharedMem.hpp, included via InterfaceRL.hpp
+
+static const String FILENAMEROOT("mlp_rl_");
 
 
 // Protected helper method implementations
@@ -50,11 +50,15 @@ void InterfaceRL::_perform_randomiseRL_action() {
 
 // Public trigger methods (updated to call protected helpers)
 void InterfaceRL::trigger_like() {
+    DEBUG_PRINTLN("Like!");
     _perform_like_action();
+    DEBUG_PRINTLN("Liked!");
 }
 
 void InterfaceRL::trigger_dislike() {
+    DEBUG_PRINTLN("Dislike!");
     _perform_dislike_action();
+    DEBUG_PRINTLN("Disliked!");
 }
 
 void InterfaceRL::trigger_randomiseRL() {
@@ -98,10 +102,7 @@ void InterfaceRL::bind_RL_interface(bool disable_joystick) {
     });
     MEMLNaut::Instance()->setMomB2Callback([this]() { // scr_ref no longer captured directly
         if (MEMLNaut::Instance()->getMOMB2State()) {
-            this->randomiseTheCritic();
-            this->generateAction(true);
-            DEBUG_PRINTLN("The Critic is confounded");
-            if (msgView) msgView->post("Critic: totally confounded");
+            _randomise_critic_interf();
         }
     });
     if (!disable_joystick) {
@@ -120,15 +121,7 @@ void InterfaceRL::bind_RL_interface(bool disable_joystick) {
 
     MEMLNaut::Instance()->setTogB1Callback([this](bool state) { // scr_ref no longer captured directly
         if (state) {
-            this->forgetMemory();
-            static APP_SRAM std::vector<String> forgetmsgs = {
-                "Erasing my memory", "Forgetting everything", "Memory wiped","Thank you Susan?",
-                "Starting afresh", "Why care about the past?","Living in the moment"
-            };
-            String msg = forgetmsgs[rand() % forgetmsgs.size()];
-
-            if (msgView) msgView->post(msg);
-
+            this->_forget_replay_mem_interf();
         }
     });
 
@@ -169,7 +162,30 @@ void InterfaceRL::setRewardScaleInterf(float value)
 }
 
 
-void InterfaceRL::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf)
+void InterfaceRL::_randomise_critic_interf()
+{
+    this->randomiseTheCritic();
+    this->generateAction(true);
+    DEBUG_PRINTLN("The Critic is confounded");
+    if (msgView) msgView->post("Critic: totally confounded");
+}
+
+
+void InterfaceRL::_forget_replay_mem_interf()
+{
+    this->forgetMemory();
+    static APP_SRAM std::vector<String> forgetmsgs = {
+        "Erasing my memory", "Forgetting everything", "Memory wiped","Thank you Susan?",
+        "Starting afresh", "Why care about the past?","Living in the moment"
+    };
+    String msg = forgetmsgs[rand() % forgetmsgs.size()];
+
+    if (msgView) msgView->post(msg);
+}
+
+static MIDIInOut::midi_cc_callback_t extra_callback_ = nullptr;
+
+void InterfaceRL::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf, MIDIInOut::midi_cc_callback_t extra_callback)
 {
     if (midi_interf) {
         midi_interf->SetCCCallback([this] (uint8_t cc_number, uint8_t cc_value) {
@@ -192,6 +208,8 @@ void InterfaceRL::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf)
                 }
                 case 4:
                 {
+                    this->_randomise_critic_interf();
+                    this->_forget_replay_mem_interf();
                     break;
                 }
                 case 5:
@@ -223,19 +241,25 @@ void InterfaceRL::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf)
                     this->setOptimiseDivisorInterf(1.f - opt);
                     break;
                 }
+                default:
+                {
+                    if (extra_callback_) {
+                        extra_callback_(cc_number, cc_value);
+                    }
+                }
             };
         });
+
+        extra_callback_ = extra_callback;
     }
+
+    midi_ = midi_interf;
 }
 
 void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
 {
-#if XIASRI
-    const size_t nAudioAnalysisInputs = 4;
-#else
-    const size_t nAudioAnalysisInputs = 0;
-#endif
-    controlSize = n_inputs + nAudioAnalysisInputs;
+    controlSize = n_inputs; // control inputs only
+
     InterfaceBase::setup(controlSize, n_outputs);
 
     stateSize = controlSize; //state = control inputs + synth params
@@ -313,12 +337,70 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
     msgView = std::make_shared<MessageView>("Messages");
     MEMLNaut::Instance()->disp->AddView(msgView);
 
+    fileSaveView = std::make_shared<BlockSelectView>("Save Model", TFT_BLUE);
+    fileSaveView->SetOnSelectCallback([this] (size_t id) {
+        fileSaveView->SetMessage("Saving model " + String(id));
+        if (MEMLNaut::Instance()->startSD()) {
+            if (this->_save_RL_to_SD(String(id))) {
+                fileSaveView->SetMessage("Model saved successfully to slot " + String(id));
+            } else {
+                fileSaveView->SetMessage("Failed to save model");
+            }
+            MEMLNaut::Instance()->stopSD();
+        } else {
+            fileSaveView->SetMessage("SD card error - is it inserted and formatted?");
+        }
+    });
+    MEMLNaut::Instance()->disp->AddView(fileSaveView);
+
+    fileLoadView = std::make_shared<BlockSelectView>("Load Model", TFT_PURPLE);
+    fileLoadView->SetOnSelectCallback([this] (size_t id) {
+        fileLoadView->SetMessage("Loading model " + String(id));
+        if (MEMLNaut::Instance()->startSD()) {
+            if (this->_load_RL_from_SD(String(id))) {
+                fileLoadView->SetMessage("Model loaded successfully ");
+            } else {
+                fileLoadView->SetMessage("Failed to load model");
+            }
+            MEMLNaut::Instance()->stopSD();
+        } else {
+            fileLoadView->SetMessage("SD card error - is it inserted and formatted?");
+        }
+
+    });
+    MEMLNaut::Instance()->disp->AddView(fileLoadView);
+
+
+
     rlStatsView = std::make_shared<RLStatsView>("RL Stats");
-    MEMLNaut::Instance()->disp->AddView(rlStatsView);    
+    MEMLNaut::Instance()->disp->AddView(rlStatsView);
     nnInputsGraphView = std::make_shared<BarGraphView>("NN Inputs", controlSize, 10, TFT_YELLOW, 0.f, 1.f);
-    MEMLNaut::Instance()->disp->AddView(nnInputsGraphView);    
+    MEMLNaut::Instance()->disp->AddView(nnInputsGraphView);
     nnOutputsGraphView = std::make_shared<BarGraphView>("NN Outputs", n_outputs, 4, TFT_GREEN, 0.f, 1.f);
-    MEMLNaut::Instance()->disp->AddView(nnOutputsGraphView);    
+    MEMLNaut::Instance()->disp->AddView(nnOutputsGraphView);
+}
+
+
+bool InterfaceRL::_save_RL_to_SD(String id) {
+    bool success = true;
+    // Save actor and actorTarget
+    success = success && actor->SaveMLPNetworkSD((FILENAMEROOT + id + String("_actor.bin")).c_str());
+    success = success && actorTarget->SaveMLPNetworkSD((FILENAMEROOT + id + String("_actorTarget.bin")).c_str());
+    // Save critic and criticTarget
+    success = success && critic->SaveMLPNetworkSD((FILENAMEROOT + id + String("_critic.bin")).c_str());
+    success = success && criticTarget->SaveMLPNetworkSD((FILENAMEROOT + id + String("_criticTarget.bin")).c_str());
+    return success;
+}
+
+bool InterfaceRL::_load_RL_from_SD(String id) {
+    bool success = true;
+    // Load actor and actorTarget
+    success = success && actor->LoadMLPNetworkSD((FILENAMEROOT + id + String("_actor.bin")).c_str());
+    success = success && actorTarget->LoadMLPNetworkSD((FILENAMEROOT + id + String("_actorTarget.bin")).c_str());
+    // Load critic and criticTarget
+    success = success && critic->LoadMLPNetworkSD((FILENAMEROOT + id + String("_critic.bin")).c_str());
+    success = success && criticTarget->LoadMLPNetworkSD((FILENAMEROOT + id + String("_criticTarget.bin")).c_str());
+    return success;
 }
 
 
@@ -405,10 +487,10 @@ void InterfaceRL::optimise() {
             // Extract action gradients
             std::vector<float> actionGradients(actionSize);
             for(size_t j = 0; j < actionSize; j++) {
-                actionGradients[j] = l0Grads[j+stateSize]; 
+                actionGradients[j] = l0Grads[j+stateSize];
                 accumulatedGradient[j] += std::abs(actionGradients[j]);
             }
-            
+
             // Apply gradients for this specific state
             actor->ApplyPolicyGradient(stateInput, actionGradients, actorLearningRateScaled * sampleSizeRecr);
 
@@ -490,27 +572,16 @@ void InterfaceRL::optimise() {
     }
 }
 
-void InterfaceRL::readAnalysisParameters() {
+void InterfaceRL::readAnalysisParameters(std::vector<float> params) {
     //read analysis parameters
-#if XIASRI
-    actorControlInput[0] = READ_VOLATILE(sharedMem::f0);
-    actorControlInput[1] = READ_VOLATILE(sharedMem::f1);
-    actorControlInput[2] = READ_VOLATILE(sharedMem::f2);
-    actorControlInput[3] = READ_VOLATILE(sharedMem::f3);
-    PERIODIC_DEBUG(40, { // Ensure PERIODIC_DEBUG is defined (e.g. in PicoDefs.hpp or sharedMem.hpp)
-        DEBUG_PRINTLN(actorControlInput[0]);
-    })
-    newInput = true;
-    if (msgView) {
-        // Calculate argmax of actorControlInput
-        size_t maxIndex = 0;
-        for (size_t i = 1; i < actorControlInput.size()-1; ++i) {
-            if (actorControlInput[i] > actorControlInput[maxIndex]) {
-                maxIndex = i;
-            }
-        }
+    if (params.size() != n_inputs_) {
+        DEBUG_PRINTLN("Error: Incorrect number of analysis parameters received.");
+        return;
     }
-#endif
+    // Copy params and add bias efficiently
+    actorControlInput = params;
+    actorControlInput.push_back(1.0f);
+
     generateAction(true);
 }
 

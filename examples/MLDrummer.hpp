@@ -1,17 +1,22 @@
 #ifndef __XIASRIAUDIOAPP_HPP__
 #define __XIASRIAUDIOAPP_HPP__
 
+// bettyloops100..112
+
 #include "../audio/AudioAppBase.hpp"
 #include "../audio/AudioDriver.hpp"
-#include "../../../sharedMem.hpp"
+#include "../utils/sharedMem.hpp"
 #include "../PicoDefs.hpp"
 #include "../synth/OnePoleSmoother.hpp"
 #include "../synth/maximilian.h"
+
+#include "../utils/sharedMem.hpp"
 
 // Flash memory address where audio data is loaded
 #define AUDIO_FLASH_ADDRESS    0x10200000U
 #define AUDIO_MAGIC            0x4F434950U  // 'PICO'
 #define AUDIO_VERSION          1U
+
 
 class MLDrummer : public AudioAppBase
 {
@@ -100,20 +105,34 @@ public:
     MLDrummer() : AudioAppBase(), smoother(150.f, kSampleRate),
         neuralNetOutputs(kN_Params, 0),
         smoothParams(kN_Params, 0)
-     {
+    {
         if (!get_sample_info("afrfunk1", &sample_info)) {
             DEBUG_PRINTLN("Error: Sample  not found in audio data.");
         }else{
             DEBUG_PRINTLN("Sample found: " + String(sample_info.name) + ", count: " + String(sample_info.sample_count) + ", duration: " + String(sample_info.duration));
         }
 
-     }
+    }
 
 
 
+    inline __attribute__((always_inline)) void ProcessBlock(const float in[][kBufferSize], float out[][kBufferSize], size_t n_channels, size_t n_frames) {
+        for (size_t i = 0; i < n_frames; ++i) {
+
+            stereosample_t x {
+                in[0][i],
+                in[1][i]
+            }, y;
+
+
+            out[0][i] = y.L;
+            out[1][i] = y.R;
+        }
+    }
 
     stereosample_t __force_inline Process(const stereosample_t x) override
     {
+    #if OLD_LISTENING_MODE
         constexpr float boost = 5.f;
         float mix = x.L + x.R;
         float bpf1Val = bpf1.play(mix) * boost;
@@ -131,11 +150,11 @@ public:
         float bpf4Val = bpf4.play(mix) * boost;
         bpf4Val = bpfEnv4.play(bpf4Val);
         WRITE_VOLATILE(sharedMem::f3, bpf4Val);
+    #endif
 
         smoother.Process(neuralNetOutputs.data(), smoothParams.data());
 
         // Process drum machine
-
 #if BREAKBEAT
         //cast phase with rounding
         size_t currentSegment = static_cast<size_t>(phase / sample_info.sample_count / segLength);
@@ -215,14 +234,16 @@ public:
         return ret;
     }
 
-    void Setup(float sample_rate, std::shared_ptr<InterfaceBase> interface) override
+    void Setup(float sample_rate, std::shared_ptr<InterfaceBase> interface)
     {
         AudioAppBase::Setup(sample_rate, interface);
         maxiSettings::sampleRate = sample_rate;
+    #if OLD_LISTENING_MODE
         bpf1.set(maxiBiquad::filterTypes::BANDPASS, 100.f, 5.f, 0.f);
         bpf2.set(maxiBiquad::filterTypes::BANDPASS, 300.f, 5.f, 0.f);
         bpf3.set(maxiBiquad::filterTypes::BANDPASS, 900.f, 5.f, 0.f);
         bpf4.set(maxiBiquad::filterTypes::BANDPASS, 2700.f, 5.f, 0.f);
+    #endif
     }
 
     void ProcessParams(const std::vector<float>& params) override
@@ -235,11 +256,13 @@ protected:
 
     std::vector<float> neuralNetOutputs, smoothParams;
 
+#if OLD_LISTENING_MODE
     //listening
     maxiBiquad bpf1;
     maxiBiquad bpf2;
     maxiBiquad bpf3;
     maxiBiquad bpf4;
+#endif
 
     maxiEnvelopeFollowerF bpfEnv1;
     maxiEnvelopeFollowerF bpfEnv2;
@@ -255,8 +278,85 @@ protected:
     float segmentPhase = 0.f;
     bool looping=true;
     bool playing = true;
+};
+
+
+#include "../synth/PlayLoop.hpp"
+
+
+class MLDrummerNew : public AudioAppBase
+{
+public:
+
+    static constexpr size_t kMixerChannels = 12;
+
+    struct {
+        float mixer[kMixerChannels];
+    } params;
+
+    static constexpr size_t kN_Params = sizeof(params) / sizeof(float);
+
+    MLDrummerNew() : AudioAppBase(),
+        smoother(150.f, kSampleRate),
+        loops {
+            PlayLoop("bettyloops100"),
+            PlayLoop("bettyloops101"),
+            PlayLoop("bettyloops102"),
+            PlayLoop("bettyloops103"),
+            PlayLoop("bettyloops104"),
+            PlayLoop("bettyloops105"),
+            PlayLoop("bettyloops106"),
+            PlayLoop("bettyloops107"),
+            PlayLoop("bettyloops108"),
+            PlayLoop("bettyloops109"),
+            PlayLoop("bettyloops110"),
+            PlayLoop("bettyloops111")
+        }
+    {
+        // Set mixer gains to 1
+        for (size_t i = 0; i < kMixerChannels; i++) {
+            params.mixer[i] = 1.f;
+        }
+    }
+
+    void ProcessParams(const std::vector<float>& p) override
+    {
+        size_t n = p.size() < kN_Params ? p.size() : kN_Params;
+        memcpy(&params, p.data(), n * sizeof(float));
+    }
+
+    inline stereosample_t __attribute__((always_inline)) Process(stereosample_t x)
+    {
+
+        // Smooth mixer parameters
+        float smoothed_mixer_params[kMixerChannels];
+        smoother.Process(params.mixer, smoothed_mixer_params);
+
+        // Fetch samples
+        static const size_t kN_playheads = kMixerChannels;
+        float mix[kMixerChannels] = {0.f};
+        for (size_t i = 0; i < kN_playheads; i++) {
+            mix[i] = loops[i].Process() * params.mixer[i];
+        }
+        // Mix down
+        float out = 0.f;
+        static constexpr float gain = 1.f / kMixerChannels;
+        for (size_t i = 0; i < kN_playheads; i++) {
+            out += mix[i] * gain;
+        }
+        return { out, out };
+
+    }
+
+protected:
+
+    PlayLoop loops[kMixerChannels];
+    OnePoleSmoother<kMixerChannels> smoother;
+    maxiOsc osc;
 
 };
+
+
 
 
 #endif  // __XIASRIAUDIOAPP_HPP__

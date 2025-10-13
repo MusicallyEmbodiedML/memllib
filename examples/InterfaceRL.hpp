@@ -37,7 +37,7 @@ class InterfaceRL : public InterfaceBase
 {
 public:
    InterfaceRL() : InterfaceBase()
-//    , ou_noise(0.02f, 0.0f, 0.2f, 0.001f, 0.0f) 
+//    , ou_noise(0.02f, 0.0f, 0.2f, 0.001f, 0.0f)
 {
 
     }
@@ -50,7 +50,7 @@ public:
         newInput = true;
     }
 
-    void readAnalysisParameters();
+    void readAnalysisParameters(std::vector<float> params);
 
     void generateAction(bool donthesitate=false);
 
@@ -88,6 +88,10 @@ public:
 
     void setOptimiseDivisorInterf(float value);
 
+    inline size_t getOptimiseDivisor() const {
+        return optimiseDivisor;
+    }
+
     inline void forgetMemory() {
         replayMem.clear();
     }
@@ -122,14 +126,17 @@ public:
         }
     }
 
-    void bind_RL_interface(bool disable_joystick = false);
+    virtual void bind_RL_interface(bool disable_joystick = false);
+    __force_inline void bindInterface(bool disable_joystick = false) {
+        bind_RL_interface(disable_joystick);
+    }
 
     void bindUARTInput(std::shared_ptr<UARTInput> uart_input,
         const std::vector<size_t>& kUARTListenInputs)
     {
         DEBUG_PRINTLN("bindUARTInput not implemented yet");
     }
-    void bindMIDI(std::shared_ptr<MIDIInOut> midi_interf);
+    void bindMIDI(std::shared_ptr<MIDIInOut> midi_interf, MIDIInOut::midi_cc_callback_t extra_callback = nullptr);
 
     void trigger_like();
     void trigger_dislike();
@@ -144,6 +151,10 @@ protected:
     void _perform_like_action();
     void _perform_dislike_action();
     void _perform_randomiseRL_action();
+    bool _save_RL_to_SD(String id);
+    bool _load_RL_from_SD(String id);
+    void _randomise_critic_interf();
+    void _forget_replay_mem_interf();
 
 private:
 
@@ -151,7 +162,6 @@ private:
 
     size_t optimiseDivisor = 40;
     size_t optimiseCounter = 0;
-
     bool newInput=false;
 
 
@@ -190,7 +200,9 @@ private:
     std::vector<std::unique_ptr<OrnsteinUhlenbeckNoise>> ou_noises;
 
     // Display views
+public:
     std::shared_ptr<MessageView> msgView;
+private:
     std::shared_ptr<BlockSelectView> fileSaveView;
     std::shared_ptr<BlockSelectView> fileLoadView;
     std::shared_ptr<BarGraphView> nnInputsGraphView;

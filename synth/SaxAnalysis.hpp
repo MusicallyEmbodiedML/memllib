@@ -1,15 +1,12 @@
 #ifndef __SAX_ANALYSIS_HPP__
 #define __SAX_ANALYSIS_HPP__
 
-#include <Arduino.h>
-
-#include "maximilian.h"
 #include "../audio/AudioDriver.hpp"
 #include "../utils/MedianFilter.h"
 #include "../utils/CircularBuffer.hpp"
+#include "maximilian.h"
+#include "../synth/OnePoleSmoother.hpp"
 
-#include <cstdint>
-#include <cstddef>
 #include <cmath>
 
 
@@ -27,7 +24,7 @@ public:
 
     SaxAnalysis(const float sample_rate);
 
-    parameters_t Process(float x);
+    parameters_t Process(const float x);
 
 protected:
     const float sample_rate_;
@@ -56,6 +53,9 @@ protected:
     maxiBiquad br_lpf2_;
     maxiEnvelopeFollowerF br_follower_[kBR_NBands];
 
+    // Smooth the parameters for stability
+    maxiEnvelopeFollowerF ar_smoothers_[3];
+    OnePoleSmoother<2> smoothers_;
 };
 
 

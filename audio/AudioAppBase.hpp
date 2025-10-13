@@ -19,7 +19,7 @@ public:
             .mic_input = false,
             .line_level = 3,
             .mic_gain_dB = 0,
-            .output_volume = 0.8f
+            .output_volume = 0.97f
         };
     }
 

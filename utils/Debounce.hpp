@@ -31,6 +31,7 @@ private:
     static constexpr unsigned long kHaltTime_ms = 50;
     unsigned long lastChangeTime_ms = 0;
     bool lastState = false;
+    bool lastState_internal_ = false;
     bool stateChanged = false;
 
 public:
@@ -38,12 +39,18 @@ public:
         unsigned long currentTime = millis();
         bool shouldUpdate = false;
 
-        if (currentState != lastState &&
+        //Serial.println(String("Pin state: ") + (currentState ? "1" : "0"));
+        //Serial.println(String("Last state: ") + (lastState_internal_ ? "1" : "0"));
+        //Serial.println(String("Time since last change: ") + (currentTime - lastChangeTime_ms) + " ms");
+
+        if (currentState != lastState_internal_ &&
             currentTime - lastChangeTime_ms >= kHaltTime_ms) {
             lastChangeTime_ms = currentTime;
             lastState = currentState;
             shouldUpdate = true;
+            //Serial.println(String("State updated to ") + (lastState ? "1" : "0"));
         }
+        lastState_internal_ = currentState;
         return shouldUpdate;
     }
 

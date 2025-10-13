@@ -38,6 +38,7 @@
 | Pin Number | Pin Name | Type | Description |
 |------------|----------|------|-------------|
 | 33 | LED | OUTPUT | Status LED |
+| 43 | LED_Timing | OUTPUT | Timing LED |
 
 ## UART:
 

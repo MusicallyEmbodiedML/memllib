@@ -1,6 +1,7 @@
 #include "MEMLNaut.hpp"
 #include "../../audio/AudioDriver.hpp"
 #include "Arduino.h"
+#include "pico/util/queue.h"
 
 #include "hardware/adc.h"
 #include "hardware/dma.h"
@@ -9,6 +10,7 @@
 
 
 MEMLNaut* MEMLNaut::instance = nullptr;
+queue_t queue_buttons_;
 
 #define FAST_MEM __not_in_flash("memlnaut")
 
@@ -112,31 +114,35 @@ void MEMLNaut::setup_adcs() {
 
 
 // Static interrupt handlers implementation
-void __not_in_flash_func(MEMLNaut::handleMomA1)() {
-    if (instance && instance->debouncers[0].debounce() && instance->momA1Callback) {
-        instance->momA1Callback();
-    }
+#define HANDLE_BUTTON_MACRO(handler_name, pin_name, callback_name, debouncer_index)    \
+void __not_in_flash_func(MEMLNaut::handle##handler_name)() {    \
+    if (instance) { \
+        bool current_value = digitalRead(Pins::pin_name) == LOW; \
+        /*Serial.println(String("Button ") + #pin_name + " interrupt, value: " + String(current_value));*/ \
+        if (instance->debouncers[debouncer_index].debounce(current_value)) { \
+            /*Serial.println("Valid input!");*/ \
+            if (instance->debouncers[debouncer_index].getState()) { \
+                /*Serial.println(String("Pin ") + #pin_name + " getState() = 1");*/ \
+                if (instance->callback_name##Callback) { \
+                    const size_t pin = Pins::pin_name; \
+                    queue_add_blocking(&queue_buttons_, &pin); \
+                    /*Serial.println(String("Pin ") + #pin_name + " callback!");*/ \
+                    /*instance->callback_name##Callback();*/ \
+                } \
+            } else { \
+                /*Serial.println(String("Pin ") + #pin_name + " getState() = 0");*/ \
+            } \
+        } \
+        /*Serial.println("---");*/ \
+    } \
 }
-void __not_in_flash_func(MEMLNaut::handleMomA2)() {
-    if (instance && instance->debouncers[1].debounce() && instance->momA2Callback) {
-        instance->momA2Callback();
-    }
-}
-void __not_in_flash_func(MEMLNaut::handleMomB1)() {
-    if (instance && instance->debouncers[2].debounce() && instance->momB1Callback) {
-        instance->momB1Callback();
-    }
-}
-void __not_in_flash_func(MEMLNaut::handleMomB2)() {
-    if (instance && instance->debouncers[3].debounce() && instance->momB2Callback) {
-        instance->momB2Callback();
-    }
-}
-void __not_in_flash_func(MEMLNaut::handleReSW)() {
-    if (instance && instance->debouncers[4].debounce() && instance->reSWCallback) {
-        instance->reSWCallback();
-    }
-}
+
+HANDLE_BUTTON_MACRO(MomA1, MOM_A1, momA1, 0)
+HANDLE_BUTTON_MACRO(MomA2, MOM_A2, momA2, 1)
+HANDLE_BUTTON_MACRO(MomB1, MOM_B1, momB1, 2)
+HANDLE_BUTTON_MACRO(MomB2, MOM_B2, momB2, 3)
+HANDLE_BUTTON_MACRO(ReSW, RE_SW, reSW, 4)
+
 
 void __not_in_flash_func(MEMLNaut::handleTogA1)() {
     if (instance) {
@@ -229,11 +235,11 @@ MEMLNaut::MEMLNaut(bool old_display) {
     Pins::initializePins();
 
     // Attach momentary switch interrupts (FALLING edge)
-    attachInterrupt(digitalPinToInterrupt(Pins::MOM_A1), handleMomA1, FALLING);
-    attachInterrupt(digitalPinToInterrupt(Pins::MOM_A2), handleMomA2, FALLING);
-    attachInterrupt(digitalPinToInterrupt(Pins::MOM_B1), handleMomB1, FALLING);
-    attachInterrupt(digitalPinToInterrupt(Pins::MOM_B2), handleMomB2, FALLING);
-    attachInterrupt(digitalPinToInterrupt(Pins::RE_SW), handleReSW, FALLING);
+    attachInterrupt(digitalPinToInterrupt(Pins::MOM_A1), handleMomA1, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(Pins::MOM_A2), handleMomA2, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(Pins::MOM_B1), handleMomB1, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(Pins::MOM_B2), handleMomB2, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(Pins::RE_SW), handleReSW, CHANGE);
     // attachInterrupt(digitalPinToInterrupt(Pins::RE_A), handleReA, FALLING);
     // attachInterrupt(digitalPinToInterrupt(Pins::RE_B), handleReB, FALLING);
 
@@ -267,7 +273,7 @@ MEMLNaut::MEMLNaut(bool old_display) {
 
     // add_repeating_timer_ms(39, displayUpdate, NULL, &timerDisplay);
     // add_repeating_timer_ms(10, touchUpdate, NULL, &timerTouch);
-
+    queue_init(&queue_buttons_, sizeof(size_t), 1);
 }
 
 
@@ -336,6 +342,36 @@ void MEMLNaut::loop() {
     if (first_run) {
         first_run = false;
         SyncOnBoot();
+    }
+
+    // Process buttons
+    size_t button_index;
+    while (queue_try_remove(&queue_buttons_, &button_index)) {
+        switch (button_index) {
+            case Pins::MOM_A1:
+                if (momA1Callback) momA1Callback();
+                //Serial.println("+++ MOM_A1 asynchronous call!");
+                break;
+            case Pins::MOM_A2:
+                if (momA2Callback) momA2Callback();
+                //Serial.println("+++ MOM_A2 asynchronous call!");
+                break;
+            case Pins::MOM_B1:
+                if (momB1Callback) momB1Callback();
+                //Serial.println("+++ MOM_B1 asynchronous call!");
+                break;
+            case Pins::MOM_B2:
+                if (momB2Callback) momB2Callback();
+                //Serial.println("+++ MOM_B2 asynchronous call!");
+                break;
+            case Pins::RE_SW:
+                if (reSWCallback) reSWCallback();
+                //Serial.println("+++ RE_SW asynchronous call!");
+                break;
+            default:
+                DEBUG_PRINTLN("MEMLNaut- Unknown button asynchronous call!");
+                break;
+        }
     }
 
     const uint8_t adcPins[NUM_ADCS] = {

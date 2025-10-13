@@ -3,6 +3,7 @@
 
 #include "View.hpp"
 #include "UIElements.hpp"
+#include <deque>
 
 
 class SystemView : public ViewBase {
