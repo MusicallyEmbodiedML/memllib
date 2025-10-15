@@ -5,6 +5,8 @@
 #include <vector>
 #include "MIDIInOut.hpp"
 #include <memory>
+#include <span>
+
 
 class InterfaceBase
 {

@@ -216,21 +216,15 @@ public:
         float shiftval,
         const bool x_cauchy=false)
     {
-        // float freqinc;
-        // float cfval, cfinc;
-        // float bwval, bwinc;
-        // float ampval, ampinc;
-        // float vibval, vibinc;
-        // float vfrval, vfrinc;
         float shiftinc;
         float bwquotient, bwqincr;
         // const double ub32 = UNITBIT32;
         double phase = x_phase + UNITBIT32;
         double phasehack;
-        volatile double *phasehackp = &phasehack;
+        double *phasehackp = &phasehack;
         double shiftphase = x_shiftphase + UNITBIT32;
-        volatile int32 *hackptr = ((int32 *)(phasehackp)) + HIOFFSET, hackval;
-        volatile int32 *lowptr = ((int32 *)(phasehackp)) + LOWOFFSET, lowbits;
+        int32 *hackptr = ((int32 *)(phasehackp)) + HIOFFSET, hackval;
+        int32 *lowptr = ((int32 *)(phasehackp)) + LOWOFFSET, lowbits;
         float held_freq = x_held_freq;
         float held_intcar = x_held_intcar;
         float held_fraccar = x_held_fraccar;

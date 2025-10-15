@@ -6,7 +6,7 @@
 #include <memory>
 #include "../hardware/memlnaut/Pins.hpp"
 #include <functional>
-
+#include <span>
 
 
 class MIDIInOut
@@ -81,7 +81,7 @@ public:
      * The size of the vector must be equal to n_outputs.
      * @note The parameters will be scaled from [0 .. 1] to [0 .. 127].
      */
-    void SendParamsAsMIDICC(const std::vector<float> &params);
+    void SendParamsAsMIDICC(std::span<const float> params);
 
     /**
      * @typedef midi_cc_callback_t

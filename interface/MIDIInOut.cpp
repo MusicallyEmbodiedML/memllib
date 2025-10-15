@@ -111,7 +111,7 @@ void MIDIInOut::SetParamCCNumbers(const std::vector<uint8_t>& cc_numbers) {
     cc_numbers_ = cc_numbers;
 }
 
-void MIDIInOut::SendParamsAsMIDICC(const std::vector<float>& params) {
+void MIDIInOut::SendParamsAsMIDICC(std::span<const float> params) {
     RefreshUART_(); // Refresh UART if needed
 
     while(!Serial2) { delay(1); } // Wait for Serial2
