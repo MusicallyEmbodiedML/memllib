@@ -3,7 +3,6 @@
 
 #include "pico/util/queue.h"
 #include <vector>
-#include "UARTOutput.hpp"
 #include "MIDIInOut.hpp"
 #include <memory>
 
@@ -17,7 +16,6 @@ protected:
     size_t n_inputs_;
     size_t n_outputs_;
     queue_t queue_audioparam_;
-    std::unique_ptr<UARTOutput> uart_output_;
     std::shared_ptr<MIDIInOut> midi_;
 
 public:
