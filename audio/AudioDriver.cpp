@@ -8,10 +8,17 @@
 #include "hardware/clocks.h"
 #include "../PicoDefs.hpp"
 
+#include "../utils/perf.hpp"
+
+
 
 #define TEST_TONES    0
 #define PASSTHROUGH   0
 
+
+PERF_DECLARE(AUDIOLOOP);
+
+AUDIO_MEM uint32_t AUDIOLOOP_MEAN=0;
 
 constexpr int sampleRate = kSampleRate; // minimum for many i2s DACs
 constexpr int bitsPerSample = 32;
@@ -27,8 +34,9 @@ static AUDIO_MEM AudioControlSGTL5000 codecCtl;
 audiocallback_fptr_t AUDIO_MEM audio_callback_ = nullptr;
 audiocallback_block_fptr_t AUDIO_MEM audio_callback_block_ = nullptr;
 
-static AUDIO_MEM float input_buffer[kNChannels][kBufferSize];
-static AUDIO_MEM float output_buffer[kNChannels][kBufferSize];
+//define AUDIO_BUFFER_MEM externally
+static AUDIO_BUFFER_MEM float input_buffer[kNChannels][kBufferSize];
+static AUDIO_BUFFER_MEM float output_buffer[kNChannels][kBufferSize];
 
 static __attribute__((aligned(8))) AUDIO_MEM pio_i2s i2s;
 
@@ -94,8 +102,7 @@ static inline __attribute__((always_inline)) void AUDIO_FUNC(process_normal)(
 }
 
 static void AUDIO_FUNC(process_audio)(const int32_t* input, int32_t* output, size_t num_frames) {
-    // Timing start
-    auto ts = micros();
+    PERF_BEGIN(AUDIOLOOP);
 
     if (audio_callback_block_ != nullptr) {
 
@@ -135,19 +142,8 @@ static void AUDIO_FUNC(process_audio)(const int32_t* input, int32_t* output, siz
         }
     }
 
-    // Timing end
-    auto elapsed = micros() - ts;
-    static constexpr float quantumLength = 1.f/
-            ((static_cast<float>(kBufferSize)/static_cast<float>(kSampleRate))
-            * 1000000.f);
-    const float dspload = elapsed * quantumLength;
-     //DEBUG_PRINTLN(dspload);
-    // Report DSP overload if needed
-    if (dspload > 0.95 and !dsp_overload) {
-        dsp_overload = true;
-    } else if (dspload < 0.9) {
-        dsp_overload = false;
-    }
+    PERF_END(AUDIOLOOP);
+    AUDIOLOOP_MEAN = PERF_GET_MEAN(AUDIOLOOP);
 }
 
 static void __isr dma_i2s_in_handler(void) {

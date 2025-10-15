@@ -17,10 +17,6 @@ typedef struct _tabpoint
 } t_tabpoint;
 
 
-// t_tabpoint paf_gauss[TABSIZE];
-// t_tabpoint paf_cauchy[TABSIZE];
-
-
 typedef struct _linenv
 {
     double l_current;
@@ -70,9 +66,9 @@ constexpr float ADDSQ = (- CAUCHYSLOPE / (2 * TABRANGE));
 constexpr float HALFSINELIM  = (0.997 * TABRANGE);
 constexpr float TABRANGERCPR = 1.f/TABRANGE;
 
-//todo: could be static and shared between operators
-extern t_tabpoint paf_gauss[TABSIZE];
-extern t_tabpoint paf_cauchy[TABSIZE];
+static t_tabpoint __not_in_flash("paf") paf_gauss[TABSIZE];
+static t_tabpoint __not_in_flash("paf") paf_cauchy[TABSIZE];
+static bool tabsGenerated = false;
 
 
 class maxiPAFOperator {
@@ -90,29 +86,30 @@ public:
     void init()
     {
         int i;
-        const float CAUCHYFAKEAT3  =
-            (CAUCHYVAL + ADDSQ * TABRANGE * TABRANGE);
-        const float CAUCHYRESIZE = (1./ (1. - CAUCHYFAKEAT3));
-        for (i = 0; i <= TABSIZE; i++)
-        {
-            float f = i * ((float)TABRANGE/(float)TABSIZE);
-            float gauss = expf(-f * f);
-            float cauchygenuine = 1. / (1. + f * f);
-            float cauchyfake = cauchygenuine + ADDSQ * f * f;
-            float cauchyrenorm = (cauchyfake - 1.) * CAUCHYRESIZE + 1.;
-            if (i != TABSIZE)
+            if (!tabsGenerated) {
+            const float CAUCHYFAKEAT3  =
+                (CAUCHYVAL + ADDSQ * TABRANGE * TABRANGE);
+            const float CAUCHYRESIZE = (1./ (1. - CAUCHYFAKEAT3));
+            for (i = 0; i <= TABSIZE; i++)
             {
-                paf_gauss[i].p_y = gauss;
-                paf_cauchy[i].p_y = cauchyrenorm;
-                /* post("%f", cauchyrenorm); */
-            }
-            if (i != 0)
-            {
-                paf_gauss[i-1].p_diff = gauss - paf_gauss[i-1].p_y;
-                paf_cauchy[i-1].p_diff = cauchyrenorm - paf_cauchy[i-1].p_y;
+                float f = i * ((float)TABRANGE/(float)TABSIZE);
+                float gauss = expf(-f * f);
+                float cauchygenuine = 1.f / (1.f + f * f);
+                float cauchyfake = cauchygenuine + ADDSQ * f * f;
+                float cauchyrenorm = (cauchyfake - 1.) * CAUCHYRESIZE + 1.;
+                if (i != TABSIZE)
+                {
+                    paf_gauss[i].p_y = gauss;
+                    paf_cauchy[i].p_y = cauchyrenorm;
+                    /* post("%f", cauchyrenorm); */
+                }
+                if (i != 0)
+                {
+                    paf_gauss[i-1].p_diff = gauss - paf_gauss[i-1].p_y;
+                    paf_cauchy[i-1].p_diff = cauchyrenorm - paf_cauchy[i-1].p_y;
+                }
             }
         }
-
         // linenv_init(x_freqenv);
         // linenv_init(x_cfenv);
         // linenv_init(x_bwenv);
@@ -367,7 +364,7 @@ public:
                     /* now shift again so that the fractional table address
                 appears in the low 32 bits, bash again, and extract this as
                 a floating point number from 0 to 1. */
-                *phasehackp = halfsine + TABFRACSHIFT;
+            *phasehackp = halfsine + TABFRACSHIFT;
             *hackptr = hackval;
             const float tabfrac = *phasehackp - UNITBIT32;
 

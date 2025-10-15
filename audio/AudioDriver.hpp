@@ -9,7 +9,7 @@
 extern "C" {
 
 const size_t kBufferSize = AUDIO_BUFFER_FRAMES;
-constexpr size_t kSampleRate = 24000;
+constexpr size_t kSampleRate = 32000;
 constexpr float kSampleRateRcpr = 1.0/kSampleRate;
 const size_t kNChannels = 2;
 
@@ -54,8 +54,12 @@ using audiocallback_block_fptr_t = void (*)(float[][kBufferSize], float[][kBuffe
 
 }
 
+
 extern audiocallback_fptr_t audio_callback_;
 extern audiocallback_block_fptr_t audio_callback_block_;
+
+extern uint32_t AUDIOLOOP_MEAN;
+
 
 enum PinConfig_i2c {
     i2c_sgt5000Data = 0,
@@ -69,6 +73,7 @@ enum PinConfig_i2c {
 
 extern volatile bool AUDIO_MEM dsp_overload;
 extern float master_volume_;
+
 
 class AudioDriver {
  public:
@@ -100,7 +105,19 @@ class AudioDriver {
     }
 
     static inline size_t GetSampleRate() { return kSampleRate; }
-    static size_t GetSysClockSpeed() {return 132000 * 2; } // 264MHz
+    static size_t GetSysClockSpeed() {
+		if (kSampleRate == 48000) {
+	        return 132000 * 2; 
+		} else if (kSampleRate == 44100) {
+			return 135475 * 2;
+		} else if (kSampleRate == 32000) {
+		    return 132000 * 2; 
+		} else if (kSampleRate == 24000) {
+		    return 132000 * 2; 
+		} else {
+			panic("Unsupported sample rate for SGTL5000");
+		}
+    } 
 
     AudioDriver() = delete;
 
