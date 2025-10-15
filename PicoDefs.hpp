@@ -64,6 +64,17 @@ inline T read_volatile_struct(const volatile T& src) {
     } \
 }  
 
+#define PERIODIC_RUN_US(code, freq_us) \
+{ \
+    static __not_in_flash("periodicupdate") size_t lastUpdate = 0; \
+    size_t now = micros(); \
+    if (now - lastUpdate > (freq_us)) { \
+        lastUpdate = now; \
+        code; \
+    } \
+}  
+
+
 
 
 #endif  // __MEML_PICO_HPP__
