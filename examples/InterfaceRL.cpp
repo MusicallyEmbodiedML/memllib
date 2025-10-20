@@ -43,9 +43,10 @@ void InterfaceRL::_perform_dislike_action() {
 void InterfaceRL::_perform_randomiseRL_action() {
 
     this->randomiseTheActor();
+    this->randomiseTheCritic();
     this->generateAction(true);
-    DEBUG_PRINTLN("The Actor is confused");
-    if (msgView) msgView->post("Actor: i'm confused");
+    DEBUG_PRINTLN("Randomising networks");
+    if (msgView) msgView->post("Scrambling Actor and Critic nets");
 }
 
 // Public trigger methods (updated to call protected helpers)
@@ -61,9 +62,9 @@ void InterfaceRL::trigger_dislike() {
     DEBUG_PRINTLN("Disliked!");
 }
 
-void InterfaceRL::trigger_randomiseRL() {
-    _perform_randomiseRL_action();
-}
+// void InterfaceRL::trigger_randomiseRL() {
+//     _perform_randomiseRL_action();
+// }
 
 
 void InterfaceRL::setOptimiseDivisorInterf(float value)
@@ -97,12 +98,13 @@ void InterfaceRL::bind_RL_interface(bool disable_joystick) {
     });
     MEMLNaut::Instance()->setMomB1Callback([this]() { // scr_ref no longer captured directly
         if (MEMLNaut::Instance()->getMOMB1State()) {
-            this->trigger_randomiseRL();
+            // this->trigger_randomiseRL();
+            _perform_randomiseRL_action();            
         }
     });
     MEMLNaut::Instance()->setMomB2Callback([this]() { // scr_ref no longer captured directly
         if (MEMLNaut::Instance()->getMOMB2State()) {
-            _randomise_critic_interf();
+            joltNetworks();
         }
     });
     if (!disable_joystick) {

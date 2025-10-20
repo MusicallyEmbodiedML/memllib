@@ -85,6 +85,12 @@ public:
         resetMinMaxFlag = true;
     }
 
+    inline void joltNetworks()
+    {
+        actor->PurturbWeights(80);
+        critic->PurturbWeights(80);
+    }
+
     inline void setOptimiseDivisor(size_t newDiv) {
         optimiseDivisor = newDiv;
     }
@@ -141,7 +147,7 @@ public:
 
     void trigger_like();
     void trigger_dislike();
-    void trigger_randomiseRL();
+    // void trigger_randomiseRL();
 
     inline void getAction(std::vector<float> &out_action) {
         out_action = action;

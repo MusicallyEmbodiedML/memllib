@@ -86,11 +86,6 @@ public:
     }
 
     void addDataPoint(float value) {
-        Serial.printf("=== DEBUG addDataPoint ===\n");
-        Serial.printf("View name: %s\n", name_.c_str());
-        Serial.printf("View address: %p\n", (void*)this);
-        Serial.printf("viewIsVisible: %d\n", viewIsVisible);
-        Serial.printf("IsVisible(): %d\n", IsVisible());        
         if (IsVisible()) {
 
             dataPoints[dataPointIndex] = value;
@@ -131,10 +126,10 @@ public:
             // Serial.println("\n --------- ");
             redraw();
         }
-        Serial.printf("GraphView addDataPoint: %f %d\n", value, IsVisible());
     }
 
     void OnDisplay() override {
+        ViewBase::OnDisplay();
         for(size_t i = 0; i < NPOINTS; i++) {
             graphPoints[i] = { static_cast<int>(i*xstep), 0 };
         }

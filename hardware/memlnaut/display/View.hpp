@@ -21,7 +21,9 @@ public:
     };
     //called when a view is displayed  
     virtual void OnDisplay() {
-
+        for(auto& subview: subviews) {
+            subview->OnDisplay();
+        }
     };
     //called when a view is hidden
     virtual void OnHide() {
