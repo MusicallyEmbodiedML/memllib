@@ -23,6 +23,10 @@ public:
     virtual void OnDisplay() {
 
     };
+    //called when a view is hidden
+    virtual void OnHide() {
+
+    };
     bool NeedRedraw();
     inline String GetName() const { return name_; } // Changed return type
     inline void SetGrid(const GridDef &grid) { grid_ = grid; }
@@ -82,6 +86,19 @@ public:
     }    
     String name_;      // 1st initialized
 
+    bool IsVisible() {
+        return viewIsVisible;
+    } 
+
+    void setVisible(const bool v) {
+        viewIsVisible = v;
+        // Serial.printf("setVisible called on view %s (addr: %p) to %d\n", 
+        //           name_.c_str(), (void*)this, v);    
+        for(auto& subview: subviews) {
+            subview->setVisible(v);
+        }
+    }
+
 protected:
     explicit ViewBase(String &name)  // Changed parameter type
             : name_(name)
@@ -94,7 +111,7 @@ protected:
     TFT_eSPI* scr;       // 4th initialized
     rect area;
     std::vector<std::shared_ptr<ViewBase>> subviews;
-
+    bool viewIsVisible = false;
 };
 
 

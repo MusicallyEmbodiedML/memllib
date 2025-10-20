@@ -86,46 +86,58 @@ public:
     }
 
     void addDataPoint(float value) {
-        dataPoints[dataPointIndex] = value;
-        ymax = -std::numeric_limits<float>::infinity();
-        ymin = std::numeric_limits<float>::infinity();
-        for(size_t i = 0; i < NPOINTS; i++) {
-            if (dataPoints[i] > ymax) {
-                ymax = dataPoints[i];
-            }
-            // if (dataPoints[i] < xmin) {
-                // xmin = dataPoints[i];
-            // }
-        }
-        redrawMax = oldyMax != ymax;
-        oldyMax = ymax;
+        Serial.printf("=== DEBUG addDataPoint ===\n");
+        Serial.printf("View name: %s\n", name_.c_str());
+        Serial.printf("View address: %p\n", (void*)this);
+        Serial.printf("viewIsVisible: %d\n", viewIsVisible);
+        Serial.printf("IsVisible(): %d\n", IsVisible());        
+        if (IsVisible()) {
 
-        ymin = 0.f;
-        yrange = ymax - ymin;
-        if (yrange < 0.00001f) {
-            yrange = 0.00001f;
+            dataPoints[dataPointIndex] = value;
+            ymax = -std::numeric_limits<float>::infinity();
+            ymin = std::numeric_limits<float>::infinity();
+            for(size_t i = 0; i < NPOINTS; i++) {
+                if (dataPoints[i] > ymax) {
+                    ymax = dataPoints[i];
+                }
+                // if (dataPoints[i] < xmin) {
+                    // xmin = dataPoints[i];
+                // }
+            }
+            redrawMax = oldyMax != ymax;
+            oldyMax = ymax;
+
+            ymin = 0.f;
+            yrange = ymax - ymin;
+            if (yrange < 0.00001f) {
+                yrange = 0.00001f;
+            }
+            yrangeInv = 1.f / yrange;
+            for(size_t i = 0; i < NPOINTS; i++) {
+                oldGraphPoints[i] = {graphPoints[i].x, graphPoints[i].y};
+                size_t index = (dataPointIndex + i + 1) % NPOINTS;
+                int graphX = static_cast<int>(static_cast<float>(i) * xstep);
+                int graphY = graphHeight - static_cast<int>((dataPoints[index]-ymin) * yrangeInv * graphHeight);
+                graphPoints[i] = { graphX, graphY };
+            }
+            dataPointIndex = (dataPointIndex + 1) % NPOINTS;
+            // for(size_t i=0; i < 10; i++) {
+            //     Serial.printf("(%d,%d),", oldGraphPoints[i].x, oldGraphPoints[i].y);
+            // }
+            // Serial.println(" ");
+            // for(size_t i=0; i < 10; i++) {
+            //     Serial.printf("(%d,%d),", graphPoints[i].x, graphPoints[i].y);
+            // }
+            // Serial.println("\n --------- ");
+            redraw();
         }
-        yrangeInv = 1.f / yrange;
-        for(size_t i = 0; i < NPOINTS; i++) {
-            oldGraphPoints[i] = {graphPoints[i].x, graphPoints[i].y};
-            size_t index = (dataPointIndex + i + 1) % NPOINTS;
-            int graphX = static_cast<int>(static_cast<float>(i) * xstep);
-            int graphY = graphHeight - static_cast<int>((dataPoints[index]-ymin) * yrangeInv * graphHeight);
-            graphPoints[i] = { graphX, graphY };
-        }
-        dataPointIndex = (dataPointIndex + 1) % NPOINTS;
-        // for(size_t i=0; i < 10; i++) {
-        //     Serial.printf("(%d,%d),", oldGraphPoints[i].x, oldGraphPoints[i].y);
-        // }
-        // Serial.println(" ");
-        // for(size_t i=0; i < 10; i++) {
-        //     Serial.printf("(%d,%d),", graphPoints[i].x, graphPoints[i].y);
-        // }
-        // Serial.println("\n --------- ");
-        redraw();
+        Serial.printf("GraphView addDataPoint: %f %d\n", value, IsVisible());
     }
 
-    virtual void OnDisplay() {
+    void OnDisplay() override {
+        for(size_t i = 0; i < NPOINTS; i++) {
+            graphPoints[i] = { static_cast<int>(i*xstep), 0 };
+        }
         redrawMax = true;
         redrawTitle = true;
         redraw();

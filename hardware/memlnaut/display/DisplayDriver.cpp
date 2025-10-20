@@ -125,6 +125,7 @@ void DisplayDriver::PollTouch() {
     if (currentViewIndex_ < views_.size()) {
         bool viewChange = false;
         if (pressed && !isTouchPressed_) {
+            auto lastViewIndex = currentViewIndex_;
             // If within first row, handle navigation
             if (y <= leftButton.height()) {
                 if (x < leftButton.width() && currentViewIndex_ > 0) {
@@ -148,6 +149,9 @@ void DisplayDriver::PollTouch() {
             }
             if (viewChange) {
                 // If view changed, redraw the new view
+                views_[lastViewIndex]->setVisible(false);
+                views_[lastViewIndex]->OnHide();  // Call OnHide for the old view
+                views_[currentViewIndex_]->setVisible(true);
                 views_[currentViewIndex_]->OnDisplay();  // Call OnDisplay for the new view
             }
             isTouchPressed_ = true;
