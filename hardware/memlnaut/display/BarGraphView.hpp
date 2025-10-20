@@ -125,6 +125,7 @@ private:
     bool drawnValues = false;
 
     std::vector<float> runningMax, runningMin;
+
 };
 
 #endif 
