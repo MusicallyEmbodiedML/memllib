@@ -180,8 +180,16 @@ MEMLNaut::MEMLNaut(bool old_display) {
         disp = nullptr;
     }
 
-    // add_repeating_timer_ms(39, displayUpdate, NULL, &timerDisplay);
-    // add_repeating_timer_ms(10, touchUpdate, NULL, &timerTouch);
+    setRotaryEncoderCallback([this](int delta) {
+        Serial.printf("Rotary encoder moved: %d\n", delta);
+        if (disp)
+            disp->RotaryIncEvent(delta);
+    });
+
+    setReSWCallback([this]() {
+        if (disp)
+            disp->RotarySwitchEvent();
+    });
     queue_init(&queue_buttons_, sizeof(size_t), 1);
 }
 

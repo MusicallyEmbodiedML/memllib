@@ -24,15 +24,21 @@ public:
     }  
 
     void OnDraw() override {
-        scr->fillRect(area.x, area.y, area.w, area.h, fillColour);
+        TFT_eSprite sprite(scr);
+        constexpr int32_t lineheight = 30;
+        sprite.createSprite(area.w, area.h);
+
+        // sprite.fillRect(area.x, area.y, area.w, area.h, fillColour);
+        sprite.fillSprite(fillColour);
         if (pressed) {
-            scr->drawRect(area.x, area.y, area.w, area.h, TFT_RED);
+            sprite.drawRect(0,0, area.w, area.h, TFT_RED);
         } else {
-            scr->drawRect(area.x, area.y, area.w, area.h, TFT_WHITE);
+            sprite.drawRect(0,0, area.w, area.h, TFT_WHITE);
         }
-        scr->setTextColor(TFT_WHITE);
-        scr->setTextFont(4);
-        scr->drawString(this->name_, area.x + 10, area.y + 10);
+        sprite.setTextColor(TFT_WHITE);
+        sprite.setTextFont(4);
+        sprite.drawString(this->name_, 10, 10);
+        sprite.pushSprite(area.x, area.y);
         // scr->drawString("1", area.x + 10, area.y + 10);
     }  
 

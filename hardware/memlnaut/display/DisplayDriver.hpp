@@ -36,6 +36,30 @@ public:
     unsigned long GetLastTouchTime() const { return lastTouchTime_; }
     unsigned long GetLastDrawTime() const { return lastDrawTime_; }
 
+    void ChangeView(int delta);
+
+    void RotaryIncEvent(int delta) {
+        if (currentViewIndex_ < views_.size()) {
+            auto& currentView = views_[currentViewIndex_];
+            if (currentView->isFocused()) {
+                currentView->HandleRotaryEncChange(delta);
+            }else{
+                ChangeView(delta);
+            }
+        }
+    }
+    void RotarySwitchEvent() {
+        if (currentViewIndex_ < views_.size()) {
+            auto& currentView = views_[currentViewIndex_];
+            if (currentView->isFocused()) {
+                currentView->HandleRotaryEncSwitch();
+            } else {
+                if (currentView->setFocus()) {
+                }
+            }
+        }
+    }
+
 private:
     // Internal TFT hardware instance
     TFT_eSPI tft_;

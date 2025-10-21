@@ -139,6 +139,7 @@ public:
     void setRotaryEncoderCallback(RotaryEncoderCallback cb);
 
 
+
     /**
      * @brief Read all pots and switches at once. Synchronise with the
      * state of the hardware panel. Run once after all callbacks are

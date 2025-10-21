@@ -22,8 +22,6 @@ public:
     void OnSetup() override {
         graphHeight = area.h - 20;
         xstep = static_cast<float>(area.w) / static_cast<float>(NPOINTS - 1);
-        sprite = new TFT_eSprite(scr);
-        sprite->createSprite(area.w, graphHeight);
 
         sprTitle = new TFT_eSprite(scr);
         sprTitle->createSprite(100,20);
@@ -55,6 +53,8 @@ public:
         // for(size_t i = 0; i < NPOINTS-1; i++) {
         //     scr->drawLine(oldGraphPoints[i].x, oldGraphPoints[i].y, oldGraphPoints[i+1].x, oldGraphPoints[i+1].y, TFT_BLACK);
         // }
+        sprite = new TFT_eSprite(scr);
+        sprite->createSprite(area.w, graphHeight);
         sprite->fillSprite(TFT_BLACK);
         for(size_t i = 0; i < NPOINTS-1; i++) {
             sprite->drawLine(graphPoints[i].x, graphPoints[i].y, graphPoints[i+1].x, graphPoints[i+1].y, fillColour);

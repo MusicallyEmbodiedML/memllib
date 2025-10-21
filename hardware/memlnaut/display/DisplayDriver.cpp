@@ -24,7 +24,7 @@ void DisplayDriver::Setup() {
     grid_.heightStep = screenHeight_ / grid_.heightElements;
 
     leftButton.createSprite(30,topBarHeight);
-    title.createSprite(150,topBarHeight);
+    title.createSprite(180,topBarHeight);
     rightButton.createSprite(30,topBarHeight);
 
     leftButton.setTextFont(4);
@@ -112,6 +112,29 @@ void DisplayDriver::Draw() {
 
 }
 
+void DisplayDriver::ChangeView(int delta) {
+    if (!redraw_internal_) { //wait until the current redraw is finished
+        auto lastViewIndex = currentViewIndex_;
+        bool viewChange = false;
+        if (delta < 0 && currentViewIndex_ > 0) {
+            currentViewIndex_--;
+            viewChange = true;
+        } else if (delta > 0 && currentViewIndex_ < views_.size() - 1) {
+            currentViewIndex_++;
+            viewChange = true;
+        }
+        if (viewChange) {
+            // If view changed, redraw the new view
+            views_[lastViewIndex]->setVisible(false);
+            views_[lastViewIndex]->removeFocus();
+            views_[lastViewIndex]->OnHide();  // Call OnHide for the old view
+            views_[currentViewIndex_]->setVisible(true);
+            views_[currentViewIndex_]->OnDisplay();  // Call OnDisplay for the new view
+            redraw_internal_ = true;
+        }
+    }
+}
+
 void DisplayDriver::PollTouch() {
     // lastTouchTime_ = millis();
 
@@ -128,17 +151,23 @@ void DisplayDriver::PollTouch() {
             auto lastViewIndex = currentViewIndex_;
             // If within first row, handle navigation
             if (y <= leftButton.height()) {
-                if (x < leftButton.width() && currentViewIndex_ > 0) {
-                    // Navigate to previous view
-                    currentViewIndex_--;
-                    redraw_internal_ = true;
-                    viewChange = true;
+                // if (x < leftButton.width() && currentViewIndex_ > 0) {
+                //     // Navigate to previous view
+                //     currentViewIndex_--;
+                //     redraw_internal_ = true;
+                //     viewChange = true;
+                // }
+                // else if (x > tft_.width() - rightButton.width() && currentViewIndex_ < views_.size() - 1) {
+                //     // Navigate to next view
+                //     currentViewIndex_++;
+                //     redraw_internal_ = true;
+                //     viewChange = true;
+                // }
+                if (x < leftButton.width()) {
+                    ChangeView(-1);
                 }
-                else if (x > tft_.width() - rightButton.width() && currentViewIndex_ < views_.size() - 1) {
-                    // Navigate to next view
-                    currentViewIndex_++;
-                    redraw_internal_ = true;
-                    viewChange = true;
+                else if (x > tft_.width() - rightButton.width()) {
+                    ChangeView(1);
                 }
             } else {
                 // Handle touch in the current view
@@ -147,13 +176,13 @@ void DisplayDriver::PollTouch() {
                     views_[currentViewIndex_]->HandleTouch(lastTouchX, lastTouchY);
                 // }
             }
-            if (viewChange) {
-                // If view changed, redraw the new view
-                views_[lastViewIndex]->setVisible(false);
-                views_[lastViewIndex]->OnHide();  // Call OnHide for the old view
-                views_[currentViewIndex_]->setVisible(true);
-                views_[currentViewIndex_]->OnDisplay();  // Call OnDisplay for the new view
-            }
+            // if (viewChange) {
+            //     // If view changed, redraw the new view
+            //     views_[lastViewIndex]->setVisible(false);
+            //     views_[lastViewIndex]->OnHide();  // Call OnHide for the old view
+            //     views_[currentViewIndex_]->setVisible(true);
+            //     views_[currentViewIndex_]->OnDisplay();  // Call OnDisplay for the new view
+            // }
             isTouchPressed_ = true;
         } else if (isTouchPressed_) {
             //drag event

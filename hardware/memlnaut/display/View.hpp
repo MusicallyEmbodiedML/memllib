@@ -101,6 +101,32 @@ public:
         }
     }
 
+    //focus on view with rotary encoder switch
+    virtual bool acceptsFocus() {
+        return false;
+    }
+
+    virtual bool setFocus() {
+        hasFocus = acceptsFocus();
+        return hasFocus;
+    }
+
+    virtual void removeFocus() {
+        hasFocus = false;   
+    }
+
+    bool isFocused() {
+        return hasFocus;
+    }
+
+    virtual void HandleRotaryEncChange(int inc) {
+        // Override in subclass if needed
+    }
+
+    virtual void HandleRotaryEncSwitch(){
+        // Override in subclass if needed
+    }
+
 protected:
     explicit ViewBase(String &name)  // Changed parameter type
             : name_(name)
@@ -114,6 +140,7 @@ protected:
     rect area;
     std::vector<std::shared_ptr<ViewBase>> subviews;
     bool viewIsVisible = false;
+    bool hasFocus = false;
 };
 
 
