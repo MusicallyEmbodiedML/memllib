@@ -356,11 +356,11 @@ public:
     maxiDelayline();
 
     /*! Apply a delay to a signal \param input a signal, \param size the size of the delay in samples \param feedback the amount of feedback*/
-    float play(const float &input, size_t size, float feedback);
+    float play(const float input, const size_t size, float feedback);
 
  protected:
-    int phase;
-    float memory[DELAYTIME];
+    size_t phase;
+    alignas(16) float memory[DELAYTIME];
 };
 
 template<size_t DELAYTIME>
@@ -370,25 +370,22 @@ maxiDelayline<DELAYTIME>::maxiDelayline() :
 };
 
 
-#pragma GCC push_options
-#pragma GCC optimize ("O0")
 
 template<size_t DELAYTIME>
-/*inline*/ float maxiDelayline<DELAYTIME>::play(const float &input, const size_t size, const float feedback)  {
-	if (size >= DELAYTIME) {
+inline float maxiDelayline<DELAYTIME>::play(const float input, const size_t size, const float feedback)  {
+	if (size >= DELAYTIME) [[unlikely]]{
 		return 0;
 	}
-	if ( phase >= static_cast<int>(size) ) {
+	if ( phase >= size ) [[unlikely]] {
 		phase = 0;
 	}
 	float output=memory[phase];
 	memory[phase]=(memory[phase] * feedback) + input;
 	phase+=1;
-	return(output);
+	return output;
 
 }
 
-#pragma GCC pop_options
 
 /**
 * A selection of filters
