@@ -151,6 +151,10 @@ void InterfaceRL::bind_RL_interface(bool disable_joystick) {
     MEMLNaut::Instance()->setLoopCallback([this]() {
         this->optimiseSometimes();
         this->generateAction();
+        PERIODIC_DEBUG(100,
+        Serial.printf("Actor wn: %f, Critic wn: %f\n", actor->GetGlobalWeightNorm(), critic->GetGlobalWeightNorm());
+        )
+
     });
 }
 
@@ -280,13 +284,13 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
 
     actor_layers_nodes = {
         stateSize + bias,
-        12, 12, 14,
+        12, 12, 12,
         actionSize
     };
 
     critic_layers_nodes = {
         stateSize + actionSize + bias,
-        12, 10, 10,
+        16, 16, 16,
         1
     };
 
@@ -327,6 +331,9 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
     );
 
     rewardScale = 1.0f; // Default reward scale
+
+    randomiseTheActor();
+    randomiseTheCritic();
 
     // Memory limit
     replayMem.setMemoryLimit(memoryLimit);
@@ -437,7 +444,7 @@ void InterfaceRL::optimise() {
 
             //calculate expected reward
             const float y = sample[i].reward + (discountFactor *  criticOutput[0]);
-            // std::cout << "[" << i << "]: y: " << y << std::endl;
+            // Serial.printf("y[%d]: %f\n", i, y);
 
             //use criticTarget to estimate value of next action given next state
             for(size_t j=0; j < stateSize; j++) {
@@ -482,9 +489,6 @@ void InterfaceRL::optimise() {
                 criticInput[j+stateSize] = actorOutput[j];
             }
 
-            // for(size_t j=0; j < actionSize; j++) {
-            //     criticInput[j+stateSize] = sample[i].action[j];
-            // }
             criticInput[criticInput.size()-1] = 1.f; //bias
 
             critic->CalcGradients(criticInput, gradientLoss); // This calculates dQ/d(input to critic)
@@ -495,7 +499,7 @@ void InterfaceRL::optimise() {
             std::vector<float> actionGradients(actionSize);
             for(size_t j = 0; j < actionSize; j++) {
                 actionGradients[j] = l0Grads[j+stateSize];
-                accumulatedGradient[j] += std::abs(actionGradients[j]);
+                accumulatedGradient[j] += actionGradients[j];
             }
 
             // Apply gradients for this specific state

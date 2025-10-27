@@ -331,7 +331,7 @@ bool SteliosInterface::MLTraining_()
     DEBUG_PRINT("Training for max ");
     DEBUG_PRINT(n_iterations_);
     DEBUG_PRINTLN(" iterations...");
-    float loss = mlp_->MiniBatchTrain(dataset,
+    float loss = mlp_->TrainBatch(dataset,
             0.03f,
             n_iterations_,
             32, // Batch size

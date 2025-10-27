@@ -70,26 +70,33 @@ public:
 
     void storeExperience(float reward);
 
+    #define randomWeightVariance 1.f
+
     inline void randomiseTheActor()
     {
-        actor->DrawWeights();
-        actorTarget->DrawWeights();
+        actor->DrawWeights(0.8f);
+        actorTarget->DrawWeights(0.8f);
+        // actor->InitXavier();
+        // actorTarget->InitXavier();
+
         newInput = true;
         resetMinMaxFlag = true;
     }
 
     inline void randomiseTheCritic()
     {
-        critic->DrawWeights();
-        criticTarget->DrawWeights();
+        critic->DrawWeights(0.8f);
+        criticTarget->DrawWeights(0.8f);
+        // critic->InitXavier();
+        // criticTarget->InitXavier();
         newInput = true;
         resetMinMaxFlag = true;
     }
 
     inline void joltNetworks()
     {
-        actor->PurturbWeights(80);
-        critic->PurturbWeights(80);
+        actor->PurturbWeights(500);
+        critic->PurturbWeights(500);
         if (msgView) msgView->post("Jolting Actor and Critic nets");
 
     }
@@ -197,8 +204,8 @@ private:
     std::shared_ptr<MLP<float> > actor, actorTarget, critic, criticTarget;
 
     float discountFactor = 0.1f;
-    float actorLearningRate = 1e-2;
-    float criticLearningRate = 1e-2;
+    float actorLearningRate = 1e-4;
+    float criticLearningRate = 1e-3;
     float smoothingAlpha = 0.01f;
     float actorLearningRateScaled = actorLearningRate;
     float criticLearningRateScaled = criticLearningRate;
@@ -206,14 +213,14 @@ private:
 
     ReplayMemory<trainRLItem> replayMem;
     static constexpr size_t memoryLimit = 64;
-    static constexpr size_t batchSize = 8;
+    static constexpr size_t batchSize = 4;
 
     std::vector<float> actorOutput, criticOutput;
     std::vector<float> criticInput;
     std::vector<float> actorControlInput;
 
     //std::vector<float> criticLossLog, actorLossLog, log1;
-    float rewardScale = 1.f;
+    float rewardScale = 0.8f;
 
     // OrnsteinUhlenbeckNoise ou_noise;
     std::vector<std::unique_ptr<OrnsteinUhlenbeckNoise>> ou_noises;
