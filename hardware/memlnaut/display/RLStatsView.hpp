@@ -49,7 +49,7 @@ public:
         // drawText(150, 2 * lineheight,  String(criticLoss).c_str(), valueColour);
     }  
 
-    void setActorGradNorm(float v) {
+    void setLoss(float v) {
         // actorGradNorm = v;
         graphActorGNorm->addDataPoint(v);
         redraw();

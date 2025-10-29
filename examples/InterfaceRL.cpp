@@ -42,11 +42,10 @@ void InterfaceRL::_perform_dislike_action() {
 
 void InterfaceRL::_perform_randomiseRL_action() {
 
-    this->randomiseTheActor();
-    this->randomiseTheCritic();
+    this->randomiseTheNetwork();
     this->generateAction(true);
     DEBUG_PRINTLN("Randomising networks");
-    if (msgView) msgView->post("Scrambling Actor and Critic nets");
+    if (msgView) msgView->post("Scrambling the network");
 }
 
 // Public trigger methods (updated to call protected helpers)
@@ -151,9 +150,6 @@ void InterfaceRL::bind_RL_interface(bool disable_joystick) {
     MEMLNaut::Instance()->setLoopCallback([this]() {
         this->optimiseSometimes();
         this->generateAction();
-        PERIODIC_DEBUG(100,
-        Serial.printf("Actor wn: %f, Critic wn: %f\n", actor->GetGlobalWeightNorm(), critic->GetGlobalWeightNorm());
-        )
 
     });
 }
@@ -167,14 +163,6 @@ void InterfaceRL::setRewardScaleInterf(float value)
     if (msgView) msgView->post(msg);
 }
 
-
-void InterfaceRL::_randomise_critic_interf()
-{
-    this->randomiseTheCritic();
-    this->generateAction(true);
-    DEBUG_PRINTLN("The Critic is confounded");
-    if (msgView) msgView->post("Critic: totally confounded");
-}
 
 
 void InterfaceRL::_forget_replay_mem_interf()
@@ -213,7 +201,6 @@ void InterfaceRL::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf)
                 }
                 case 4:
                 {
-                    this->_randomise_critic_interf();
                     this->_forget_replay_mem_interf();
                     break;
                 }
@@ -265,81 +252,43 @@ void InterfaceRL::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf)
 
 void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
 {
-    controlSize = n_inputs; // control inputs only
 
-    InterfaceBase::setup(controlSize, n_outputs);
+    InterfaceBase::setup(n_inputs, n_outputs);
 
-    stateSize = controlSize; //state = control inputs + synth params
-
-    actionSize = n_outputs;
-
-    const std::vector<ACTIVATION_FUNCTIONS> actor_activfuncs = {
-        RELU, RELU, RELU, TANH
-    };
-
-    const std::vector<ACTIVATION_FUNCTIONS> critic_activfuncs = {
-        RELU, RELU, RELU, TANH
+    const std::vector<ACTIVATION_FUNCTIONS> activfuncs = {
+        RELU, RELU, RELU, LINEAR
     };
 
 
-    actor_layers_nodes = {
-        stateSize + bias,
-        12, 12, 12,
-        actionSize
-    };
 
-    critic_layers_nodes = {
-        stateSize + actionSize + bias,
+    std::vector<size_t> layers_nodes = {
+        n_inputs,
         16, 16, 16,
-        1
+        n_outputs
     };
 
-    criticInput.resize(critic_layers_nodes[0]);
-    actorControlInput.resize(actor_layers_nodes[0]);
-    actorControlInput[actorControlInput.size()-1] = 1.f; // bias
+    controlInput.resize(layers_nodes[0]);
 
     //init networks
-    actor = std::make_shared<MLP<float> > (
-        actor_layers_nodes,
-        actor_activfuncs,
+    synthMapping = std::make_shared<MLP<float> > (
+        layers_nodes,
+        activfuncs,
         loss::LOSS_MSE,
-        use_constant_weight_init,
-        constant_weight_init
+        0,
+        0
     );
 
-    actorTarget = std::make_shared<MLP<float> > (
-        actor_layers_nodes,
-        actor_activfuncs,
-        loss::LOSS_MSE,
-        use_constant_weight_init,
-        constant_weight_init
-    );
-
-    critic = std::make_shared<MLP<float> > (
-        critic_layers_nodes,
-        critic_activfuncs,
-        loss::LOSS_MSE,
-        use_constant_weight_init,
-        constant_weight_init
-    );
-    criticTarget = std::make_shared<MLP<float> > (
-        critic_layers_nodes,
-        critic_activfuncs,
-        loss::LOSS_MSE,
-        use_constant_weight_init,
-        constant_weight_init
-    );
+    // synthMapping->InitXavier();
 
     rewardScale = 1.0f; // Default reward scale
 
-    randomiseTheActor();
-    randomiseTheCritic();
+    // randomiseTheNetwork();
 
     // Memory limit
     replayMem.setMemoryLimit(memoryLimit);
 
-    ou_noises.reserve(actionSize);
-    for(size_t i=0; i < actionSize; i++) {
+    ou_noises.reserve(n_outputs);
+    for(size_t i=0; i < n_outputs; i++) {
         ou_noises.push_back(std::make_unique<OrnsteinUhlenbeckNoise>(0.02f, 0.0f, 0.2f, 0.001f, 0.0f));
     }
 
@@ -388,7 +337,7 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
 
     rlStatsView = std::make_shared<RLStatsView>("RL Stats");
     MEMLNaut::Instance()->disp->AddView(rlStatsView);
-    nnInputsGraphView = std::make_shared<BarGraphView>("NN Inputs", controlSize, 10, TFT_YELLOW, 0.f, 1.f);
+    nnInputsGraphView = std::make_shared<BarGraphView>("NN Inputs", n_inputs, 10, TFT_YELLOW, 0.f, 1.f);
     MEMLNaut::Instance()->disp->AddView(nnInputsGraphView);
     nnOutputsGraphView = std::make_shared<BarGraphView>("NN Outputs", n_outputs, 4, TFT_GREEN, 0.f, 1.f);
     MEMLNaut::Instance()->disp->AddView(nnOutputsGraphView);
@@ -398,129 +347,73 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
 bool InterfaceRL::_save_RL_to_SD(String id) {
     bool success = true;
     // Save actor and actorTarget
-    success = success && actor->SaveMLPNetworkSD((FILENAMEROOT + id + String("_actor.bin")).c_str());
-    success = success && actorTarget->SaveMLPNetworkSD((FILENAMEROOT + id + String("_actorTarget.bin")).c_str());
-    // Save critic and criticTarget
-    success = success && critic->SaveMLPNetworkSD((FILENAMEROOT + id + String("_critic.bin")).c_str());
-    success = success && criticTarget->SaveMLPNetworkSD((FILENAMEROOT + id + String("_criticTarget.bin")).c_str());
+    success = success && synthMapping->SaveMLPNetworkSD((FILENAMEROOT + id + String("_net.bin")).c_str());
     return success;
 }
 
 bool InterfaceRL::_load_RL_from_SD(String id) {
     bool success = true;
     // Load actor and actorTarget
-    success = success && actor->LoadMLPNetworkSD((FILENAMEROOT + id + String("_actor.bin")).c_str());
-    success = success && actorTarget->LoadMLPNetworkSD((FILENAMEROOT + id + String("_actorTarget.bin")).c_str());
-    // Load critic and criticTarget
-    success = success && critic->LoadMLPNetworkSD((FILENAMEROOT + id + String("_critic.bin")).c_str());
-    success = success && criticTarget->LoadMLPNetworkSD((FILENAMEROOT + id + String("_criticTarget.bin")).c_str());
+    success = success && synthMapping->LoadMLPNetworkSD((FILENAMEROOT + id + String("_net.bin")).c_str());
     return success;
 }
 
 
+
+
 void InterfaceRL::optimise() {
-    std::vector<trainRLItem> sample = replayMem.sample(batchSize);
-    if (sample.size() == batchSize) {
-        //run sample through critic target, build training set for critic net
-        MLP<float>::training_pair_t ts;
-        for(size_t i = 0; i < sample.size(); i++) {
-            //---calculate y
-            //--calc next-state-action pair
-            //get next action from actorTarget given next state
-            auto nextStateInput =  sample[i].nextState;
-            nextStateInput.push_back(1.f); // bias
-            actorTarget->GetOutput(nextStateInput, &actorOutput);
+    std::vector<trainStatelessRLItem> sample = replayMem.sample(batchSize);
+    if (sample.size() >2) {
+        //run sample through network
+        size_t batchSizePos=0;
+        size_t batchSizeNeg=0;
+        float avgRewardPos=0.f;
+        float avgRewardNeg=0.f;
+        MLP<float>::training_pair_t tsPositive, tsNegative;
 
-            //use criticTarget to estimate value of next action given next state
-            for(size_t j=0; j < stateSize; j++) {
-                criticInput[j] = sample[i].nextState[j];
-            }
-            for(size_t j=0; j < actionSize; j++) {
-                criticInput[j+stateSize] = actorOutput[j];
-            }
-            criticInput[criticInput.size()-1] = 1.f; //bias
-
-            criticTarget->GetOutput(criticInput, &criticOutput);
-
-            //calculate expected reward
-            const float y = sample[i].reward + (discountFactor *  criticOutput[0]);
-            // Serial.printf("y[%d]: %f\n", i, y);
-
-            //use criticTarget to estimate value of next action given next state
-            for(size_t j=0; j < stateSize; j++) {
-                criticInput[j] = sample[i].state[j];
-            }
-            for(size_t j=0; j < actionSize; j++) {
-                criticInput[j+stateSize] = sample[i].action[j];
-            }
-            criticInput[criticInput.size()-1] = 1.f; //bias
-
-            ts.first.push_back(criticInput);
-            ts.second.push_back({y});
-        }
-
-        //train the critic
-        // float loss = critic->Train(ts, criticLearningRate, 1);
-        float loss = critic->TrainBatch(ts, criticLearningRateScaled, 1, sample.size(), 0.f, false);
-
-        rlStatsView->setCriticLoss(loss);
-
-        //TODO: size limit to this log
-        // criticLossLog.push_back(loss);
-
-        //update the actor
-
-        //for each memory in replay memory sample, and get grads from critic
-        std::vector<float> gradientLoss= {1.f};
-        float sampleSizeRecr = static_cast<float>(1.f/sample.size());
-        std::vector<float> accumulatedGradient(actionSize, 0.0f);
+        // Pre-allocate to avoid repeated allocations
+        tsPositive.first.reserve(sample.size());
+        tsPositive.second.reserve(sample.size());
+        tsNegative.first.reserve(sample.size());
+        tsNegative.second.reserve(sample.size());
 
         for(size_t i = 0; i < sample.size(); i++) {
-            //use criticTarget to estimate value of next action given next state
-            for(size_t j=0; j < stateSize; j++) {
-                criticInput[j] = sample[i].state[j];
-            }
-            auto stateInput = sample[i].state;
-            stateInput.push_back(1.f); // bias
-            actor->GetOutput(stateInput, &actorOutput);
-
-            // Use this fresh action for critic input
-            for(size_t j=0; j < actionSize; j++) {
-                criticInput[j+stateSize] = actorOutput[j];
+            // Validate input and action sizes
+            if (sample[i].input.size() != n_inputs_ || sample[i].action.size() != n_outputs_) {
+                Serial.printf("ERROR: Invalid sample %d - input_size=%d (expected %d), action_size=%d (expected %d)\n",
+                    i, sample[i].input.size(), n_inputs_, sample[i].action.size(), n_outputs_);
+                continue;
             }
 
-            criticInput[criticInput.size()-1] = 1.f; //bias
-
-            critic->CalcGradients(criticInput, gradientLoss); // This calculates dQ/d(input to critic)
-
-            std::vector<float> l0Grads = critic->m_layers[0].GetGrads(); // Gradients of critic's first layer inputs
-
-            // Extract action gradients
-            std::vector<float> actionGradients(actionSize);
-            for(size_t j = 0; j < actionSize; j++) {
-                actionGradients[j] = l0Grads[j+stateSize];
-                accumulatedGradient[j] += actionGradients[j];
+            if (sample[i].reward > 0) {
+                tsPositive.first.push_back(sample[i].input);
+                tsPositive.second.push_back(sample[i].action);
+                batchSizePos++;
+                avgRewardPos+=sample[i].reward;
+                Serial.printf("si %d %d\n", sample[i].input.size(), sample[i].action.size());
+            }else{
+                tsNegative.first.push_back(sample[i].input);
+                tsNegative.second.push_back(sample[i].action);
+                batchSizeNeg++;
+                avgRewardNeg+=sample[i].reward;
             }
-
-            // Apply gradients for this specific state
-            actor->ApplyPolicyGradient(stateInput, actionGradients, actorLearningRateScaled * sampleSizeRecr);
-
 
         }
-
-        float gradNorm = 0.0f;
-        for(auto& g : accumulatedGradient) {
-            gradNorm += g * g;
+        float lossPositive{0.f};
+        float lossNegative{0.f};
+        if (batchSizePos > 0){
+            avgRewardPos /= static_cast<float>(batchSizePos);
+            Serial.printf("Training %d positive samples, avg reward: %f\n", batchSizePos, avgRewardPos);
+            lossPositive = synthMapping->TrainBatch(tsPositive, learningRateScaled * avgRewardPos, 1, batchSize, 0.f, false);
         }
-        gradNorm = sqrtf(gradNorm);
+        if (batchSizeNeg > 0){
+            avgRewardNeg /= static_cast<float>(batchSizeNeg);
+            Serial.printf("Training %d negative samples, avg reward: %f\n", batchSizeNeg, avgRewardNeg);
+            lossNegative = synthMapping->TrainBatch(tsNegative, learningRateScaled * 0.1 * avgRewardNeg, 1, batchSize, 0.f, false);
+        }
 
-        // Log gradient statistics
-        rlStatsView->setActorGradNorm(gradNorm);
+        rlStatsView->setLoss(lossPositive + lossNegative);
 
-
-        // soft update the target networks
-        criticTarget->SmoothUpdateWeights(critic, smoothingAlpha);
-        actorTarget->SmoothUpdateWeights(actor, smoothingAlpha);
     }
 }
 
@@ -530,9 +423,7 @@ void InterfaceRL::readAnalysisParameters(std::vector<float> params) {
         DEBUG_PRINTLN("Error: Incorrect number of analysis parameters received.");
         return;
     }
-    // Copy params and add bias efficiently
-    actorControlInput = params;
-    actorControlInput.push_back(1.0f);
+    controlInput = params;
 
     generateAction(true);
 }
@@ -540,54 +431,28 @@ void InterfaceRL::readAnalysisParameters(std::vector<float> params) {
 void InterfaceRL::generateAction(bool donthesitate) {
     if (newInput || donthesitate) {
         newInput = false;
-        // std::vector<float> actorOutput; // This was shadowing the member variable
 
-        actorTarget->GetOutput(actorControlInput, &actorOutput); // Use member actorOutput
-        for(size_t i=0; i < actorOutput.size(); i++) {
+        synthMapping->GetOutput(controlInput, &mappingOutput); 
+        for(size_t i=0; i < mappingOutput.size(); i++) {
             const float noise = ou_noises[i]->sample();
-            actorOutput[i] += noise;
-            if (actorOutput[i] < 0.f) {
-                actorOutput[i] = -actorOutput[i]; // reflect
-            } else if (actorOutput[i] > 1.f) {
-                actorOutput[i] = 1.f - fmod(actorOutput[i], 1.f); // reflect at 1.0
+            mappingOutput[i] += noise;
+            if (mappingOutput[i] < 0.f) {
+                mappingOutput[i] = -mappingOutput[i]; // reflect
+            } else if (mappingOutput[i] > 1.f) {
+                mappingOutput[i] = 1.f - fmod(mappingOutput[i], 1.f); // reflect at 1.0
             }
         }
 
-        SendParamsToQueue(actorOutput);
-        action = actorOutput;
-        nnOutputsGraphView->UpdateValues(actorOutput, resetMinMaxFlag);
+        SendParamsToQueue(mappingOutput);
+        action = mappingOutput;
+        nnOutputsGraphView->UpdateValues(mappingOutput, resetMinMaxFlag);
         resetMinMaxFlag = false;
-        nnInputsGraphView->UpdateValues(actorControlInput, false);
-
-        // for(size_t i=0; i < actorOutput.size(); i++) {
-        //     const float noise = ou_noise.sample() * knobL; // ou_noise and knobL are not defined here
-        //     actorOutput[i] += noise;
-        // }
+        nnInputsGraphView->UpdateValues(controlInput, false);
     }
 }
 
 void InterfaceRL::storeExperience(float reward) {
-    std::vector<float> state = actorControlInput; // actorControlInput already includes bias if setup correctly
-
-    //remove bias if it's part of actorControlInput for storage
-    // The actorControlInput is stateSize + bias.
-    // If 'state' in trainRLItem should not have bias, it needs to be removed.
-    // The original code pops_back, assuming bias is the last element.
-    if (!state.empty() && state.size() == stateSize + bias) { // Check if bias is likely present
-       state.pop_back(); // remove bias if it was added for network input
-    }
-
-
-    // for(size_t i=0; i < state.size(); i++) { // state here is without bias
-    //     DEBUG_PRINTF("%f\t", state[i]);
-    // }
-    // DEBUG_PRINTLN();
-    // nextState in DDPG is the state resulting from taking 'action' in 'state'.
-    // Here, 'state' is used as 'nextState', which is common if the environment is static
-    // or if the 'nextState' is the same as the current state for the purpose of this reward.
-    // However, typically nextState would be s_t+1.
-    // If actorControlInput is s_t+1, then the current state s_t needs to be stored from a previous step.
-    // For now, assuming state is s_t and nextState is also s_t for this specific implementation detail.
-    trainRLItem trainItem = {state, action, reward, state}; // state is s_t, action is a_t, reward is r_t, nextState is s_t
+    std::vector<float> state = controlInput; 
+    trainStatelessRLItem trainItem = {state, action, reward}; // state is s_t, action is a_t, reward is r_t, nextState is s_t
     replayMem.add(trainItem, millis());
 }

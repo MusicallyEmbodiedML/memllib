@@ -26,13 +26,18 @@
 
 //#define XIASRI 1
 
-struct trainRLItem {
-    std::vector<float> state ;
+// struct trainRLItem {
+//     std::vector<float> state ;
+//     std::vector<float> action;
+//     float reward;
+//     std::vector<float> nextState;
+// };
+
+struct trainStatelessRLItem {
+    std::vector<float> input ;
     std::vector<float> action;
     float reward;
-    std::vector<float> nextState;
 };
-
 
 class InterfaceRL : public InterfaceBase
 {
@@ -50,7 +55,7 @@ public:
     void optimise();
 
     inline void setState(const size_t index, float value) {
-        actorControlInput[index] = value;
+        controlInput[index] = value;
         newInput = true;
     }
 
@@ -72,32 +77,18 @@ public:
 
     #define randomWeightVariance 1.f
 
-    inline void randomiseTheActor()
+    inline void randomiseTheNetwork()
     {
-        actor->DrawWeights(0.8f);
-        actorTarget->DrawWeights(0.8f);
-        // actor->InitXavier();
-        // actorTarget->InitXavier();
-
+        synthMapping->DrawWeights(0.8f);
         newInput = true;
         resetMinMaxFlag = true;
     }
 
-    inline void randomiseTheCritic()
-    {
-        critic->DrawWeights(0.8f);
-        criticTarget->DrawWeights(0.8f);
-        // critic->InitXavier();
-        // criticTarget->InitXavier();
-        newInput = true;
-        resetMinMaxFlag = true;
-    }
 
     inline void joltNetworks()
     {
-        actor->PurturbWeights(500);
-        critic->PurturbWeights(500);
-        if (msgView) msgView->post("Jolting Actor and Critic nets");
+        synthMapping->PurturbWeights(500);
+        if (msgView) msgView->post("Jolting network");
 
     }
 
@@ -116,21 +107,16 @@ public:
     }
 
     inline void setLRScale(const float scale) {
-        actorLearningRateScaled = actorLearningRate * scale;
-        criticLearningRateScaled = criticLearningRate * scale;
+        learningRateScaled = learningRate * scale;
         String msg = "LR scale: " + String(scale);
         if (msgView) msgView->post(msg);
     }
 
     void setRewardScaleInterf(float value);
 
-    inline void setDiscountFactor(float factor) {
-        discountFactor = factor;
-    }
-
     inline void setNoiseLevel(float level) {
         level *= 0.5f;
-        if (level < 0.05f) {
+        if (level < 0.02f) {
             level = 0.f;
             if (msgView) msgView->post("Noise off");
         }
@@ -157,7 +143,6 @@ public:
 
     void trigger_like();
     void trigger_dislike();
-    // void trigger_randomiseRL();
 
     inline void getAction(std::vector<float> &out_action) {
         out_action = action;
@@ -176,7 +161,6 @@ protected:
     void _perform_randomiseRL_action();
     bool _save_RL_to_SD(String id);
     bool _load_RL_from_SD(String id);
-    void _randomise_critic_interf();
     void _forget_replay_mem_interf();
 
 private:
@@ -191,36 +175,27 @@ private:
     bool newInput=false;
 
 
-    size_t controlSize;
-    size_t stateSize;
-    size_t actionSize;
 
-    std::vector<size_t> actor_layers_nodes;
-    std::vector<size_t> critic_layers_nodes;
+    std::vector<size_t> layers_nodes;
 
     const bool use_constant_weight_init = false;
     const float constant_weight_init = 0;
 
-    std::shared_ptr<MLP<float> > actor, actorTarget, critic, criticTarget;
+    std::shared_ptr<MLP<float> > synthMapping;
 
-    float discountFactor = 0.1f;
-    float actorLearningRate = 1e-4;
-    float criticLearningRate = 1e-3;
-    float smoothingAlpha = 0.01f;
-    float actorLearningRateScaled = actorLearningRate;
-    float criticLearningRateScaled = criticLearningRate;
+    float learningRate = 1e-3;
+    float learningRateScaled = learningRate;
     std::vector<float> action;
 
-    ReplayMemory<trainRLItem> replayMem;
+
+    ReplayMemory<trainStatelessRLItem> replayMem;
     static constexpr size_t memoryLimit = 64;
-    static constexpr size_t batchSize = 4;
+    static constexpr size_t batchSize = 8;
 
-    std::vector<float> actorOutput, criticOutput;
-    std::vector<float> criticInput;
-    std::vector<float> actorControlInput;
+    std::vector<float> mappingOutput;
+    std::vector<float> controlInput;
 
-    //std::vector<float> criticLossLog, actorLossLog, log1;
-    float rewardScale = 0.8f;
+    float rewardScale = 1.0f;
 
     // OrnsteinUhlenbeckNoise ou_noise;
     std::vector<std::unique_ptr<OrnsteinUhlenbeckNoise>> ou_noises;
