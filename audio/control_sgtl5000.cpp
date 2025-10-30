@@ -591,6 +591,8 @@ bool AudioControlSGTL5000::enable(const unsigned extMCLK, const uint32_t pllFreq
 			write(CHIP_CLK_CTRL, 0b000000);  // 32 kHz, 256*Fs (SYS_FS=0, MCLK_FREQ=0)
 		} else if (kSampleRate == 24000) {
 			write(CHIP_CLK_CTRL, 0b011000);  // 24 kHz, 256*Fs (RATE_MODE=1, SYS_FS=2)
+		} else if (kSampleRate == 96000) { //untested
+    		write(CHIP_CLK_CTRL, 0b001100);  // 96 kHz, 256*Fs (SYS_FS=3, MCLK_FREQ=0)
 		} else {
 			panic("Unsupported sample rate for SGTL5000");
 		}

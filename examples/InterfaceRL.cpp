@@ -256,14 +256,14 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
     InterfaceBase::setup(n_inputs, n_outputs);
 
     const std::vector<ACTIVATION_FUNCTIONS> activfuncs = {
-        RELU, RELU, RELU, LINEAR
+        RELU, RELU, SIGMOID
     };
 
 
 
     std::vector<size_t> layers_nodes = {
         n_inputs,
-        16, 16, 16,
+        16, 16,
         n_outputs
     };
 
@@ -279,6 +279,7 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
     );
 
     // synthMapping->InitXavier();
+    synthMapping->RandomiseWeightsAndBiasesLin(-0.9f,0.9f, 0, 0.5);
 
     rewardScale = 1.0f; // Default reward scale
 
@@ -378,19 +379,19 @@ void InterfaceRL::optimise() {
         tsNegative.second.reserve(sample.size());
 
         for(size_t i = 0; i < sample.size(); i++) {
+
             // Validate input and action sizes
-            if (sample[i].input.size() != n_inputs_ || sample[i].action.size() != n_outputs_) {
-                Serial.printf("ERROR: Invalid sample %d - input_size=%d (expected %d), action_size=%d (expected %d)\n",
-                    i, sample[i].input.size(), n_inputs_, sample[i].action.size(), n_outputs_);
-                continue;
-            }
+            // if (sample[i].input.size() != n_inputs_ || sample[i].action.size() != n_outputs_) {
+            //     Serial.printf("ERROR: Invalid sample %d - input_size=%d (expected %d), action_size=%d (expected %d)\n",
+            //         i, sample[i].input.size(), n_inputs_, sample[i].action.size(), n_outputs_);
+            //     continue;
+            // }
 
             if (sample[i].reward > 0) {
                 tsPositive.first.push_back(sample[i].input);
                 tsPositive.second.push_back(sample[i].action);
                 batchSizePos++;
                 avgRewardPos+=sample[i].reward;
-                Serial.printf("si %d %d\n", sample[i].input.size(), sample[i].action.size());
             }else{
                 tsNegative.first.push_back(sample[i].input);
                 tsNegative.second.push_back(sample[i].action);
@@ -403,12 +404,12 @@ void InterfaceRL::optimise() {
         float lossNegative{0.f};
         if (batchSizePos > 0){
             avgRewardPos /= static_cast<float>(batchSizePos);
-            Serial.printf("Training %d positive samples, avg reward: %f\n", batchSizePos, avgRewardPos);
+            // Serial.printf("Training %d positive samples, avg reward: %f\n", batchSizePos, avgRewardPos);
             lossPositive = synthMapping->TrainBatch(tsPositive, learningRateScaled * avgRewardPos, 1, batchSize, 0.f, false);
         }
         if (batchSizeNeg > 0){
             avgRewardNeg /= static_cast<float>(batchSizeNeg);
-            Serial.printf("Training %d negative samples, avg reward: %f\n", batchSizeNeg, avgRewardNeg);
+            // Serial.printf("Training %d negative samples, avg reward: %f\n", batchSizeNeg, avgRewardNeg);
             lossNegative = synthMapping->TrainBatch(tsNegative, learningRateScaled * 0.1 * avgRewardNeg, 1, batchSize, 0.f, false);
         }
 
@@ -437,7 +438,7 @@ void InterfaceRL::generateAction(bool donthesitate) {
             const float noise = ou_noises[i]->sample();
             mappingOutput[i] += noise;
             if (mappingOutput[i] < 0.f) {
-                mappingOutput[i] = -mappingOutput[i]; // reflect
+                mappingOutput[i] = fmod(-mappingOutput[i],1.f); // reflect
             } else if (mappingOutput[i] > 1.f) {
                 mappingOutput[i] = 1.f - fmod(mappingOutput[i], 1.f); // reflect at 1.0
             }
