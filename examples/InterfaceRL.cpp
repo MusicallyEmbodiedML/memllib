@@ -13,29 +13,31 @@ void InterfaceRL::_perform_like_action() {
     static APP_SRAM std::vector<String> likemsgs = {
         "Wow, incredible", "Awesome", "That's amazing", "Unbelievable+",
         "I love it!!", "More of this", "Yes!!!!", "A-M-A-Z-I-N-G",
-        "Keep going!", "I love you", "In flow", "I believe in you",
-        "You're a star!", "Absolutely brilliant!", "This is perfection!",
-        "Stunning work!", "You've nailed it!", "Pure genius!",
-        "Keep shining!", "Fantastic!", "Incredible vibes!", "Love this journey!"
+        "Keep going!", "In flow", "I believe in you",
+        "Absolutely brilliant!", "This is perfection!",
+        "Stunning work!", "Pure genius!",
+        "Keep shining!", "Fantastic!", "Incredible vibes!", "Love this journey!",
+        "Super cool!"
     };
     String msg = likemsgs[rand() % likemsgs.size()];
-    this->storeExperience(1.f * rewardScale);
+    this->storeExperience(1.f, controlInput, action);
     DEBUG_PRINTLN(msg);
     if (msgView) msgView->post(msg);
 }
 
 void InterfaceRL::_perform_dislike_action() {
     static APP_SRAM std::vector<String> dislikemsgs = {
-        "Awful!", "wtf? that sucks", "Get rid of this sound", "Totally shite",
-        "I hate this", "Why even bother?", "New sound please!", "No, please no!!!",
+        "oh no!", "Get rid of this sound", 
+        "Why even bother?", "New sound please!", "No, please no!!!",
         "Thumbs down", "I'm so sorry", "I'm trying my hardest...",
-        "I'm doing the best I can", "Please forgive me", "My apologies, learning...",
-        "I'll try to do better.", "Didn't mean to disappoint.", "Still figuring things out.",
+        "I'm doing the best I can", "Learning...",
+	    "I'll try to do better.", "Still figuring things out.",
         "Thanks for the feedback.", "Working on it!", "Oops, my bad.",
-        "Learning from this.", "I'll adjust, promise.", "Noted, I'll improve."
+        "Learning from this.", "I'll adjust, promise.", "Noted", "Rearranging",
+        "Let's move on!"
     };
     String msg = dislikemsgs[rand() % dislikemsgs.size()];
-    this->storeExperience(-1.f * rewardScale);
+    this->storeExperience(-1.f, controlInput, action);
     DEBUG_PRINTLN(msg);
     if (msgView) msgView->post(msg);
 }
@@ -106,7 +108,22 @@ void InterfaceRL::bind_RL_interface(bool disable_joystick) {
             joltNetworks();
         }
     });
+
+
     if (!disable_joystick) {
+        MEMLNaut::Instance()->setJoySWCallback([this](bool state) {
+            //button down
+            if (state) {
+                //store output
+                savedAction = action;
+                actionBeingDragged=true;
+            }else{
+                //button up
+                this->storeExperience(1.f, controlInput, savedAction);
+                actionBeingDragged=false;
+            }
+            msgView->post(state ? "Where do you want it?" : "Here!");
+        });
         // Set up ADC callbacks
         MEMLNaut::Instance()->setJoyXCallback([this](float value) {
             this->setState(0, value);
@@ -128,7 +145,7 @@ void InterfaceRL::bind_RL_interface(bool disable_joystick) {
 
 
     MEMLNaut::Instance()->setRVX1Callback([this](float value) { // scr_ref no longer captured directly
-        this->setOptimiseDivisorInterf(value);
+        this->setRewardScaleInterf(value);
     });
 
     MEMLNaut::Instance()->setRVY1Callback([this](float value) {
@@ -157,7 +174,6 @@ void InterfaceRL::bind_RL_interface(bool disable_joystick) {
 
 void InterfaceRL::setRewardScaleInterf(float value)
 {
-    return;  // bypassed for now
     this->setRewardScale(value);
     String msg = "Reward scale: " + String(value);
     if (msgView) msgView->post(msg);
@@ -178,9 +194,9 @@ void InterfaceRL::_forget_replay_mem_interf()
 }
 
 
-void InterfaceRL::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf)
+void InterfaceRL::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf, bool enableFootcontroller)
 {
-    if (midi_interf) {
+    if (midi_interf && enableFootcontroller) {
         midi_interf->SetCCCallback([this] (uint8_t cc_number, uint8_t cc_value) {
             Serial.printf("MIDI CC %d: %d\n", cc_number, cc_value);
             switch(cc_number) {
@@ -256,7 +272,7 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
     InterfaceBase::setup(n_inputs, n_outputs);
 
     const std::vector<ACTIVATION_FUNCTIONS> activfuncs = {
-        RELU, RELU, SIGMOID
+        RELU, RELU, HARDSIGMOID
     };
 
 
@@ -413,7 +429,7 @@ void InterfaceRL::optimise() {
             lossNegative = synthMapping->TrainBatch(tsNegative, learningRateScaled * 0.1 * avgRewardNeg, 1, batchSize, 0.f, false);
         }
 
-        rlStatsView->setLoss(lossPositive + lossNegative);
+        rlStatsView->setLoss(lossPositive);
 
     }
 }
@@ -433,17 +449,18 @@ void InterfaceRL::generateAction(bool donthesitate) {
     if (newInput || donthesitate) {
         newInput = false;
 
-        synthMapping->GetOutput(controlInput, &mappingOutput); 
-        for(size_t i=0; i < mappingOutput.size(); i++) {
-            const float noise = ou_noises[i]->sample();
-            mappingOutput[i] += noise;
-            if (mappingOutput[i] < 0.f) {
-                mappingOutput[i] = fmod(-mappingOutput[i],1.f); // reflect
-            } else if (mappingOutput[i] > 1.f) {
-                mappingOutput[i] = 1.f - fmod(mappingOutput[i], 1.f); // reflect at 1.0
+        if (!actionBeingDragged) {
+            synthMapping->GetOutput(controlInput, &mappingOutput); 
+            for(size_t i=0; i < mappingOutput.size(); i++) {
+                const float noise = ou_noises[i]->sample();
+                mappingOutput[i] += noise;
+                if (mappingOutput[i] < 0.f) {
+                    mappingOutput[i] = fmod(-mappingOutput[i],1.f); // reflect
+                } else if (mappingOutput[i] > 1.f) {
+                    mappingOutput[i] = 1.f - fmod(mappingOutput[i], 1.f); // reflect at 1.0
+                }
             }
         }
-
         SendParamsToQueue(mappingOutput);
         action = mappingOutput;
         nnOutputsGraphView->UpdateValues(mappingOutput, resetMinMaxFlag);
@@ -452,8 +469,13 @@ void InterfaceRL::generateAction(bool donthesitate) {
     }
 }
 
-void InterfaceRL::storeExperience(float reward) {
-    std::vector<float> state = controlInput; 
-    trainStatelessRLItem trainItem = {state, action, reward}; // state is s_t, action is a_t, reward is r_t, nextState is s_t
+// void InterfaceRL::storeExperience(float reward) {
+//     std::vector<float> state = controlInput; 
+//     trainStatelessRLItem trainItem = {state, action, reward}; // state is s_t, action is a_t, reward is r_t, nextState is s_t
+//     replayMem.add(trainItem, millis());
+// }
+
+void InterfaceRL::storeExperience(float reward, std::vector<float> &experienceState, std::vector<float> &experienceAction ) {
+    trainStatelessRLItem trainItem = {experienceState, experienceAction, reward * rewardScale}; // state is s_t, action is a_t, reward is r_t, nextState is s_t
     replayMem.add(trainItem, millis());
 }

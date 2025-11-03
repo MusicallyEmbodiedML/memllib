@@ -18,10 +18,10 @@ public:
 
     void OnSetup() override {
         // rect bounds = { area.x + 10 + (i * 60), area.y + 10 + (j*60), 50, 50 };
-        graphActorGNorm = std::make_shared<GraphView<NPOINTS>>("Actor Grad Norm", TFT_BLUE);
-        graphCriticLoss = std::make_shared<GraphView<NPOINTS>>("Critic Loss", TFT_RED);
+        graphActorGNorm = std::make_shared<GraphView<NPOINTS>>("Loss", TFT_BLUE);
+        // graphCriticLoss = std::make_shared<GraphView<NPOINTS>>("Critic Loss", TFT_RED);
         AddSubView(graphActorGNorm, { area.x + 10, area.y + 10, 300, 90 });
-        AddSubView(graphCriticLoss, { area.x + 10, area.y + 10+100, 300, 90 });
+        // AddSubView(graphCriticLoss, { area.x + 10, area.y + 10+100, 300, 90 });
 
     }  
 

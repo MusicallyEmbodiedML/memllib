@@ -93,6 +93,10 @@ public:
         ViewBase::OnDisplay();
     };
 
+    void setOptions(std::span<String> newOptions) {
+        options.assign(newOptions.begin(), newOptions.end());
+    }
+
     bool acceptsFocus() override {
         return true;
     }

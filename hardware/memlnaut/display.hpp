@@ -53,7 +53,7 @@ public:
             constexpr int32_t lineheight = 20;
             // tft.fillRect(10, 10, 250, 30, TFT_BLUE);
             // tft.fillRect(100, 100, 200, 100, TFT_RED);
-            for(size_t i=0; i < lines.size(); i++) {
+        	for(size_t i=0; i < lines.size(); i++) {
                 textSprite.fillRect(0,0,320,20,TFT_BLACK);
                 textSprite.drawString(lines[i].c_str(), 0, 0);
                 textSprite.pushSprite(4,i*lineheight);

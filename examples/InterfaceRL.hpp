@@ -73,13 +73,13 @@ public:
         }
     }
 
-    void storeExperience(float reward);
+    void storeExperience(float reward, std::vector<float> &experienceState, std::vector<float> &experienceAction );
 
     #define randomWeightVariance 1.f
 
     inline void randomiseTheNetwork()
     {
-        synthMapping->DrawWeights(0.8f);
+        synthMapping->RandomiseWeightsAndBiasesLin(-0.9f,0.9f, 0, 0.5);
         newInput = true;
         resetMinMaxFlag = true;
     }
@@ -139,7 +139,7 @@ public:
         DEBUG_PRINTLN("bindUARTInput not implemented yet");
     }
     
-    void bindMIDI(std::shared_ptr<MIDIInOut> midi_interf);
+    void bindMIDI(std::shared_ptr<MIDIInOut> midi_interf, bool enableFootcontroller=false);
 
     void trigger_like();
     void trigger_dislike();
@@ -170,9 +170,13 @@ private:
 
     static constexpr size_t bias=1;
 
-    size_t optimiseDivisor = 40;
+    size_t optimiseDivisor = 1;
     size_t optimiseCounter = 0;
     bool newInput=false;
+
+    bool actionBeingDragged=false;
+
+
 
 
 
@@ -194,6 +198,8 @@ private:
 
     std::vector<float> mappingOutput;
     std::vector<float> controlInput;
+    std::vector<float> savedAction;
+
 
     float rewardScale = 1.0f;
 
