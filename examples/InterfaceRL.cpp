@@ -309,6 +309,8 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
         ou_noises.push_back(std::make_unique<OrnsteinUhlenbeckNoise>(0.02f, 0.0f, 0.2f, 0.001f, 0.0f));
     }
 
+    itemsToRemove.reserve(replayMem.getMemoryLimit());
+
     // GUI
     msgView = std::make_shared<MessageView>("Messages");
     MEMLNaut::Instance()->disp->AddView(msgView);
@@ -379,7 +381,8 @@ bool InterfaceRL::_load_RL_from_SD(String id) {
 
 
 void InterfaceRL::optimise() {
-    std::vector<trainStatelessRLItem> sample = replayMem.sample(batchSize);
+    //std::vector<trainStatelessRLItem> sample = replayMem.sample(batchSize);
+    std::vector<size_t> sample = replayMem.sampleIndices(batchSize);
     if (sample.size() >2) {
         //run sample through network
         size_t batchSizePos=0;
@@ -394,7 +397,9 @@ void InterfaceRL::optimise() {
         tsNegative.first.reserve(sample.size());
         tsNegative.second.reserve(sample.size());
 
-        for(size_t i = 0; i < sample.size(); i++) {
+
+        for(auto &i: sample) {
+		//for(size_t i = 0; i < sample.size(); i++) {
 
             // Validate input and action sizes
             // if (sample[i].input.size() != n_inputs_ || sample[i].action.size() != n_outputs_) {
@@ -403,16 +408,26 @@ void InterfaceRL::optimise() {
             //     continue;
             // }
 
-            if (sample[i].reward > 0) {
-                tsPositive.first.push_back(sample[i].input);
-                tsPositive.second.push_back(sample[i].action);
+            if (replayMem.getItem(i).reward > 0) {
+                tsPositive.first.push_back(replayMem.getItem(i).input);
+                tsPositive.second.push_back(replayMem.getItem(i).action);
                 batchSizePos++;
-                avgRewardPos+=sample[i].reward;
+                avgRewardPos+=replayMem.getItem(i).reward;
             }else{
-                tsNegative.first.push_back(sample[i].input);
-                tsNegative.second.push_back(sample[i].action);
+                tsNegative.first.push_back(replayMem.getItem(i).input);
+                tsNegative.second.push_back(replayMem.getItem(i).action);
                 batchSizeNeg++;
-                avgRewardNeg+=sample[i].reward;
+                float reward = replayMem.getItem(i).reward;
+                avgRewardNeg+=reward;
+                //decay towards 0
+                const float rewardCom = 1.f+ reward;
+                reward = reward + (0.005 * rewardCom);
+				replayMem.getItem(i).reward = reward; 
+                Serial.printf("neg rw %d %f\n", i, reward);
+                if (reward > -0.01) {
+                    itemsToRemove.push_back(i);
+                    Serial.printf("Erasing neg exp %d\n",i);
+                }
             }
 
         }
@@ -428,6 +443,10 @@ void InterfaceRL::optimise() {
             // Serial.printf("Training %d negative samples, avg reward: %f\n", batchSizeNeg, avgRewardNeg);
             lossNegative = synthMapping->TrainBatch(tsNegative, learningRateScaled * 0.1 * avgRewardNeg, 1, batchSize, 0.f, false);
         }
+
+        if (replayMem.removeItems(itemsToRemove)) {
+            itemsToRemove.clear();
+        };
 
         rlStatsView->setLoss(lossPositive);
 

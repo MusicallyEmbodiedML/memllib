@@ -176,6 +176,7 @@ private:
 
     bool actionBeingDragged=false;
 
+    std::vector<size_t> itemsToRemove;
 
 
 
