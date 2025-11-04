@@ -4,6 +4,7 @@
 #include "View.hpp"
 #include <vector>
 #include <memory>
+#include <algorithm>
 #include <cstdint>
 #include <cstddef>
 
@@ -31,6 +32,18 @@ public:
             view->Setup(&tft_, mainArea);
         }
         redraw_internal_ = true;
+    }
+    inline void InsertViewAfter(const std::shared_ptr<ViewBase> &existingView, const std::shared_ptr<ViewBase> &newView)
+    {
+        auto it = std::find(views_.begin(), views_.end(), existingView);
+        if (it != views_.end()) {
+            views_.insert(it + 1, newView);
+            newView->SetGrid(grid_);
+            if (tft_initialized_) {
+                newView->Setup(&tft_, mainArea);
+            }
+            redraw_internal_ = true;
+        }
     }
     void PollTouch();
     unsigned long GetLastTouchTime() const { return lastTouchTime_; }

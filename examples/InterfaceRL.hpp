@@ -153,6 +153,15 @@ public:
     void SetMIDI6Callback(OnMIDICtrlCallback _cb_) {
         midi6cb = _cb_;
     }    
+
+    // Display views
+    std::shared_ptr<MessageView> msgView;
+    std::shared_ptr<BlockSelectView> fileSaveView;
+    std::shared_ptr<BlockSelectView> fileLoadView;
+    std::shared_ptr<BarGraphView> nnInputsGraphView;
+    std::shared_ptr<BarGraphView> nnOutputsGraphView;
+    std::shared_ptr<RLStatsView> rlStatsView;
+
 protected:
     // Helper methods for trigger actions
     void _perform_like_action();
@@ -206,13 +215,6 @@ private:
     // OrnsteinUhlenbeckNoise ou_noise;
     std::vector<std::unique_ptr<OrnsteinUhlenbeckNoise>> ou_noises;
 
-    // Display views
-    std::shared_ptr<MessageView> msgView;
-    std::shared_ptr<BlockSelectView> fileSaveView;
-    std::shared_ptr<BlockSelectView> fileLoadView;
-    std::shared_ptr<BarGraphView> nnInputsGraphView;
-    std::shared_ptr<BarGraphView> nnOutputsGraphView;
-    std::shared_ptr<RLStatsView> rlStatsView;
     bool resetMinMaxFlag = false;
 
 };

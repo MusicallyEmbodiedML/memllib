@@ -312,6 +312,14 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
     itemsToRemove.reserve(replayMem.getMemoryLimit());
 
     // GUI
+    nnOutputsGraphView = std::make_shared<BarGraphView>("NN Outputs", n_outputs, 4, TFT_GREEN, 0.f, 1.f);
+    MEMLNaut::Instance()->disp->AddView(nnOutputsGraphView);
+    rlStatsView = std::make_shared<RLStatsView>("RL Stats");
+    MEMLNaut::Instance()->disp->AddView(rlStatsView);
+    nnInputsGraphView = std::make_shared<BarGraphView>("NN Inputs", n_inputs, 10, TFT_YELLOW, 0.f, 1.f);
+    MEMLNaut::Instance()->disp->AddView(nnInputsGraphView);
+
+
     msgView = std::make_shared<MessageView>("Messages");
     MEMLNaut::Instance()->disp->AddView(msgView);
 
@@ -352,12 +360,6 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
 
 
 
-    rlStatsView = std::make_shared<RLStatsView>("RL Stats");
-    MEMLNaut::Instance()->disp->AddView(rlStatsView);
-    nnInputsGraphView = std::make_shared<BarGraphView>("NN Inputs", n_inputs, 10, TFT_YELLOW, 0.f, 1.f);
-    MEMLNaut::Instance()->disp->AddView(nnInputsGraphView);
-    nnOutputsGraphView = std::make_shared<BarGraphView>("NN Outputs", n_outputs, 4, TFT_GREEN, 0.f, 1.f);
-    MEMLNaut::Instance()->disp->AddView(nnOutputsGraphView);
 }
 
 
