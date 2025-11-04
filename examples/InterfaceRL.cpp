@@ -348,8 +348,6 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
     });
     MEMLNaut::Instance()->disp->AddView(fileLoadView);
 
-    voiceSpaceSelectView = std::make_shared<VoiceSpaceSelectView>("Voice Spaces");
-    MEMLNaut::Instance()->disp->AddView(voiceSpaceSelectView);
     
 
 

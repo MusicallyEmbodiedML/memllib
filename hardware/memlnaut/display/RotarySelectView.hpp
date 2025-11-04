@@ -12,9 +12,16 @@ public:
     TFT_eSprite *sprTitle = nullptr;
     TFT_eSprite *sprMax = nullptr;
 
+    using NewSelectionCallback = std::function<void(size_t)>;
+
+
     RotarySelectView(String name, int _fillcolour_ = TFT_BLUE)
         : ViewBase(name), fillColour(_fillcolour_)
     {
+    }
+
+    void setNewSelectionCallback(NewSelectionCallback cb) {
+        newSelCB = cb;
     }
 
 
@@ -57,7 +64,7 @@ public:
         constexpr size_t heights[] = {15,25,25,25,15};
         constexpr size_t indents[] = {5,10,15,10,5};
         constexpr size_t colours[] = {TFT_SILVER, TFT_SILVER, TFT_WHITE, TFT_SILVER, TFT_SILVER};
-        Serial.printf("RotarySelectView::OnDraw called, hasFocus=%d\n", isFocused());
+        // Serial.printf("RotarySelectView::OnDraw called, hasFocus=%d\n", isFocused());
         int heightAccum = 0;
         for(int i=0; i < 5; i++) {
             int itemIndex = selectedIndex - 2 + i;
@@ -102,7 +109,7 @@ public:
     }
 
     bool setFocus() override {
-        Serial.println("RotarySelectView::setFocus called");
+        // Serial.println("RotarySelectView::setFocus called");
         redraw();
         return ViewBase::setFocus();
     }
@@ -113,15 +120,17 @@ public:
     }
 
     void HandleRotaryEncChange(int inc) override {
-        Serial.printf("RotarySelectView::HandleRotaryEncChange called with inc=%d\n", inc);
+        // Serial.printf("RotarySelectView::HandleRotaryEncChange called with inc=%d\n", inc);
         if (inc > 0) {
             if (selectedIndex < options.size() - 1) {
                 selectedIndex++;
+                if (newSelCB) newSelCB(selectedIndex);
                 redraw();
             }
         } else if (inc < 0) {
             if (selectedIndex > 0) {
                 selectedIndex--;
+                if (newSelCB) newSelCB(selectedIndex);
                 redraw();
             }
         }
@@ -132,6 +141,7 @@ private:
     int fillColour;
     std::vector<String> options;
     size_t selectedIndex = 0;
+    NewSelectionCallback newSelCB;
     
 };
 

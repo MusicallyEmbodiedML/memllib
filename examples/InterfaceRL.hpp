@@ -20,7 +20,6 @@
 #include "../hardware/memlnaut/display/BarGraphView.hpp"
 #include "../hardware/memlnaut/display/BlockSelectView.hpp"
 #include "../hardware/memlnaut/display/RLStatsView.hpp"
-#include "../hardware/memlnaut/display/VoiceSpaceSelectView.hpp"
 
 #define RL_MEM __not_in_flash("rlmem")
 
@@ -214,7 +213,6 @@ private:
     std::shared_ptr<BarGraphView> nnInputsGraphView;
     std::shared_ptr<BarGraphView> nnOutputsGraphView;
     std::shared_ptr<RLStatsView> rlStatsView;
-    std::shared_ptr<VoiceSpaceSelectView> voiceSpaceSelectView;
     bool resetMinMaxFlag = false;
 
 };

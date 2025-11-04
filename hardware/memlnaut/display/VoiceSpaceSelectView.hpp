@@ -9,6 +9,10 @@
 
 class VoiceSpaceSelectView : public ViewBase {
 public:
+
+    using NewVoiceCallback = std::function<void(size_t)>;
+
+
     VoiceSpaceSelectView(String name)
         : ViewBase(name)
     {}
@@ -18,6 +22,15 @@ public:
         AddSubView(voiceSpaceSelector, { area.x + 20, area.y + 20, 280, 140 });
 
     }  
+
+    void setNewVoiceCallback(NewVoiceCallback cb) {
+        voiceSpaceSelector->setNewSelectionCallback(
+            [cb](size_t idx) {
+                cb(idx);
+            }
+        );
+    }
+
 
     void OnDisplay() override {
     };
@@ -31,7 +44,7 @@ public:
     }
 
     bool setFocus() override {
-        Serial.println("VoiceSpaceSelectView::setFocus called");
+        // Serial.println("VoiceSpaceSelectView::setFocus called");
         voiceSpaceSelector->setFocus();
         redraw();
         return ViewBase::setFocus();
@@ -52,6 +65,9 @@ public:
         }
     }
 
+    void setOptions(std::span<String> newOptions) {
+        voiceSpaceSelector->setOptions(newOptions);
+    }
 
 
 
