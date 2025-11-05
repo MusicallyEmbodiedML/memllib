@@ -21,8 +21,22 @@ MIDIInOut::MIDIInOut() : n_outputs_(0),
                          send_channel_(1),
                          note_channel_(1),
                          refresh_uart_(false),
-                         use_advanced_mappings_(false) {
+                         use_advanced_mappings_(false),
+                         tx_dma_channel_(-1),
+                         dma_busy_(false),
+                         midi_tx_pin_(0),
+                         track_changes_(true) {
     instance_ = this;
+    memset(tx_dma_buffer_, 0, sizeof(tx_dma_buffer_));
+}
+
+MIDIInOut::~MIDIInOut() {
+    // Clean up DMA channel if allocated
+    if (tx_dma_channel_ >= 0) {
+        dma_channel_abort(tx_dma_channel_);
+        dma_channel_unclaim(tx_dma_channel_);
+        tx_dma_channel_ = -1;
+    }
 }
 
 void MIDIInOut::Setup(size_t n_outputs,
@@ -39,6 +53,14 @@ void MIDIInOut::Setup(size_t n_outputs,
     Serial2.begin(31250); // Start MIDI baud rate
     while(!Serial2) { delay(1); } // Wait for Serial2
     delay(100); // Allow port to stabilize
+
+    // Setup DMA for TX (Serial2 uses uart1 on RP2040)
+    midi_tx_pin_ = midi_tx;
+    if (!setupTxDMA(uart1)) {
+        DEBUG_PRINTLN("Warning: DMA TX setup failed, falling back to regular writes");
+    } else {
+        DEBUG_PRINTLN("DMA TX initialized successfully");
+    }
 
     // Initialize CC numbers to default values [0 .. (n_outputs-1)]
     std::vector<int>  midiShitList = {0, 6,7, 8, 10, 32, 38, 39,41, 43};
@@ -57,6 +79,9 @@ void MIDIInOut::Setup(size_t n_outputs,
     for(size_t i=0; i < ccnums.size();i++) {
         cc_numbers_[i] = static_cast<uint8_t>(ccnums[i]);
     }
+
+    // Initialize change tracking with invalid values to force first send
+    last_sent_values_.resize(n_outputs_, 0xFF);
 
     if (midi_through) {
         // Enable MIDI thru if requested
@@ -112,28 +137,76 @@ void MIDIInOut::SetParamCCNumbers(const std::vector<uint8_t>& cc_numbers) {
 }
 
 void MIDIInOut::SendParamsAsMIDICC(std::span<const float> params) {
-    RefreshUART_(); // Refresh UART if needed
-
-    while(!Serial2) { delay(1); } // Wait for Serial2
+    // Optimized: Build directly into DMA buffer, skip unchanged values, use running status
+    size_t buf_idx = 0;
 
     if (use_advanced_mappings_) {
         // Use advanced mappings with individual channels and custom scaling
         size_t send_count = std::min(params.size(), std::min(advanced_mappings_.size(), n_outputs_));
+        uint8_t last_channel = 0;  // Track channel for running status
+
         for (size_t i = 0; i < send_count; i++) {
-            const CCMapping& mapping = advanced_mappings_[i];
-            uint8_t value = scaleValue(params[i], mapping);
-            MIDI.sendControlChange(mapping.cc_number, value, mapping.channel);
+            uint8_t value = scaleValue(params[i], advanced_mappings_[i]);
+
+            // Skip if value hasn't changed
+            if (track_changes_ && value == last_sent_values_[i]) {
+                continue;
+            }
+            last_sent_values_[i] = value;
+
+            // Use running status: only send status byte when channel changes
+            uint8_t channel = advanced_mappings_[i].channel;
+            if (channel != last_channel || buf_idx == 0) {
+                tx_dma_buffer_[buf_idx++] = 0xB0 | ((channel - 1) & 0x0F);
+                last_channel = channel;
+            }
+
+            tx_dma_buffer_[buf_idx++] = advanced_mappings_[i].cc_number & 0x7F;
+            tx_dma_buffer_[buf_idx++] = value & 0x7F;
+
+            // Check buffer limit
+            if (buf_idx >= DMA_BUFFER_SIZE - 3) break;
         }
     } else {
-        // Use simple mappings (backwards compatible)
+        // Use simple mappings (all on same channel - maximum running status benefit)
         size_t send_count = std::min(params.size(), std::min(cc_numbers_.size(), n_outputs_));
+        uint8_t status_byte = 0xB0 | ((send_channel_ - 1) & 0x0F);
+        bool status_sent = false;
+
         for (size_t i = 0; i < send_count; i++) {
-            float clamped = std::max(0.0f, std::min(1.0f, params[i]));
+            // Fast clamping and scaling
+            float clamped = params[i];
+            clamped = (clamped > 1.0f) ? 1.0f : ((clamped < 0.0f) ? 0.0f : clamped);
             uint8_t value = static_cast<uint8_t>(clamped * 127.0f + 0.5f);
-            MIDI.sendControlChange(cc_numbers_[i], value, send_channel_);
+
+            // Skip if value hasn't changed
+            if (track_changes_ && value == last_sent_values_[i]) {
+                continue;
+            }
+            last_sent_values_[i] = value;
+
+            // Send status byte only once (running status)
+            if (!status_sent) {
+                tx_dma_buffer_[buf_idx++] = status_byte;
+                status_sent = true;
+            }
+
+            tx_dma_buffer_[buf_idx++] = cc_numbers_[i] & 0x7F;
+            tx_dma_buffer_[buf_idx++] = value & 0x7F;
+
+            // Check buffer limit
+            if (buf_idx >= DMA_BUFFER_SIZE - 3) break;
         }
     }
-    MEMORY_BARRIER();
+
+    // Only send if we have data
+    if (buf_idx > 0) {
+        if (tx_dma_channel_ >= 0) {
+            sendViaDMADirect(buf_idx);  // No memcpy - buffer already built in place
+        } else {
+            Serial2.write(tx_dma_buffer_, buf_idx);
+        }
+    }
 }
 
 void MIDIInOut::SetAdvancedParamMappings(const std::vector<CCMapping>& mappings) {
@@ -256,11 +329,11 @@ bool MIDIInOut::sendNoteOn(uint8_t note_number, uint8_t velocity) {
         return false;
     }
 
-    RefreshUART_(); // Refresh UART if needed
+    // RefreshUART_(); // Refresh UART if needed
 
-    while(!Serial2) { delay(1); } // Wait for Serial2
+    // while(!Serial2) { delay(1); } // Wait for Serial2
     MIDI.sendNoteOn(note_number, velocity, note_channel_);
-    MEMORY_BARRIER();
+    // MEMORY_BARRIER();
     return true;
 }
 
@@ -275,4 +348,76 @@ bool MIDIInOut::sendNoteOff(uint8_t note_number, uint8_t velocity) {
     MIDI.sendNoteOff(note_number, velocity, note_channel_);
     MEMORY_BARRIER();
     return true;
+}
+
+// DMA Implementation
+bool MIDIInOut::setupTxDMA(uart_inst_t* uart) {
+    // Claim DMA channel (don't panic on failure)
+    tx_dma_channel_ = dma_claim_unused_channel(false);
+    if (tx_dma_channel_ < 0) {
+        return false;  // No DMA channel available
+    }
+
+    // Configure TX data channel
+    dma_channel_config c = dma_channel_get_default_config(tx_dma_channel_);
+    channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
+    channel_config_set_read_increment(&c, true);   // Increment read address
+    channel_config_set_write_increment(&c, false); // Always write to UART DR
+    channel_config_set_dreq(&c, uart_get_dreq(uart, true));  // UART TX DREQ
+
+    dma_channel_configure(
+        tx_dma_channel_,
+        &c,
+        &uart_get_hw(uart)->dr,        // Write to UART data register
+        NULL,                           // Read address set later
+        0,                              // Transfer count set later
+        false                           // Don't start yet
+    );
+
+    dma_busy_ = false;
+    return true;
+}
+
+void MIDIInOut::sendViaDMA(const uint8_t* data, size_t length) {
+    if (tx_dma_channel_ < 0 || length == 0 || length > DMA_BUFFER_SIZE) {
+        return;  // DMA not available or invalid length
+    }
+
+    // Wait for previous transfer to complete
+    waitForDMA();
+
+    // Copy data to DMA buffer
+    memcpy(tx_dma_buffer_, data, length);
+
+    // Start DMA transfer
+    dma_busy_ = true;
+    dma_channel_set_read_addr(tx_dma_channel_, tx_dma_buffer_, false);
+    dma_channel_set_trans_count(tx_dma_channel_, length, true);  // Start immediately
+}
+
+void MIDIInOut::sendViaDMADirect(size_t length) {
+    if (tx_dma_channel_ < 0 || length == 0 || length > DMA_BUFFER_SIZE) {
+        return;  // DMA not available or invalid length
+    }
+
+    // Wait for previous transfer to complete
+    waitForDMA();
+
+    // Start DMA transfer directly from buffer (no memcpy needed)
+    dma_busy_ = true;
+    dma_channel_set_read_addr(tx_dma_channel_, tx_dma_buffer_, false);
+    dma_channel_set_trans_count(tx_dma_channel_, length, true);  // Start immediately
+}
+
+void MIDIInOut::waitForDMA() {
+    if (tx_dma_channel_ < 0 || !dma_busy_) {
+        return;
+    }
+
+    // Wait for DMA to complete
+    while (dma_channel_is_busy(tx_dma_channel_)) {
+        tight_loop_contents();
+    }
+
+    dma_busy_ = false;
 }

@@ -7,6 +7,8 @@
 #include "../hardware/memlnaut/Pins.hpp"
 #include <functional>
 #include <span>
+#include "hardware/dma.h"
+#include "hardware/uart.h"
 
 
 class MIDIInOut
@@ -16,6 +18,12 @@ public:
      * @brief Constructor (only instantiates memory and member variables).     *
      */
     MIDIInOut();
+
+    /**
+     * @brief Destructor - cleans up DMA resources
+     */
+    ~MIDIInOut();
+
     /**
      * @brief Sets up the MIDI interface on the required pins.
      * The CC numbers are set to the default values [0 .. (n_outputs-1)].
@@ -164,6 +172,16 @@ public:
      */
     void ClearAdvancedMappings();
 
+    /**
+     * @brief Enable/disable change tracking optimization
+     *
+     * When enabled, only sends CC messages when values change.
+     * Disable if you need to force send all values every time.
+     *
+     * @param enable True to track changes (default), false to always send
+     */
+    void SetChangeTracking(bool enable) { track_changes_ = enable; }
+
 protected:
     std::vector<uint8_t> cc_numbers_;
     size_t n_outputs_;
@@ -187,6 +205,22 @@ private:
     static void handleNoteOn(byte channel, byte note, byte velocity);
     static void handleNoteOff(byte channel, byte note, byte velocity);
     void RefreshUART_(void);
+
+    // DMA output support
+    static constexpr size_t DMA_BUFFER_SIZE = 1024;
+    int tx_dma_channel_;
+    uint8_t tx_dma_buffer_[DMA_BUFFER_SIZE];
+    volatile bool dma_busy_;
+    uint8_t midi_tx_pin_;
+
+    // Optimization: Track last sent values to skip unchanged CCs
+    std::vector<uint8_t> last_sent_values_;
+    bool track_changes_;
+
+    bool setupTxDMA(uart_inst_t* uart);
+    void sendViaDMA(const uint8_t* data, size_t length);
+    void sendViaDMADirect(size_t length);  // Send buffer directly without memcpy
+    void waitForDMA();
 
     // Inline helper for efficient value scaling
     inline uint8_t scaleValue(float param, const CCMapping& mapping) const {
