@@ -73,6 +73,10 @@ void DisplayDriver::Draw() {
         // tft_.setTextColor(TFT_WHITE);
         tft_.fillRect(0, 0, tft_.width(), 30, TFT_WHITE);
 
+        // Clear the redraw flag now that screen is cleared
+        // This allows rapid view changes while ensuring old content is removed
+        redraw_internal_ = false;
+
         // tft_.setFreeFont(&FreeSansBoldOblique24pt7b);
         // tft_.setTextFont(4);
 
@@ -104,10 +108,9 @@ void DisplayDriver::Draw() {
     }
     if (currentViewIndex_ < views_.size()) {
         // if (views_[currentViewIndex_]->NeedRedraw()) {
-        views_[currentViewIndex_]->Draw();  
+        views_[currentViewIndex_]->Draw();
         // }
     }
-    redraw_internal_ = false;
 
 
 }
@@ -125,12 +128,12 @@ void DisplayDriver::ChangeView(int delta) {
         }
         if (viewChange) {
             // If view changed, redraw the new view
+            redraw_internal_ = true;
             views_[lastViewIndex]->setVisible(false);
             views_[lastViewIndex]->removeFocus();
             views_[lastViewIndex]->OnHide();  // Call OnHide for the old view
             views_[currentViewIndex_]->setVisible(true);
             views_[currentViewIndex_]->OnDisplay();  // Call OnDisplay for the new view
-            redraw_internal_ = true;
         }
     }
 }
