@@ -217,6 +217,8 @@ private:
 
     bool resetMinMaxFlag = false;
 
+    spin_lock_t *mlpActive;
+
 };
 
 #endif // INTERFACERL_HPP

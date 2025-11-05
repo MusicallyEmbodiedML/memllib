@@ -117,12 +117,15 @@ void InterfaceRL::bind_RL_interface(bool disable_joystick) {
                 //store output
                 savedAction = action;
                 actionBeingDragged=true;
+                msgView->post("Where do you want it?");
             }else{
                 //button up
-                this->storeExperience(1.f, controlInput, savedAction);
-                actionBeingDragged=false;
+                if (actionBeingDragged) {
+                    this->storeExperience(1.f, controlInput, savedAction);
+                    actionBeingDragged=false;
+                    msgView->post("Here!");
+                }
             }
-            msgView->post(state ? "Where do you want it?" : "Here!");
         });
         // Set up ADC callbacks
         MEMLNaut::Instance()->setJoyXCallback([this](float value) {
@@ -165,8 +168,10 @@ void InterfaceRL::bind_RL_interface(bool disable_joystick) {
     });
     // Set up loop callback
     MEMLNaut::Instance()->setLoopCallback([this]() {
+        uint32_t save = spin_lock_blocking(mlpActive);
         this->optimiseSometimes();
         this->generateAction();
+        spin_unlock(mlpActive, save);
 
     });
 }
@@ -271,6 +276,8 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
 
     InterfaceBase::setup(n_inputs, n_outputs);
 
+    mlpActive = spin_lock_init(spin_lock_claim_unused(true));
+
     const std::vector<ACTIVATION_FUNCTIONS> activfuncs = {
         RELU, RELU, HARDSIGMOID
     };
@@ -284,6 +291,8 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
     };
 
     controlInput.resize(layers_nodes[0]);
+    action.resize(n_outputs, 0.5f);  // Initialize action vector with default values
+    mappingOutput.resize(n_outputs);
 
     //init networks
     synthMapping = std::make_shared<MLP<float> > (
@@ -326,6 +335,7 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
     fileSaveView = std::make_shared<BlockSelectView>("Save Model", TFT_BLUE);
     fileSaveView->SetOnSelectCallback([this] (size_t id) {
         fileSaveView->SetMessage("Saving model " + String(id));
+        uint32_t save = spin_lock_blocking(mlpActive);
         if (MEMLNaut::Instance()->startSD()) {
             if (this->_save_RL_to_SD(String(id))) {
                 fileSaveView->SetMessage("Model saved successfully to slot " + String(id));
@@ -336,12 +346,14 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
         } else {
             fileSaveView->SetMessage("SD card error - is it inserted and formatted?");
         }
+        spin_unlock(mlpActive, save);
     });
     MEMLNaut::Instance()->disp->AddView(fileSaveView);
 
     fileLoadView = std::make_shared<BlockSelectView>("Load Model", TFT_PURPLE);
     fileLoadView->SetOnSelectCallback([this] (size_t id) {
         fileLoadView->SetMessage("Loading model " + String(id));
+        uint32_t save = spin_lock_blocking(mlpActive);
         if (MEMLNaut::Instance()->startSD()) {
             if (this->_load_RL_from_SD(String(id))) {
                 fileLoadView->SetMessage("Model loaded successfully ");
@@ -352,6 +364,7 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
         } else {
             fileLoadView->SetMessage("SD card error - is it inserted and formatted?");
         }
+        spin_unlock(mlpActive, save);
 
     });
     MEMLNaut::Instance()->disp->AddView(fileLoadView);
@@ -381,9 +394,8 @@ bool InterfaceRL::_load_RL_from_SD(String id) {
 
 
 void InterfaceRL::optimise() {
-    //std::vector<trainStatelessRLItem> sample = replayMem.sample(batchSize);
     std::vector<size_t> sample = replayMem.sampleIndices(batchSize);
-    if (sample.size() >2) {
+    if (sample.size() >1) {
         //run sample through network
         size_t batchSizePos=0;
         size_t batchSizeNeg=0;
@@ -409,13 +421,33 @@ void InterfaceRL::optimise() {
             // }
 
             if (replayMem.getItem(i).reward > 0) {
-                tsPositive.first.push_back(replayMem.getItem(i).input);
-                tsPositive.second.push_back(replayMem.getItem(i).action);
+                auto input = replayMem.getItem(i).input;
+                auto action = replayMem.getItem(i).action;
+                // Serial.printf("[DEBUG] Adding pos exp %d: reward=%f, input_size=%d, action_size=%d\n",
+                //              i, replayMem.getItem(i).reward, input.size(), action.size());
+
+                // Validate data before adding
+                // if (input.empty() || action.empty()) {
+                //     Serial.printf("[DEBUG] *** SKIPPING exp %d: empty input or action! ***\n", i);
+                //     continue;
+                // }
+
+                tsPositive.first.push_back(input);
+                tsPositive.second.push_back(action);
                 batchSizePos++;
                 avgRewardPos+=replayMem.getItem(i).reward;
             }else{
-                tsNegative.first.push_back(replayMem.getItem(i).input);
-                tsNegative.second.push_back(replayMem.getItem(i).action);
+                auto input = replayMem.getItem(i).input;
+                auto action = replayMem.getItem(i).action;
+
+                // Validate data before adding
+                // if (input.empty() || action.empty()) {
+                //     Serial.printf("[DEBUG] *** SKIPPING neg exp %d: empty input or action! ***\n", i);
+                //     continue;
+                // }
+
+                tsNegative.first.push_back(input);
+                tsNegative.second.push_back(action);
                 batchSizeNeg++;
                 float reward = replayMem.getItem(i).reward;
                 avgRewardNeg+=reward;
@@ -423,10 +455,8 @@ void InterfaceRL::optimise() {
                 const float rewardCom = 1.f+ reward;
                 reward = reward + (0.005 * rewardCom);
 				replayMem.getItem(i).reward = reward; 
-                Serial.printf("neg rw %d %f\n", i, reward);
                 if (reward > -0.01) {
                     itemsToRemove.push_back(i);
-                    Serial.printf("Erasing neg exp %d\n",i);
                 }
             }
 
@@ -435,20 +465,55 @@ void InterfaceRL::optimise() {
         float lossNegative{0.f};
         if (batchSizePos > 0){
             avgRewardPos /= static_cast<float>(batchSizePos);
-            // Serial.printf("Training %d positive samples, avg reward: %f\n", batchSizePos, avgRewardPos);
+            float effectiveLR_pos = learningRateScaled * avgRewardPos;
+            // Serial.printf("[DEBUG] Pos batch: counter=%d, actual_data_size=%d (inputs), %d (outputs), avgReward=%f, LR=%f, effectiveLR=%f\n",
+            //              batchSizePos, tsPositive.first.size(), tsPositive.second.size(),
+            //              avgRewardPos, learningRateScaled, effectiveLR_pos);
+
+            // Check first sample for inf/nan
+            // if (!tsPositive.first.empty() && !tsPositive.first[0].empty()) {
+            //     bool hasInf = false;
+            //     for (const auto& val : tsPositive.first[0]) {
+            //         if (std::isinf(val) || std::isnan(val)) {
+            //             Serial.printf("[DEBUG] *** TRAINING DATA HAS INF/NAN in input! ***\n");
+            //             hasInf = true;
+            //             break;
+            //         }
+            //     }
+            //     if (!hasInf && !tsPositive.second.empty() && !tsPositive.second[0].empty()) {
+            //         for (const auto& val : tsPositive.second[0]) {
+            //             if (std::isinf(val) || std::isnan(val)) {
+            //                 Serial.printf("[DEBUG] *** TRAINING DATA HAS INF/NAN in target! ***\n");
+            //                 break;
+            //             }
+            //         }
+            //     }
+            // }
+
             lossPositive = synthMapping->TrainBatch(tsPositive, learningRateScaled * avgRewardPos, 1, batchSize, 0.f, false);
+            // Serial.printf("[DEBUG] Loss after positive TrainBatch: %f (inf=%d, nan=%d)\n",
+            //              lossPositive, std::isinf(lossPositive), std::isnan(lossPositive));
         }
         if (batchSizeNeg > 0){
             avgRewardNeg /= static_cast<float>(batchSizeNeg);
-            // Serial.printf("Training %d negative samples, avg reward: %f\n", batchSizeNeg, avgRewardNeg);
+            float effectiveLR_neg = learningRateScaled * 0.1f * avgRewardNeg;
+            // Serial.printf("[DEBUG] Neg batch: size=%d, avgReward=%f, LR=%f, effectiveLR=%f\n",
+            //              batchSizeNeg, avgRewardNeg, learningRateScaled, effectiveLR_neg);
             lossNegative = synthMapping->TrainBatch(tsNegative, learningRateScaled * 0.1 * avgRewardNeg, 1, batchSize, 0.f, false);
+            // Serial.printf("[DEBUG] Loss after negative TrainBatch: %f (inf=%d, nan=%d)\n",
+            //              lossNegative, std::isinf(lossNegative), std::isnan(lossNegative));
         }
 
         if (replayMem.removeItems(itemsToRemove)) {
             itemsToRemove.clear();
         };
 
+        // if (std::isinf(lossPositive) || std::isnan(lossPositive)) {
+        //     Serial.printf("WARNING: Invalid loss detected!\n");
+        //     lossPositive = 0.f;
+        // }        
         rlStatsView->setLoss(lossPositive);
+        // Serial.printf("l %f\n", lossPositive);
 
     }
 }
