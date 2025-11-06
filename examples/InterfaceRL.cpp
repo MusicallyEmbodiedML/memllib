@@ -304,7 +304,7 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
     );
 
     // synthMapping->InitXavier();
-    synthMapping->RandomiseWeightsAndBiasesLin(-0.9f,0.9f, 0, 0.5);
+    synthMapping->RandomiseWeightsAndBiasesLin(-1.2f,0.9f, 0, 0.5);
 
     rewardScale = 1.0f; // Default reward scale
 

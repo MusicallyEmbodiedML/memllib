@@ -70,9 +70,15 @@ class ADSRLite {
     }
 
     void release() {
-        relInc = 1.f/((releaseMs / 1000.f) * kSampleRate);
-        relInc *= envelopeValue;
-        stage = envStage::RELEASE;
+        if (releaseMs > 0) {
+            relInc = 1.f/((releaseMs / 1000.f) * kSampleRate);
+            relInc *= envelopeValue;
+            stage = envStage::RELEASE;
+        }
+        else {
+            relInc = 0.f;
+            stage = envStage::WAITTOTRIG;            
+        }
     }
 
 private:
