@@ -467,8 +467,8 @@ void InterfaceRL::optimise() {
             avgRewardPos /= static_cast<float>(batchSizePos);
             float effectiveLR_pos = learningRateScaled * avgRewardPos;
             // Serial.printf("[DEBUG] Pos batch: counter=%d, actual_data_size=%d (inputs), %d (outputs), avgReward=%f, LR=%f, effectiveLR=%f\n",
-            //              batchSizePos, tsPositive.first.size(), tsPositive.second.size(),
-            //              avgRewardPos, learningRateScaled, effectiveLR_pos);
+                        //  batchSizePos, tsPositive.first.size(), tsPositive.second.size(),
+                        //  avgRewardPos, learningRateScaled, effectiveLR_pos);
 
             // Check first sample for inf/nan
             // if (!tsPositive.first.empty() && !tsPositive.first[0].empty()) {
@@ -499,7 +499,7 @@ void InterfaceRL::optimise() {
             float effectiveLR_neg = learningRateScaled * 0.1f * avgRewardNeg;
             // Serial.printf("[DEBUG] Neg batch: size=%d, avgReward=%f, LR=%f, effectiveLR=%f\n",
             //              batchSizeNeg, avgRewardNeg, learningRateScaled, effectiveLR_neg);
-            lossNegative = synthMapping->TrainBatch(tsNegative, learningRateScaled * 0.1 * avgRewardNeg, 1, batchSize, 0.f, false);
+            lossNegative = synthMapping->TrainBatch(tsNegative, learningRateScaled * 0.3 * avgRewardNeg, 1, batchSize, 0.f, false);
             // Serial.printf("[DEBUG] Loss after negative TrainBatch: %f (inf=%d, nan=%d)\n",
             //              lossNegative, std::isinf(lossNegative), std::isnan(lossNegative));
         }

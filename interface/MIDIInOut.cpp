@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include "../PicoDefs.hpp"
 #include <unordered_set>
+#include "hardware/dma.h"
 
 
 
@@ -25,22 +26,40 @@ MIDIInOut::MIDIInOut() : n_outputs_(0),
                          tx_dma_channel_(-1),
                          dma_busy_(false),
                          midi_tx_pin_(0),
+                         rx_dma_channel_(-1),
+                         rx_read_pos_(0),
+                         parser_state_(0),
+                         parser_status_(0),
+                         parser_index_(0),
+                         running_status_(0),
+                         msg_write_pos_(0),
+                         msg_read_pos_(0),
+                         max_messages_per_poll_(16),
+                         max_bytes_per_poll_(64),
                          track_changes_(true) {
     instance_ = this;
     memset(tx_dma_buffer_, 0, sizeof(tx_dma_buffer_));
+    memset(rx_dma_buffer_, 0, sizeof(rx_dma_buffer_));
+    memset(parser_data_, 0, sizeof(parser_data_));
+    memset(msg_queue_, 0, sizeof(msg_queue_));
 }
 
 MIDIInOut::~MIDIInOut() {
-    // Clean up DMA channel if allocated
+    // Clean up DMA channels if allocated
     if (tx_dma_channel_ >= 0) {
         dma_channel_abort(tx_dma_channel_);
         dma_channel_unclaim(tx_dma_channel_);
         tx_dma_channel_ = -1;
     }
+    if (rx_dma_channel_ >= 0) {
+        dma_channel_abort(rx_dma_channel_);
+        dma_channel_unclaim(rx_dma_channel_);
+        rx_dma_channel_ = -1;
+    }
 }
 
 void MIDIInOut::Setup(size_t n_outputs,
-    bool midi_through, uint8_t midi_tx, uint8_t midi_rx) {
+    bool midi_through, uint8_t midi_tx, uint8_t midi_rx, bool use_dma_rx) {
     n_outputs_ = n_outputs;
     cc_numbers_.resize(n_outputs);
 
@@ -54,12 +73,32 @@ void MIDIInOut::Setup(size_t n_outputs,
     while(!Serial2) { delay(1); } // Wait for Serial2
     delay(100); // Allow port to stabilize
 
+    // Check DMA channel availability before claiming
+    int available_channels = 0;
+    for (int i = 0; i < NUM_DMA_CHANNELS; i++) {
+        if (!dma_channel_is_claimed(i)) {
+            available_channels++;
+        }
+    }
+    DEBUG_PRINTF("DMA channels available: %d / %d\n", available_channels, NUM_DMA_CHANNELS);
+
     // Setup DMA for TX (Serial2 uses uart1 on RP2040)
     midi_tx_pin_ = midi_tx;
     if (!setupTxDMA(uart1)) {
         DEBUG_PRINTLN("Warning: DMA TX setup failed, falling back to regular writes");
     } else {
-        DEBUG_PRINTLN("DMA TX initialized successfully");
+        DEBUG_PRINTF("DMA TX initialized (channel %d)\n", tx_dma_channel_);
+    }
+
+    // Setup DMA for RX only if explicitly requested (to avoid DMA channel conflicts)
+    if (use_dma_rx) {
+        if (!setupRxDMA(uart1)) {
+            DEBUG_PRINTLN("Warning: DMA RX setup failed, falling back to MIDI.read()");
+        } else {
+            DEBUG_PRINTF("DMA RX initialized (channel %d)\n", rx_dma_channel_);
+        }
+    } else {
+        DEBUG_PRINTLN("MIDI RX using Arduino MIDI library (DMA RX disabled to preserve channels)");
     }
 
     // Initialize CC numbers to default values [0 .. (n_outputs-1)]
@@ -119,9 +158,27 @@ void MIDIInOut::Setup(size_t n_outputs,
 
 void MIDIInOut::Poll()
 {
-    // RefreshUART_(); // Refresh UART if needed
+    // Use DMA-based processing if available
+    if (rx_dma_channel_ >= 0) {
+        // Process incoming bytes from DMA buffer
+        processRxBuffer();
 
-    MIDI.read();
+        // Process queued messages with rate limiting
+        processQueuedMessages();
+    } else {
+        // Non-DMA path: Read from Serial2 directly with rate limiting
+        // Process limited number of bytes per poll to prevent blocking
+        uint32_t bytes_processed = 0;
+
+        while (Serial2.available() && bytes_processed < max_bytes_per_poll_) {
+            uint8_t byte = Serial2.read();
+            processMidiByte(byte);
+            bytes_processed++;
+        }
+
+        // Process queued messages with rate limiting
+        processQueuedMessages();
+    }
 }
 
 
@@ -420,4 +477,183 @@ void MIDIInOut::waitForDMA() {
     }
 
     dma_busy_ = false;
+}
+
+// RX DMA Implementation
+bool MIDIInOut::setupRxDMA(uart_inst_t* uart) {
+    // Claim DMA channel for RX (don't panic on failure)
+    rx_dma_channel_ = dma_claim_unused_channel(false);
+    if (rx_dma_channel_ < 0) {
+        return false;  // No DMA channel available
+    }
+
+    // Configure RX DMA with ring buffer
+    dma_channel_config c = dma_channel_get_default_config(rx_dma_channel_);
+    channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
+    channel_config_set_read_increment(&c, false);  // Always read from UART DR
+    channel_config_set_write_increment(&c, true);  // Increment write address
+    channel_config_set_dreq(&c, uart_get_dreq(uart, false));  // UART RX DREQ
+
+    // Enable ring buffer on write (wraps at RX_BUFFER_SIZE)
+    uint32_t ring_size = 0;
+    uint32_t size = RX_BUFFER_SIZE;
+    while (size >>= 1) ring_size++;
+    channel_config_set_ring(&c, true, ring_size);  // true = wrap on write
+
+    // Start the DMA channel
+    dma_channel_configure(
+        rx_dma_channel_,
+        &c,
+        rx_dma_buffer_,                 // Write to rx_buffer
+        &uart_get_hw(uart)->dr,         // Read from UART data register
+        0xFFFFFFFF,                     // Transfer count (infinite with ring)
+        true                            // Start immediately
+    );
+
+    return true;
+}
+
+uint32_t MIDIInOut::getRxWritePos() {
+    // Calculate current write position from DMA transfer count
+    uint32_t remaining = dma_channel_hw_addr(rx_dma_channel_)->transfer_count;
+    return (0xFFFFFFFF - remaining) & (RX_BUFFER_SIZE - 1);
+}
+
+void MIDIInOut::processRxBuffer() {
+    uint32_t write_pos = getRxWritePos();
+
+    // Process all available bytes
+    while (rx_read_pos_ != write_pos) {
+        uint8_t byte = rx_dma_buffer_[rx_read_pos_];
+        rx_read_pos_ = (rx_read_pos_ + 1) & (RX_BUFFER_SIZE - 1);
+
+        processMidiByte(byte);
+    }
+}
+
+void MIDIInOut::processMidiByte(uint8_t byte) {
+    // Check if this is a status byte
+    if (byte & 0x80) {
+        // System Real-Time messages (single byte, can interrupt other messages)
+        if (byte >= 0xF8) {
+            // Ignore system real-time for now (Clock, Start, Stop, etc.)
+            return;
+        }
+
+        // System Common messages or Channel Voice messages
+        parser_status_ = byte;
+        parser_index_ = 0;
+
+        // Determine expected data bytes
+        uint8_t msg_type = byte & 0xF0;
+
+        if (msg_type == 0xF0) {
+            // System messages - ignore SysEx for this implementation
+            if (byte == 0xF0) {
+                parser_state_ = 0xFF;  // Ignore until 0xF7
+            }
+            return;
+        }
+
+        // Channel voice message
+        running_status_ = parser_status_;
+
+    } else if (parser_status_ == 0 && running_status_ != 0) {
+        // Use running status
+        parser_status_ = running_status_;
+        parser_index_ = 0;
+    }
+
+    // Ignore if in SysEx ignore mode
+    if (parser_state_ == 0xFF) {
+        if (byte == 0xF7) parser_state_ = 0;
+        return;
+    }
+
+    // Process data bytes
+    if (!(byte & 0x80) && parser_status_ != 0) {
+        uint8_t msg_type = parser_status_ & 0xF0;
+
+        // Determine how many data bytes we need
+        uint8_t expected_bytes = 2;
+        if (msg_type == 0xC0 || msg_type == 0xD0) {  // Program Change or Channel Aftertouch
+            expected_bytes = 1;
+        }
+
+        parser_data_[parser_index_++] = byte;
+
+        if (parser_index_ >= expected_bytes) {
+            // Complete message received - queue it
+            uint8_t channel = (parser_status_ & 0x0F) + 1;  // 1-16
+            uint8_t data2 = (expected_bytes > 1) ? parser_data_[1] : 0;
+
+            queueMessage(msg_type, channel, parser_data_[0], data2);
+
+            // Reset for next message (but keep running status)
+            parser_index_ = 0;
+        }
+    }
+}
+
+void MIDIInOut::queueMessage(uint8_t type, uint8_t channel, uint8_t data1, uint8_t data2) {
+    // Add message to queue
+    uint32_t next_pos = (msg_write_pos_ + 1) % MSG_QUEUE_SIZE;
+
+    // Check if queue is full (drop message if full)
+    if (next_pos == msg_read_pos_) {
+        return;  // Queue full, drop message
+    }
+
+    msg_queue_[msg_write_pos_].type = type;
+    msg_queue_[msg_write_pos_].channel = channel;
+    msg_queue_[msg_write_pos_].data1 = data1;
+    msg_queue_[msg_write_pos_].data2 = data2;
+
+    msg_write_pos_ = next_pos;
+}
+
+void MIDIInOut::processQueuedMessages() {
+    uint32_t processed = 0;
+
+    // Process messages up to the limit
+    while (msg_read_pos_ != msg_write_pos_) {
+        // Check rate limit
+        if (max_messages_per_poll_ > 0 && processed >= max_messages_per_poll_) {
+            break;  // Hit rate limit, process more next time
+        }
+
+        const MIDIMessage& msg = msg_queue_[msg_read_pos_];
+        msg_read_pos_ = (msg_read_pos_ + 1) % MSG_QUEUE_SIZE;
+        processed++;
+
+        // Call appropriate callback
+        switch (msg.type) {
+            case 0x90:  // Note On
+                if (msg.data2 == 0) {
+                    // Velocity 0 = Note Off
+                    if (note_callback_) {
+                        note_callback_(false, msg.data1, 0);
+                    }
+                } else {
+                    if (note_callback_) {
+                        note_callback_(true, msg.data1, msg.data2);
+                    }
+                }
+                break;
+
+            case 0x80:  // Note Off
+                if (note_callback_) {
+                    note_callback_(false, msg.data1, msg.data2);
+                }
+                break;
+
+            case 0xB0:  // Control Change
+                if (cc_callback_) {
+                    cc_callback_(msg.data1, msg.data2);
+                }
+                break;
+
+            // Add more message types as needed
+        }
+    }
 }

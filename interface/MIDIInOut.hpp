@@ -29,13 +29,16 @@ public:
      * The CC numbers are set to the default values [0 .. (n_outputs-1)].
      *
      * @param n_outputs Number of output parameters that will be expected by SendParamsAsMIDICC().
+     * @param midi_through Enable MIDI thru
      * @param midi_tx TX pin the MIDI device is connected to (default: Pins::MIDI_TX).
      * @param midi_rx RX pin the MIDI device is connected to (default: Pins::MIDI_RX).
+     * @param use_dma_rx Enable DMA for RX (default: false to avoid conflicts with audio/neural net DMA)
      */
     void Setup(size_t n_outputs,
                bool midi_through = false,
                uint8_t midi_tx = Pins::MIDI_TX,
-               uint8_t midi_rx = Pins::MIDI_RX);
+               uint8_t midi_rx = Pins::MIDI_RX,
+               bool use_dma_rx = false);
     /**
      * @brief Set the MIDI channel to send messages on.
      *
@@ -182,6 +185,25 @@ public:
      */
     void SetChangeTracking(bool enable) { track_changes_ = enable; }
 
+    /**
+     * @brief Set maximum messages to process per Poll() call
+     *
+     * Limits how many incoming MIDI messages are processed per poll,
+     * preventing message floods from blocking the main loop.
+     *
+     * @param max_messages Maximum messages per poll (default: 16, 0 = unlimited)
+     */
+    void SetMaxMessagesPerPoll(uint32_t max_messages) { max_messages_per_poll_ = max_messages; }
+
+    /**
+     * @brief Set maximum bytes to read from Serial per Poll() call (non-DMA mode)
+     *
+     * Limits how many bytes are read from the UART per poll to prevent blocking.
+     *
+     * @param max_bytes Maximum bytes per poll (default: 64)
+     */
+    void SetMaxBytesPerPoll(uint32_t max_bytes) { max_bytes_per_poll_ = max_bytes; }
+
 protected:
     std::vector<uint8_t> cc_numbers_;
     size_t n_outputs_;
@@ -213,14 +235,49 @@ private:
     volatile bool dma_busy_;
     uint8_t midi_tx_pin_;
 
+    // DMA input support
+    static constexpr size_t RX_BUFFER_SIZE = 512;
+    int rx_dma_channel_;
+    uint8_t rx_dma_buffer_[RX_BUFFER_SIZE] __attribute__((aligned(RX_BUFFER_SIZE)));
+    uint32_t rx_read_pos_;
+
+    // MIDI parser state
+    uint8_t parser_state_;
+    uint8_t parser_status_;
+    uint8_t parser_data_[2];
+    uint8_t parser_index_;
+    uint8_t running_status_;
+
+    // Message buffering for rate limiting
+    struct MIDIMessage {
+        uint8_t type;
+        uint8_t channel;
+        uint8_t data1;
+        uint8_t data2;
+    };
+    static constexpr size_t MSG_QUEUE_SIZE = 64;
+    MIDIMessage msg_queue_[MSG_QUEUE_SIZE];
+    volatile uint32_t msg_write_pos_;
+    volatile uint32_t msg_read_pos_;
+    uint32_t max_messages_per_poll_;
+    uint32_t max_bytes_per_poll_;
+
     // Optimization: Track last sent values to skip unchanged CCs
     std::vector<uint8_t> last_sent_values_;
     bool track_changes_;
 
     bool setupTxDMA(uart_inst_t* uart);
+    bool setupRxDMA(uart_inst_t* uart);
     void sendViaDMA(const uint8_t* data, size_t length);
     void sendViaDMADirect(size_t length);  // Send buffer directly without memcpy
     void waitForDMA();
+
+    // RX processing
+    uint32_t getRxWritePos();
+    void processRxBuffer();
+    void processMidiByte(uint8_t byte);
+    void queueMessage(uint8_t type, uint8_t channel, uint8_t data1, uint8_t data2);
+    void processQueuedMessages();
 
     // Inline helper for efficient value scaling
     inline uint8_t scaleValue(float param, const CCMapping& mapping) const {
