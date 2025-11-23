@@ -403,6 +403,9 @@ private:
     float y; //pos
     float z; //pole
     float c; //filter coefficient
+    constexpr static __not_in_flash("maxi") float SQRT2 = 1.41421356237f;
+    float svf_low = 0.f;   // For Chamberlin SVF
+    float svf_band = 0.f;  // For Chamberlin SVF
 
 public:
     maxiFilter();
@@ -410,16 +413,83 @@ public:
     float resonance;
     /** A resonant low pass filter
     * \param input A signal
-    * \param cutoff1 The cutoff frequency (in Hz)
+    * \param cutoff1 The cutoff frequency (in Hz) (unstable > sr/4)
     * \param resonance The amount of resonance
     */
-    float lores(float input, float cutoff1, float resonance);
+    //awesome. cuttof is freq in hz. res is between 1 and whatever. Watch out!
+    __force_inline float lores(float input,float cutoff1, float resonance) {
+        cutoff=cutoff1;
+        // if (cutoff<10) cutoff=10;
+        // if (cutoff>(maxiSettings::sampleRate)) cutoff=(maxiSettings::sampleRate);
+        // if (resonance<1.) resonance = 1.;
+        z=cosf(TWOPI*cutoff*maxiSettings::one_over_sampleRate);
+        c=2.f-2.f*z;
+        const float r=(SQRT2*sqrtf(-powf((z-1.0f),3.0f))+resonance*(z-1.f))/(resonance*(z-1.f));
+        x=x+(input-y)*c;
+        y=y+x;
+        x=x*r;
+        output=y;
+        return(output);
+    }
     /** A resonant high pass filter
     * \param input A signal
     * \param cutoff1 The cutoff frequency (in Hz)
     * \param resonance The amount of resonance
     */
-    float hires(float input, float cutoff1, float resonance);
+    __force_inline float hires(float input,float cutoff1, float resonance) {
+        cutoff=cutoff1;
+        // if (cutoff<10) cutoff=10;
+        // if (cutoff>(maxiSettings::sampleRate)) cutoff=(maxiSettings::sampleRate);
+        // if (resonance<1.) resonance = 1.;
+        z=cosf(TWOPI*cutoff*maxiSettings::one_over_sampleRate);
+        c=2.f-2.f*z;
+        const float r=(SQRT2*sqrtf(-powf((z-1.0f),3.0f))+resonance*(z-1.f))/(resonance*(z-1.f));
+        x=x+(input-y)*c;
+        y=y+x;
+        x=x*r;
+        output=input-y;
+        return(output);
+    }
+
+    __force_inline float loresChamberlain(float input, float cutoff1, float resonance) {
+        // Clamp parameters
+        // cutoff1 = fminf(cutoff1, maxiSettings::sampleRate * 0.45f);
+        // cutoff1 = fmaxf(cutoff1, 10.f);
+        // resonance = fmaxf(0.5f, fminf(resonance, 20.f));
+        
+        // Chamberlin SVF coefficients with pre-warping
+        const float omega = TWOPI * cutoff1 * maxiSettings::one_over_sampleRate;
+        const float f = 2.f * sinf(omega * 0.5f);  // Pre-warped frequency
+        const float q = 1.f / resonance;
+        const float qAdjust = 1.f + q * f + f * f;  // Stability compensation
+        
+        // State variable filter topology
+        svf_low += f * svf_band;
+        const float high = input - svf_low - q * svf_band;
+        svf_band += f * high / qAdjust;  // Damping
+        
+        return svf_low;
+    }    
+
+    __force_inline float hiresChamberlain(float input, float cutoff1, float resonance) {
+        // Clamp parameters
+        cutoff1 = fminf(cutoff1, maxiSettings::sampleRate * 0.45f);
+        cutoff1 = fmaxf(cutoff1, 10.f);
+        resonance = fmaxf(0.5f, fminf(resonance, 20.f));
+        
+        // Chamberlin SVF coefficients
+        const float omega = TWOPI * cutoff1 * maxiSettings::one_over_sampleRate;
+        const float f = 2.f * sinf(omega * 0.5f);
+        const float q = 1.f / resonance;
+        const float qAdjust = 1.f + q * f + f * f;
+        
+        // State variable filter topology
+        svf_low += f * svf_band;
+        const float high = input - svf_low - q * svf_band;  // HIGH PASS output
+        svf_band += f * high / qAdjust;
+        
+        return high;  // Return highpass instead of lowpass
+    }    
 
     /** A resonant band pass filter
     * \param input A signal
@@ -1045,11 +1115,11 @@ public:
 
     /*!Convert from amplitude to decibels \param amp Amplitude*/
     static float ampToDbs(float amp) {
-        return std::log10(amp) * 20.0;
+        return std::log10(amp + 1e-7) * 20.0f;
     }
     /*!Convert from decibels to amplitude \param dbs Decibels*/
     static float dbsToAmp(float dbs) {
-        return std::pow(10.0, dbs * 0.05);
+        return powf(10.f, dbs * 0.05f);
     }
 };
 
@@ -1504,11 +1574,156 @@ public:
 // /** Biquad filters
 //  * based on http://www.earlevel.com/main/2011/01/02/biquad-formulas/ and https://ccrma.stanford.edu/~jos/fp/Direct_Form_II.html
 //  */
+// class maxiBiquad
+// {
+// public:
+//     maxiBiquad() {};
+//     /*! A variety of filter types*/
+//     enum filterTypes
+//     {
+//         LOWPASS,
+//         HIGHPASS,
+//         BANDPASS,
+//         NOTCH,
+//         PEAK,
+//         LOWSHELF,
+//         HIGHSHELF
+//     };
+
+//     /*! Process a signal through the filter \param input A signal*/
+//     inline float __attribute__((always_inline)) play(const float input)
+//     {
+//         v0_ = input - (b1 * v1_) - (b2 * v2_);
+//         const float y = (a0 * v0_) + (a1 * v1_) + (a2 * v2_);
+//         v2_ = v1_;
+//         v1_ = v0_;
+//         return y;
+//     }
+
+//     /** Configure the filter
+//      * \param filtType  The type of filter, set from maxiBiquad::filterTypes
+//      * \param cutoff The filter cutoff frequency in Hz
+//      * \param Q The resonance of the filter
+//      * \param peakGain The gain of the filter (only used for PEAK, HIGHSHELF and LOWSHELF)
+//      */
+//     inline void set(filterTypes filtType, float cutoff, float Q, float peakGain)
+//     {
+//         float norm = 0;
+//         float V = powf(10.0, fabsf(peakGain) * 0.05f);
+//         float K = tanf(PI * cutoff * maxiSettings::one_over_sampleRate);
+//         switch (filtType)
+//         {
+//         case LOWPASS:
+//             norm = 1.0 / (1.0 + K / Q + K * K);
+//             a0 = K * K * norm;
+//             a1 = 2.0 * a0;
+//             a2 = a0;
+//             b1 = 2.0 * (K * K - 1.0) * norm;
+//             b2 = (1.0 - K / Q + K * K) * norm;
+//             break;
+
+//         case HIGHPASS:
+//             norm = 1. / (1. + K / Q + K * K);
+//             a0 = 1 * norm;
+//             a1 = -2 * a0;
+//             a2 = a0;
+//             b1 = 2 * (K * K - 1) * norm;
+//             b2 = (1 - K / Q + K * K) * norm;
+//             break;
+
+//         case BANDPASS:
+//             norm = 1. / (1. + K / Q + K * K);
+//             a0 = K / Q * norm;
+//             a1 = 0.;
+//             a2 = -a0;
+//             b1 = 2. * (K * K - 1.) * norm;
+//             b2 = (1. - K / Q + K * K) * norm;
+//             break;
+
+//         case NOTCH:
+//             norm = 1. / (1. + K / Q + K * K);
+//             a0 = (1. + K * K) * norm;
+//             a1 = 2. * (K * K - 1.) * norm;
+//             a2 = a0;
+//             b1 = a1;
+//             b2 = (1. - K / Q + K * K) * norm;
+//             break;
+
+//         case PEAK:
+//             if (peakGain >= 0.0)
+//             { // boost
+//                 norm = 1. / (1. + 1. / Q * K + K * K);
+//                 a0 = (1. + V / Q * K + K * K) * norm;
+//                 a1 = 2. * (K * K - 1.) * norm;
+//                 a2 = (1. - V / Q * K + K * K) * norm;
+//                 b1 = a1;
+//                 b2 = (1. - 1. / Q * K + K * K) * norm;
+//             }
+//             else
+//             { // cut
+//                 norm = 1. / (1. + V / Q * K + K * K);
+//                 a0 = (1. + 1 / Q * K + K * K) * norm;
+//                 a1 = 2. * (K * K - 1) * norm;
+//                 a2 = (1. - 1. / Q * K + K * K) * norm;
+//                 b1 = a1;
+//                 b2 = (1. - V / Q * K + K * K) * norm;
+//             }
+//             break;
+//         case LOWSHELF:
+//             if (peakGain >= 0.)
+//             { // boost
+//                 norm = 1.f / (1.f + SQRT2 * K + K * K);
+//                 a0 = (1. + sqrtf(2.f * V) * K + V * K * K) * norm;
+//                 a1 = 2. * (V * K * K - 1.) * norm;
+//                 a2 = (1. - sqrtf(2. * V) * K + V * K * K) * norm;
+//                 b1 = 2. * (K * K - 1.) * norm;
+//                 b2 = (1. - SQRT2 * K + K * K) * norm;
+//             }
+//             else
+//             { // cut
+//                 norm = 1. / (1. + sqrt(2. * V) * K + V * K * K);
+//                 a0 = (1. + SQRT2 * K + K * K) * norm;
+//                 a1 = 2. * (K * K - 1.) * norm;
+//                 a2 = (1. - SQRT2 * K + K * K) * norm;
+//                 b1 = 2. * (V * K * K - 1.) * norm;
+//                 b2 = (1. - sqrt(2. * V) * K + V * K * K) * norm;
+//             }
+//             break;
+//         case HIGHSHELF:
+//             if (peakGain >= 0.)
+//             { // boost
+//                 norm = 1. / (1. + SQRT2 * K + K * K);
+//                 a0 = (V + sqrt(2. * V) * K + K * K) * norm;
+//                 a1 = 2. * (K * K - V) * norm;
+//                 a2 = (V - sqrt(2. * V) * K + K * K) * norm;
+//                 b1 = 2. * (K * K - 1) * norm;
+//                 b2 = (1. - SQRT2 * K + K * K) * norm;
+//             }
+//             else
+//             { // cut
+//                 norm = 1. / (V + sqrt(2. * V) * K + K * K);
+//                 a0 = (1. + SQRT2 * K + K * K) * norm;
+//                 a1 = 2. * (K * K - 1.) * norm;
+//                 a2 = (1. - SQRT2 * K + K * K) * norm;
+//                 b1 = 2. * (K * K - V) * norm;
+//                 b2 = (V - sqrt(2. * V) * K + K * K) * norm;
+//             }
+//             break;
+//         }
+//     }
+
+// private:
+//     float a0 = 0, a1 = 0, a2 = 0, b1 = 0, b2 = 0;
+//     // filterTypes filterType;
+//     const float SQRT2 = sqrt(2.f);
+//     float v0_ = 0, v1_ = 0, v2_ = 0;
+// };
+
 class maxiBiquad
 {
 public:
     maxiBiquad() {};
-    /*! A variety of filter types*/
+    
     enum filterTypes
     {
         LOWPASS,
@@ -1520,133 +1735,162 @@ public:
         HIGHSHELF
     };
 
-    /*! Process a signal through the filter \param input A signal*/
-    inline float __attribute__((always_inline)) play(const float input)
+    // HOT PATH - optimized for Cortex-M33 FPU
+    __attribute__((hot)) __attribute__((always_inline)) 
+    inline float play(const float input)
     {
-        v0_ = input - (b1 * v1_) - (b2 * v2_);
-        const float y = (a0 * v0_) + (a1 * v1_) + (a2 * v2_);
+        // Reordered for better FMA (fused multiply-add) utilization
+        const float v0 = input - (b1 * v1_) - (b2 * v2_);
+        const float y = (a0 * v0) + (a1 * v1_) + (a2 * v2_);
+        
+        // Shift state - compiler will optimize register usage
         v2_ = v1_;
-        v1_ = v0_;
+        v1_ = v0;
+        
         return y;
     }
 
-    /** Configure the filter
-     * \param filtType  The type of filter, set from maxiBiquad::filterTypes
-     * \param cutoff The filter cutoff frequency in Hz
-     * \param Q The resonance of the filter
-     * \param peakGain The gain of the filter (only used for PEAK, HIGHSHELF and LOWSHELF)
-     */
     inline void set(filterTypes filtType, float cutoff, float Q, float peakGain)
     {
-        float norm = 0;
-        float V = powf(10.0, abs(peakGain) / 20.0);
-        float K = tanf(PI * cutoff / maxiSettings::sampleRate);
+        // Pre-compute common terms
+        const float K = tanf(PI * cutoff * maxiSettings::one_over_sampleRate);
+        const float K2 = K * K;
+        const float K_Q = K / Q;
+        const float norm_denom = 1.0f + K_Q + K2;
+        
         switch (filtType)
         {
         case LOWPASS:
-            norm = 1.0 / (1.0 + K / Q + K * K);
-            a0 = K * K * norm;
-            a1 = 2.0 * a0;
+        {
+            const float norm = 1.0f / norm_denom;
+            a0 = K2 * norm;
+            a1 = 2.0f * a0;
             a2 = a0;
-            b1 = 2.0 * (K * K - 1.0) * norm;
-            b2 = (1.0 - K / Q + K * K) * norm;
+            b1 = 2.0f * (K2 - 1.0f) * norm;
+            b2 = (1.0f - K_Q + K2) * norm;
             break;
+        }
 
         case HIGHPASS:
-            norm = 1. / (1. + K / Q + K * K);
-            a0 = 1 * norm;
-            a1 = -2 * a0;
+        {
+            const float norm = 1.0f / norm_denom;
+            a0 = norm;
+            a1 = -2.0f * a0;
             a2 = a0;
-            b1 = 2 * (K * K - 1) * norm;
-            b2 = (1 - K / Q + K * K) * norm;
+            b1 = 2.0f * (K2 - 1.0f) * norm;
+            b2 = (1.0f - K_Q + K2) * norm;
             break;
+        }
 
         case BANDPASS:
-            norm = 1. / (1. + K / Q + K * K);
-            a0 = K / Q * norm;
-            a1 = 0.;
+        {
+            const float norm = 1.0f / norm_denom;
+            a0 = K_Q * norm;
+            a1 = 0.0f;
             a2 = -a0;
-            b1 = 2. * (K * K - 1.) * norm;
-            b2 = (1. - K / Q + K * K) * norm;
+            b1 = 2.0f * (K2 - 1.0f) * norm;
+            b2 = (1.0f - K_Q + K2) * norm;
             break;
+        }
 
         case NOTCH:
-            norm = 1. / (1. + K / Q + K * K);
-            a0 = (1. + K * K) * norm;
-            a1 = 2. * (K * K - 1.) * norm;
+        {
+            const float norm = 1.0f / norm_denom;
+            const float one_plus_K2 = 1.0f + K2;
+            a0 = one_plus_K2 * norm;
+            a1 = 2.0f * (K2 - 1.0f) * norm;
             a2 = a0;
             b1 = a1;
-            b2 = (1. - K / Q + K * K) * norm;
+            b2 = (1.0f - K_Q + K2) * norm;
             break;
+        }
 
         case PEAK:
-            if (peakGain >= 0.0)
+        {
+            const float V = powf(10.0f, fabsf(peakGain) * 0.05f);
+            const float V_Q = V / Q;
+            
+            if (peakGain >= 0.0f)
             { // boost
-                norm = 1. / (1. + 1. / Q * K + K * K);
-                a0 = (1. + V / Q * K + K * K) * norm;
-                a1 = 2. * (K * K - 1.) * norm;
-                a2 = (1. - V / Q * K + K * K) * norm;
+                const float norm = 1.0f / norm_denom;
+                a0 = (1.0f + V_Q * K + K2) * norm;
+                a1 = 2.0f * (K2 - 1.0f) * norm;
+                a2 = (1.0f - V_Q * K + K2) * norm;
                 b1 = a1;
-                b2 = (1. - 1. / Q * K + K * K) * norm;
+                b2 = (1.0f - K_Q + K2) * norm;
             }
             else
             { // cut
-                norm = 1. / (1. + V / Q * K + K * K);
-                a0 = (1. + 1 / Q * K + K * K) * norm;
-                a1 = 2. * (K * K - 1) * norm;
-                a2 = (1. - 1. / Q * K + K * K) * norm;
+                const float norm = 1.0f / (1.0f + V_Q * K + K2);
+                a0 = norm_denom * norm;
+                a1 = 2.0f * (K2 - 1.0f) * norm;
+                a2 = (1.0f - K_Q + K2) * norm;
                 b1 = a1;
-                b2 = (1. - V / Q * K + K * K) * norm;
+                b2 = (1.0f - V_Q * K + K2) * norm;
             }
             break;
+        }
+        
         case LOWSHELF:
-            if (peakGain >= 0.)
+        {
+            const float V = powf(10.0f, fabsf(peakGain) * 0.05f);
+            const float VK2 = V * K2;
+            
+            if (peakGain >= 0.0f)
             { // boost
-                norm = 1. / (1. + SQRT2 * K + K * K);
-                a0 = (1. + sqrt(2. * V) * K + V * K * K) * norm;
-                a1 = 2. * (V * K * K - 1.) * norm;
-                a2 = (1. - sqrt(2. * V) * K + V * K * K) * norm;
-                b1 = 2. * (K * K - 1.) * norm;
-                b2 = (1. - SQRT2 * K + K * K) * norm;
+                const float norm = 1.0f / (1.0f + SQRT2 * K + K2);
+                const float sqrt2V = sqrtf(2.0f * V);
+                a0 = (1.0f + sqrt2V * K + VK2) * norm;
+                a1 = 2.0f * (VK2 - 1.0f) * norm;
+                a2 = (1.0f - sqrt2V * K + VK2) * norm;
+                b1 = 2.0f * (K2 - 1.0f) * norm;
+                b2 = (1.0f - SQRT2 * K + K2) * norm;
             }
             else
             { // cut
-                norm = 1. / (1. + sqrt(2. * V) * K + V * K * K);
-                a0 = (1. + SQRT2 * K + K * K) * norm;
-                a1 = 2. * (K * K - 1.) * norm;
-                a2 = (1. - SQRT2 * K + K * K) * norm;
-                b1 = 2. * (V * K * K - 1.) * norm;
-                b2 = (1. - sqrt(2. * V) * K + V * K * K) * norm;
+                const float sqrt2V = sqrtf(2.0f * V);
+                const float norm = 1.0f / (1.0f + sqrt2V * K + VK2);
+                a0 = (1.0f + SQRT2 * K + K2) * norm;
+                a1 = 2.0f * (K2 - 1.0f) * norm;
+                a2 = (1.0f - SQRT2 * K + K2) * norm;
+                b1 = 2.0f * (VK2 - 1.0f) * norm;
+                b2 = (1.0f - sqrt2V * K + VK2) * norm;
             }
             break;
+        }
+        
         case HIGHSHELF:
-            if (peakGain >= 0.)
+        {
+            const float V = powf(10.0f, fabsf(peakGain) * 0.05f);
+            const float sqrt2V = sqrtf(2.0f * V);
+            
+            if (peakGain >= 0.0f)
             { // boost
-                norm = 1. / (1. + SQRT2 * K + K * K);
-                a0 = (V + sqrt(2. * V) * K + K * K) * norm;
-                a1 = 2. * (K * K - V) * norm;
-                a2 = (V - sqrt(2. * V) * K + K * K) * norm;
-                b1 = 2. * (K * K - 1) * norm;
-                b2 = (1. - SQRT2 * K + K * K) * norm;
+                const float norm = 1.0f / (1.0f + SQRT2 * K + K2);
+                a0 = (V + sqrt2V * K + K2) * norm;
+                a1 = 2.0f * (K2 - V) * norm;
+                a2 = (V - sqrt2V * K + K2) * norm;
+                b1 = 2.0f * (K2 - 1.0f) * norm;
+                b2 = (1.0f - SQRT2 * K + K2) * norm;
             }
             else
             { // cut
-                norm = 1. / (V + sqrt(2. * V) * K + K * K);
-                a0 = (1. + SQRT2 * K + K * K) * norm;
-                a1 = 2. * (K * K - 1.) * norm;
-                a2 = (1. - SQRT2 * K + K * K) * norm;
-                b1 = 2. * (K * K - V) * norm;
-                b2 = (V - sqrt(2. * V) * K + K * K) * norm;
+                const float norm = 1.0f / (V + sqrt2V * K + K2);
+                a0 = (1.0f + SQRT2 * K + K2) * norm;
+                a1 = 2.0f * (K2 - 1.0f) * norm;
+                a2 = (1.0f - SQRT2 * K + K2) * norm;
+                b1 = 2.0f * (K2 - V) * norm;
+                b2 = (V - sqrt2V * K + K2) * norm;
             }
             break;
+        }
         }
     }
 
 private:
-    float a0 = 0, a1 = 0, a2 = 0, b1 = 0, b2 = 0;
-    // filterTypes filterType;
-    const float SQRT2 = sqrt(2.0);
-    float v0_ = 0, v1_ = 0, v2_ = 0;
+    float a0 = 0.0f, a1 = 0.0f, a2 = 0.0f, b1 = 0.0f, b2 = 0.0f;
+    static constexpr float SQRT2 = 1.41421356237f;  // Compile-time constant
+    float v0_ = 0.0f, v1_ = 0.0f, v2_ = 0.0f;
 };
 
 /**
@@ -2753,8 +2997,9 @@ class maxiRMS {
         /*!Set the size of the analysis window \param newWindowSize the size of the analysis window (in ms). Large values will smooth out the measurement, and make it less responsive to transients*/
         void setWindowSize(float newWindowSize) {
             size_t windowSizeInSamples = maxiConvert::msToSamps(newWindowSize);
-            if (windowSizeInSamples <= buf.size()) {
+            if (windowSizeInSamples <= buf.size() && windowSizeInSamples > 0) {
                 windowSize = windowSizeInSamples;
+                windowSizeInv = 1.f / static_cast<float>(windowSize);
             }
             runningRMS = 0;
         }
@@ -2767,15 +3012,16 @@ class maxiRMS {
         /*Analyse the signal \param signal a signal \returns RMS*/
         float play(float signal) {
             float sigPow2 = (signal * signal);
+            runningRMS -= buf.tail(windowSize);
             buf.push(sigPow2);
             runningRMS += sigPow2;
-            runningRMS -= buf.tail(windowSize);
-            return sqrt(runningRMS/windowSize);
+            return sqrtf(runningRMS * windowSizeInv);
         }
 
     private:
         maxiRingBuf buf;
         size_t windowSize=0; // in samples
+        float windowSizeInv=1.f;
         float runningRMS=0;
 };
 
@@ -2812,7 +3058,7 @@ class maxiDynamics {
             arEnvLow.setupASR(10,10);
             arEnvLow.setRetrigger(false);
 
-            lookAheadDelay.setup(maxiSettings::sampleRate * 1); //max 1s
+            lookAheadDelay.setup(maxiSettings::sampleRate * 0.1); //max 0.1s
         }
 
 
@@ -2839,23 +3085,23 @@ class maxiDynamics {
             //companding above the high threshold
             if (ratioHigh > 0) {
                 if (kneeHigh > 0) {
-                    float lowerKnee = thresholdHigh - (kneeHigh/2.0);
-                    float higherKnee = thresholdHigh  +(kneeHigh/2.0);
+                    float lowerKnee = thresholdHigh - (kneeHigh*0.5f);
+                    float higherKnee = thresholdHigh  +(kneeHigh*0.5f);
                     //attack/release
-                    float envRatio = 1;
+                    float envRatio = 1.f;
                     if (controlDB >= lowerKnee) {
-                        float envVal = arEnvHigh.play(1);
+                        float envVal = arEnvHigh.play(1.f);
                         envRatio = envToRatio(envVal, ratioHigh);
                     }else {
-                        float envVal = arEnvHigh.play(-1);
+                        float envVal = arEnvHigh.play(-1.f);
                     }
                     if ((controlDB >= lowerKnee) && (controlDB < higherKnee)) {
                         float kneeHighOut = ((higherKnee - thresholdHigh) / envRatio) + thresholdHigh;
                         float kneeRange = (kneeHighOut - lowerKnee);
                         float t = (controlDB - lowerKnee) / kneeHigh;
                         //bezier on x only
-                        float curve =  ratioHigh > 1 ? 0.8 : 0.2;
-                        float kneex = (2 * (1-t) * t * curve) + (t*t);
+                        float curve =  ratioHigh > 1.f ? 0.8f : 0.2f;
+                        float kneex = (2.f * (1.f-t) * t * curve) + (t*t);
                         outDB = lowerKnee + (kneex * kneeRange);
                     }
                     else if (controlDB >= higherKnee) {
@@ -2865,34 +3111,34 @@ class maxiDynamics {
                 else {
                     //no knee
                     if (controlDB > thresholdHigh) {
-                        float envVal = arEnvHigh.play(1);
+                        float envVal = arEnvHigh.play(1.f);
                         float envRatio = envToRatio(envVal, ratioHigh);
                         outDB = ((controlDB - thresholdHigh) / envRatio) + thresholdHigh;
                     }else {
-                        float envVal = arEnvHigh.play(-1);
+                        float envVal = arEnvHigh.play(-1.f);
                     }
                 }
             }
             //companding below the low threshold
             if (ratioLow > 0) {
                 if (kneeLow > 0) {
-                    float lowerKnee = thresholdLow - (kneeLow/2.0);
-                    float higherKnee = thresholdLow  +(kneeLow/2.0);
+                    float lowerKnee = thresholdLow - (kneeLow*0.5f);
+                    float higherKnee = thresholdLow  +(kneeLow*0.5f);
                     //attack/release
                     float envRatio = 1;
                     if (controlDB < lowerKnee) {
-                        float envVal = arEnvLow.play(1);
+                        float envVal = arEnvLow.play(1.f);
                         envRatio = envToRatio(envVal, ratioLow);
                     }else {
-                        float envVal = arEnvLow.play(-1);
+                        float envVal = arEnvLow.play(-1.f);
                     }
                     if ((controlDB >= lowerKnee) && (controlDB < higherKnee)) {
                         float kneeLowOut = thresholdLow - ((thresholdLow-lowerKnee) / ratioLow);
                         float kneeRange = (higherKnee - kneeLowOut);
                         float t = (controlDB - lowerKnee) / kneeLow;
                         //bezier on x only
-                        float curve =  ratioLow > 1 ? 0.2 : 0.8;
-                        float kneex = (2 * (1-t) * t * curve) + (t*t);
+                        float curve =  ratioLow > 1.f ? 0.2f : 0.8f;
+                        float kneex = (2.f * (1.f-t) * t * curve) + (t*t);
                         outDB = kneeLowOut + (kneex * kneeRange);
                     }
                     else if (controlDB < lowerKnee) {
@@ -2902,19 +3148,19 @@ class maxiDynamics {
                 else {
                     //no knee
                     if (controlDB < thresholdLow) {
-                        float envVal = arEnvLow.play(1);
+                        float envVal = arEnvLow.play(1.f);
                         float envRatio = envToRatio(envVal, ratioLow);
                         outDB = thresholdLow - ((thresholdLow-controlDB) / ratioLow);
                     }else {
-                        float envVal = arEnvLow.play(-1);
+                        float envVal = arEnvLow.play(-1.f);
                     }
                 }
             }
             //scale the signal according to the amount of compansion on the control signal
             float outAmp = maxiConvert::dbsToAmp(outDB);
             float sigOut = 0;
-            if (outAmp > 0) {
-                if (lookAheadSize > 0) {
+            if (outAmp > 0.f) {
+                if (lookAheadSize > 0.f) {
                     lookAheadDelay.push(sig);
                     sigOut = lookAheadDelay.tail(lookAheadSize);
                 }else{
@@ -3049,7 +3295,7 @@ class maxiDynamics {
         maxiPoll poll;
 
         //mapping from attack/release envelope to ratio
-        float envToRatio(float envVal, float ratio) {
+        inline float envToRatio(float envVal, float ratio) {
             float envRatio = 1;
             if (ratio > 1) {
                 envRatio = 1 + ((ratio-1) * envVal);

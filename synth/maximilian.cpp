@@ -240,37 +240,7 @@ float maxiFilter::hipass(float input, float cutoff) {
 	outputs[0]=output;
 	return(output);
 }
-//awesome. cuttof is freq in hz. res is between 1 and whatever. Watch out!
-float maxiFilter::lores(float input,float cutoff1, float resonance) {
-	cutoff=cutoff1;
-	if (cutoff<10) cutoff=10;
-	if (cutoff>(maxiSettings::sampleRate)) cutoff=(maxiSettings::sampleRate);
-	if (resonance<1.) resonance = 1.;
-	z=cos(TWOPI*cutoff/maxiSettings::sampleRate);
-	c=2-2*z;
-	float r=(sqrt(2.0)*sqrt(-pow((z-1.0),3.0))+resonance*(z-1))/(resonance*(z-1));
-	x=x+(input-y)*c;
-	y=y+x;
-	x=x*r;
-	output=y;
-	return(output);
-}
 
-//working hires filter
-float maxiFilter::hires(float input,float cutoff1, float resonance) {
-	cutoff=cutoff1;
-	if (cutoff<10) cutoff=10;
-	if (cutoff>(maxiSettings::sampleRate)) cutoff=(maxiSettings::sampleRate);
-	if (resonance<1.) resonance = 1.;
-	z=cos(TWOPI*cutoff/maxiSettings::sampleRate);
-	c=2-2*z;
-	float r=(sqrt(2.0)*sqrt(-pow((z-1.0),3.0))+resonance*(z-1))/(resonance*(z-1));
-	x=x+(input-y)*c;
-	y=y+x;
-	x=x*r;
-	output=input-y;
-	return(output);
-}
 
 //This works a bit. Needs attention.
 float maxiFilter::bandpass(float input,float cutoff1, float resonance) {

@@ -113,6 +113,8 @@ static void AUDIO_FUNC(process_audio)(const int32_t* input, int32_t* output, siz
             input_buffer[0][i] = _scale_down(static_cast<float>(input[indexL]));
             input_buffer[1][i] = _scale_down(static_cast<float>(input[indexR]));
         }
+        // Serial.println(input_buffer[0][0]);
+        // Serial.println(input[0]);
         // Call block callback
         audio_callback_block_(input_buffer, output_buffer, kNChannels, num_frames);
 

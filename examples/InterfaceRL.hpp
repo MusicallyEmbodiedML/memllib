@@ -58,7 +58,7 @@ public:
         newInput = true;
     }
 
-    void readAnalysisParameters(std::vector<float> params);
+    void readAnalysisParameters(std::vector<float> params) override;
 
     void generateAction(bool donthesitate=false);
 

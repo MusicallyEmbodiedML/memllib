@@ -43,6 +43,10 @@ public:
 
     //todo: this should be std::array and this class should be templated
     bool ReceiveParamsFromQueue(float *data);
+
+    virtual void readAnalysisParameters(std::vector<float> params) {
+        // Default implementation does nothing
+    }
 };
 
 #endif// __INTERFACE_BASE_HPP__

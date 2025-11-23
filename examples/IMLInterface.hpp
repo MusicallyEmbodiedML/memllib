@@ -52,7 +52,7 @@ public:
     void bindMIDI(std::shared_ptr<MIDIInOut> midi_interf);
 
     // Analysis parameters
-    void readAnalysisParameters(std::vector<float> params);
+    void readAnalysisParameters(std::vector<float> params) override;
 
 protected:
     static constexpr float kMax = 2.0f;

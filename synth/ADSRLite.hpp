@@ -6,16 +6,33 @@ class ADSRLite {
     
     enum envStage{WAITTOTRIG, ATTACK, DECAY, SUSTAIN, RELEASE};
 
-    void setup(float attackTimeMs, float decayTimeMs, float newSustainLevel, float releaseTimeMs, const float kSampleRate) {
-        attackIncFull = 1.f/((attackTimeMs * 0.001f) * kSampleRate);
+    __attribute__((always_inline)) void setAttackTime(float attackTimeMs, const float kSampleRate) {
+        if (attackTimeMs > 0.f) {
+            attackIncFull = 1.f/((attackTimeMs * 0.001f) * kSampleRate);
+        }else{
+            attackIncFull = 0.f;
+        }
         attackInc = attackIncFull;
-        decayInc = 1.f/((decayTimeMs * 0.001f) * kSampleRate);
-        sustainLevel = newSustainLevel;
-        decayInc *= (1.f - sustainLevel);
+    }
+
+    inline void setReleaseTime(float releaseTimeMs, const float kSampleRate) {
         releaseMs = releaseTimeMs;
     }
 
-    float play() {
+    void setup(float attackTimeMs, float decayTimeMs, float newSustainLevel, float releaseTimeMs, const float kSampleRate) {
+        setAttackTime(attackTimeMs, kSampleRate);
+        if (decayTimeMs > 0.f) {
+            decayInc = 1.f/((decayTimeMs * 0.001f) * kSampleRate);
+        }else{
+            decayInc = 0.f;
+        }
+        sustainLevel = newSustainLevel;
+        decayInc *= (1.f - sustainLevel);
+        // releaseMs = releaseTimeMs;
+        setReleaseTime(releaseTimeMs, kSampleRate);
+    }
+
+    __attribute__((hot)) __attribute__((always_inline)) float play() {
 
         switch(stage) {
             case envStage::WAITTOTRIG:
@@ -57,21 +74,27 @@ class ADSRLite {
         return envelopeValue * velocity;
     }
 
-    void reset() {
+    __attribute__((always_inline)) void reset() {
         stage = envStage::WAITTOTRIG;
         envelopeValue=0;
 
     }
 
-    void trigger(float vel) {
+    __attribute__((always_inline)) void trigger(float vel) {
         stage = envStage::ATTACK;
         attackInc = attackIncFull * (1.f - envelopeValue);
         velocity = vel;
     }
 
-    void release() {
+    __attribute__((always_inline)) void triggerIfReady(float vel) {
+        if (stage == envStage::WAITTOTRIG) {
+            trigger(vel);
+        }
+    }
+
+    __attribute__((always_inline)) void release() {
         if (releaseMs > 0) {
-            relInc = 1.f/((releaseMs / 1000.f) * kSampleRate);
+            relInc = 1.f/((releaseMs / 1000.f) * maxiSettings::sampleRate);
             relInc *= envelopeValue;
             stage = envStage::RELEASE;
         }
