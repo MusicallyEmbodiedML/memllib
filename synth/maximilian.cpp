@@ -46,8 +46,8 @@ float chandiv= 1;
 
 maxiSettings::maxiSettings() {}
 
-size_t maxiSettings::sampleRate = 44100;
-float maxiSettings::one_over_sampleRate = 1.f / static_cast<float>(maxiSettings::sampleRate);
+size_t maxiSettings::sampleRate = 48000;  // Match kSampleRate in AudioDriver.hpp
+float maxiSettings::one_over_sampleRate = 1.f / 48000.f;
 size_t maxiSettings::channels = 2;
 size_t maxiSettings::bufferSize = 1024;
 

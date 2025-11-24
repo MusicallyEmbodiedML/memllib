@@ -1736,17 +1736,21 @@ public:
     };
 
     // HOT PATH - optimized for Cortex-M33 FPU
-    __attribute__((hot)) __attribute__((always_inline)) 
+    __attribute__((hot)) __attribute__((always_inline))
     inline float play(const float input)
     {
         // Reordered for better FMA (fused multiply-add) utilization
         const float v0 = input - (b1 * v1_) - (b2 * v2_);
         const float y = (a0 * v0) + (a1 * v1_) + (a2 * v2_);
-        
+
         // Shift state - compiler will optimize register usage
         v2_ = v1_;
         v1_ = v0;
-        
+
+        // Flush denormals to zero to prevent CPU slowdown and numerical instability
+        if (fabsf(v1_) < 1e-15f) v1_ = 0.0f;
+        if (fabsf(v2_) < 1e-15f) v2_ = 0.0f;
+
         return y;
     }
 

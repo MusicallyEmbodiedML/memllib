@@ -84,7 +84,7 @@ void InterfaceRL::setOptimiseDivisorInterf(float value)
 }
 
 
-void InterfaceRL::bind_RL_interface(bool disable_joystick) {
+void InterfaceRL::bind_RL_interface(INPUT_MODES input_mode) {
 
     // Set up momentary switch callbacks
     MEMLNaut::Instance()->setMomA1Callback([this]() { // scr_ref no longer captured directly
@@ -110,7 +110,7 @@ void InterfaceRL::bind_RL_interface(bool disable_joystick) {
     });
 
 
-    if (!disable_joystick) {
+    if (input_mode != INPUT_MODES::MACHINE_LISTENING) {
         MEMLNaut::Instance()->setJoySWCallback([this](bool state) {
             //button down
             if (state) {
@@ -137,6 +137,12 @@ void InterfaceRL::bind_RL_interface(bool disable_joystick) {
         MEMLNaut::Instance()->setJoyZCallback([this](float value) {
             this->setState(2, value);
         });
+
+        if (input_mode == INPUT_MODES::JOYSTICK_AND_MACHINE_LISTENING) {
+            analysisParamsOffset = 3;
+        } else {
+            analysisParamsOffset = 0;
+        }
     }
 
 
@@ -281,8 +287,6 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
     const std::vector<ACTIVATION_FUNCTIONS> activfuncs = {
         RELU, RELU, HARDSIGMOID
     };
-
-
 
     std::vector<size_t> layers_nodes = {
         n_inputs,
@@ -519,13 +523,10 @@ void InterfaceRL::optimise() {
 }
 
 void InterfaceRL::readAnalysisParameters(std::vector<float> params) {
-    //read analysis parameters
-    if (params.size() != n_inputs_) {
-        DEBUG_PRINTLN("Error: Incorrect number of analysis parameters received.");
-        return;
+    //copy analysis parameters into control input vector
+    for(size_t i=0; i < params.size(); i++) {
+        controlInput[analysisParamsOffset+i] = params[i];
     }
-    controlInput = params;
-
     generateAction(true);
 }
 

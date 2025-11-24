@@ -44,6 +44,12 @@ public:
 
     using OnMIDICtrlCallback = std::function<void(uint8_t)>;
 
+    enum class INPUT_MODES {
+        JOYSTICK,
+        MACHINE_LISTENING,
+        JOYSTICK_AND_MACHINE_LISTENING
+    };
+
    InterfaceRL() : InterfaceBase()
 //    , ou_noise(0.02f, 0.0f, 0.2f, 0.001f, 0.0f)
 {
@@ -126,11 +132,16 @@ public:
         }
     }
 
-    void bind_RL_interface(bool disable_joystick = false);
+    void bind_RL_interface(INPUT_MODES input_mode = INPUT_MODES::JOYSTICK);
 
-    __force_inline void bindInterface(bool disable_joystick = false) {
-        bind_RL_interface(disable_joystick);
+    void bindInterface(INPUT_MODES input_mode = INPUT_MODES::JOYSTICK) {
+        bind_RL_interface(input_mode);
     }
+
+    void bindInterface(bool disable_joystick=false) {
+        bind_RL_interface(disable_joystick ? INPUT_MODES::MACHINE_LISTENING : INPUT_MODES::JOYSTICK);
+    }
+    
 
     void bindUARTInput(std::shared_ptr<UARTInput> uart_input,
         const std::vector<size_t>& kUARTListenInputs)
@@ -185,6 +196,8 @@ private:
     bool actionBeingDragged=false;
 
     std::vector<size_t> itemsToRemove;
+
+    size_t analysisParamsOffset = 0;
 
 
 

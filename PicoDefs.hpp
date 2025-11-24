@@ -2,6 +2,7 @@
 #define __MEML_PICO_HPP__
 
 #include "pico.h"
+#include <memory>
 
 #define AUDIO_FUNC(x)    __not_in_flash_func(x)  ///< Macro to make audio function load from mem
 #define AUDIO_MEM    __not_in_flash("audio")  ///< Macro to make variable load from mem
@@ -56,7 +57,7 @@ inline T read_volatile_struct(const volatile T& src) {
 
 #define PERIODIC_RUN(code, freq_ms) \
 { \
-    static __not_in_flash("periodicupdate") size_t lastUpdate = 0; \
+    static size_t lastUpdate = 0; \
     size_t now = millis(); \
     if (now - lastUpdate > (freq_ms)) { \
         lastUpdate = now; \
@@ -74,6 +75,10 @@ inline T read_volatile_struct(const volatile T& src) {
     } \
 }  
 
+template<typename T>
+std::shared_ptr<T> make_non_owning(T& obj) {
+    return std::shared_ptr<T>(&obj, [](T*){});
+}
 
 
 
