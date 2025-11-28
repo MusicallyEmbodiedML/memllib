@@ -10,8 +10,8 @@ public:
 
     using ButtonCallback = std::function<void(size_t)>;
 
-    ButtonView(String name, size_t _id_, int _fillcolour_ = TFT_BLUE)
-        : ViewBase(name), fillColour(_fillcolour_),
+    ButtonView(String name, size_t _id_, int _fillcolour_ = TFT_BLUE, int _fontcolour_ = TFT_WHITE)
+        : ViewBase(name), fillColour(_fillcolour_), fontColour(_fontcolour_),
         id(_id_)
     {
     }
@@ -35,7 +35,7 @@ public:
         } else {
             sprite.drawRect(0,0, area.w, area.h, TFT_WHITE);
         }
-        sprite.setTextColor(TFT_WHITE);
+        sprite.setTextColor(fontColour);
         sprite.setTextFont(4);
         sprite.drawString(this->name_, 10, 10);
         sprite.pushSprite(area.x, area.y);
@@ -60,6 +60,7 @@ public:
 
 private:
     int fillColour;
+    int fontColour;
     size_t id;
 
     ButtonCallback callback = nullptr;

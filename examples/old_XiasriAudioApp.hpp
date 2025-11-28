@@ -1,5 +1,5 @@
-#ifndef __XIASRIAUDIOAPP_HPP__
-#define __XIASRIAUDIOAPP_HPP__
+#ifndef __OLDXIASRIAUDIOAPP_HPP__
+#define __OLDXIASRIAUDIOAPP_HPP__
 
 #include "../audio/AudioAppBase.hpp"
 #include "../audio/AudioDriver.hpp"
