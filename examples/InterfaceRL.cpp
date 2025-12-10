@@ -84,7 +84,7 @@ void InterfaceRL::setOptimiseDivisorInterf(float value)
 }
 
 
-void InterfaceRL::bind_RL_interface(INPUT_MODES input_mode) {
+void InterfaceRL::bind_RL_interface(INPUT_MODES input_mode, bool joystick4D) {
 
     // Set up momentary switch callbacks
     MEMLNaut::Instance()->setMomA1Callback([this]() { // scr_ref no longer captured directly
@@ -138,8 +138,14 @@ void InterfaceRL::bind_RL_interface(INPUT_MODES input_mode) {
             this->setState(2, value);
         });
 
+        if (joystick4D) {
+            MEMLNaut::Instance()->setADC3Callback([this](float value) {
+                this->setState(3, value);
+            });
+        }
+
         if (input_mode == INPUT_MODES::JOYSTICK_AND_MACHINE_LISTENING) {
-            analysisParamsOffset = 3;
+            analysisParamsOffset = 3 + (joystick4D ? 1 : 0);
         } else {
             analysisParamsOffset = 0;
         }
@@ -149,6 +155,23 @@ void InterfaceRL::bind_RL_interface(INPUT_MODES input_mode) {
     MEMLNaut::Instance()->setTogB1Callback([this](bool state) { // scr_ref no longer captured directly
         if (state) {
             this->_forget_replay_mem_interf();
+        }
+    });
+
+    MEMLNaut::Instance()->setTogA1Callback([this](bool state) { // scr_ref no longer captured directly
+        //tiggle up
+        if (state) {
+            //store output
+            savedAction = action;
+            actionBeingDragged=true;
+            msgView->post("Where do you want it?");
+        }else{
+            //button up
+            if (actionBeingDragged) {
+                this->storeExperience(1.f, controlInput, savedAction);
+                actionBeingDragged=false;
+                msgView->post("Here!");
+            }
         }
     });
 

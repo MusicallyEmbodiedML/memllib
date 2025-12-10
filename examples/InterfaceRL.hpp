@@ -132,14 +132,14 @@ public:
         }
     }
 
-    void bind_RL_interface(INPUT_MODES input_mode = INPUT_MODES::JOYSTICK);
+    void bind_RL_interface(INPUT_MODES input_mode = INPUT_MODES::JOYSTICK, bool joystick4D = false);
 
-    void bindInterface(INPUT_MODES input_mode = INPUT_MODES::JOYSTICK) {
-        bind_RL_interface(input_mode);
+    void bindInterface(INPUT_MODES input_mode = INPUT_MODES::JOYSTICK,bool joystick4D = false) {
+        bind_RL_interface(input_mode, joystick4D);
     }
 
-    void bindInterface(bool disable_joystick=false) {
-        bind_RL_interface(disable_joystick ? INPUT_MODES::MACHINE_LISTENING : INPUT_MODES::JOYSTICK);
+    void bindInterface(bool disable_joystick=false, bool joystick4D = false) {
+        bind_RL_interface(disable_joystick ? INPUT_MODES::MACHINE_LISTENING : INPUT_MODES::JOYSTICK, joystick4D);
     }
     
 

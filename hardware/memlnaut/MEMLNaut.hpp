@@ -22,7 +22,7 @@ public:
 
 private:
     static MEMLNaut* __not_in_flash("memlnaut") instance;
-    static constexpr size_t NUM_ADCS = 7;
+    static constexpr size_t NUM_ADCS = 8;
     static constexpr uint16_t DEFAULT_THRESHOLD = 40;
     static constexpr size_t FILTER_SIZE = 5;
     static constexpr float ADC_SCALE = 4128.7f;
@@ -127,6 +127,7 @@ public:
     void setJoyXCallback(AnalogCallback cb, uint16_t threshold = DEFAULT_THRESHOLD);
     void setJoyYCallback(AnalogCallback cb, uint16_t threshold = DEFAULT_THRESHOLD);
     void setJoyZCallback(AnalogCallback cb, uint16_t threshold = DEFAULT_THRESHOLD);
+    void setADC3Callback(AnalogCallback cb, uint16_t threshold = DEFAULT_THRESHOLD);
     void setRVGain1Callback(AnalogCallback cb, uint16_t threshold = DEFAULT_THRESHOLD);
     void setRVGain1Volume(uint16_t threshold = DEFAULT_THRESHOLD);
     void setRVZ1Callback(AnalogCallback cb, uint16_t threshold = DEFAULT_THRESHOLD);

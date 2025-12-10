@@ -51,6 +51,7 @@ public:
     static constexpr uint8_t JOY_X = 40;    ///< Joystick X-axis (ADC0)
     static constexpr uint8_t JOY_Y = 41;    ///< Joystick Y-axis (ADC1)
     static constexpr uint8_t JOY_Z = 42;    ///< Joystick Z-axis (ADC2)
+    static constexpr uint8_t ADC3 = 43;    ///< Joystick Z-axis (ADC3)
     static constexpr uint8_t RV_GAIN1 = 47; ///< Gain potentiometer (ADC7)
     static constexpr uint8_t RV_Z1 = 46;    ///< Z1 potentiometer (ADC6)
     static constexpr uint8_t RV_Y1 = 45;    ///< Y1 potentiometer (ADC5)

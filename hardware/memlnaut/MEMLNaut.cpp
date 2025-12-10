@@ -218,6 +218,9 @@ void MEMLNaut::setJoyYCallback(AnalogCallback cb, uint16_t threshold) {
 void MEMLNaut::setJoyZCallback(AnalogCallback cb, uint16_t threshold) {
     adcStates[2] = {analogRead(Pins::JOY_Z) / ADC_SCALE, threshold, cb};
 }
+void MEMLNaut::setADC3Callback(AnalogCallback cb, uint16_t threshold) {
+    adcStates[7] = {analogRead(Pins::ADC3) / ADC_SCALE, threshold, cb};
+}
 void MEMLNaut::setRVGain1Callback(AnalogCallback cb, uint16_t threshold) {
     //adcStates[3] = {analogRead(Pins::RV_GAIN1) / ADC_SCALE, threshold, cb};
     DEBUG_PRINTLN("RVGain1 overridden - only controls audio volume");
@@ -293,7 +296,8 @@ void MEMLNaut::loop() {
 
     const uint8_t adcPins[NUM_ADCS] = {
         Pins::JOY_X, Pins::JOY_Y, Pins::JOY_Z,
-        Pins::RV_GAIN1, Pins::RV_Z1, Pins::RV_Y1, Pins::RV_X1
+        Pins::RV_GAIN1, Pins::RV_Z1, Pins::RV_Y1, Pins::RV_X1,
+        Pins::ADC3
     };
 
     for (size_t i = 0; i < NUM_ADCS; i++) {
@@ -307,14 +311,6 @@ void MEMLNaut::loop() {
             state.lastValue = currentValue;
         }
     }
-
-    // auto now = millis();
-    // if (now - displayTS > 35) {
-    //     displayTS = now;
-    //     if (disp) {
-    //         disp->Draw();
-    //     }
-    // }
 
     if (loopCallback) {
         loopCallback();
