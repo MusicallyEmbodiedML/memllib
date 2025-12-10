@@ -10,8 +10,8 @@ class BlockSelectView : public ViewBase {
 public:
     using OnSelectCallback = std::function<void(size_t)>;
 
-    BlockSelectView(String name, int _buttonColour_ = TFT_BLUE, size_t nButtons_=8, size_t buttonWidth_=60, size_t buttonHeight_=60, int fontColour_=TFT_WHITE, std::vector<String> buttonNames_ = {})
-                : ViewBase(name), buttonColour(_buttonColour_),
+    BlockSelectView(String name, int _buttonColour_ = TFT_BLUE, size_t nButtons_=8, size_t buttonWidth_=60, size_t buttonHeight_=60, int fontColour_=TFT_WHITE, std::vector<String> buttonNames_ = {}, int buttonAltColour_=TFT_BLUE)
+                : ViewBase(name), buttonColour(_buttonColour_), buttonAltColour(buttonAltColour_),
                 nButtons(nButtons_), buttonWidth(buttonWidth_), buttonHeight(buttonHeight_), fontColour(fontColour_)
     {
         rows = (nButtons > 4) ? 2 : 1;
@@ -23,12 +23,21 @@ public:
                 buttonNames.push_back(String(i));
             }
         }
+        altColour.resize(nButtons, false);
     }
 
     void SetOnSelectCallback(OnSelectCallback _cb_) {
         cb = _cb_;
     }
 
+    void setAltColour(size_t index, bool on) {
+        altColour[index] = on;
+    }
+
+    void toggleAlt(size_t index) {
+        altColour[index] = !altColour[index];
+        buttons[index]->setFillColour(altColour[index] ? buttonAltColour : buttonColour);
+    }
 
 
     void OnSetup() override {
@@ -36,7 +45,7 @@ public:
         for(int i=0; i < cols; i++) {
             for(int j=0; j < rows; j++) {
                 if (idx <= nButtons) {
-                    auto button = std::make_shared<ButtonView>(buttonNames[idx-1], idx, buttonColour, fontColour);
+                    auto button = std::make_shared<ButtonView>(buttonNames[idx-1], idx, altColour[idx-1] ? buttonAltColour : buttonColour, fontColour);
                     rect bounds = { static_cast<int>(area.x + 10 + (i * (buttonWidth+10))), static_cast<int>(area.y + 10 + (j*(buttonHeight+10))), static_cast<int>(buttonWidth), static_cast<int>(buttonHeight) };
                     AddSubView(button, bounds);
                     button->SetReleaseCallback([this](size_t id) { 
@@ -73,6 +82,7 @@ public:
 private:
     std::vector<std::shared_ptr<ButtonView>> buttons;
     int buttonColour;
+    int buttonAltColour;
     OnSelectCallback cb = nullptr;
     String msg;
 
@@ -83,6 +93,7 @@ private:
     size_t buttonHeight = 50;
     int fontColour = TFT_WHITE;
     std::vector<String> buttonNames;
+    std::vector<bool> altColour;
 };
 
 #endif 

@@ -23,6 +23,11 @@ public:
     void OnSetup() override {
     }  
 
+    void setFillColour(int newCol) {
+        fillColour = newCol;
+        redraw();
+    }
+
     void OnDraw() override {
         TFT_eSprite sprite(scr);
         constexpr int32_t lineheight = 30;
