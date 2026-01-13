@@ -355,6 +355,12 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
     nnInputsGraphView = std::make_shared<BarGraphView>("NN Inputs", n_inputs, 10, TFT_YELLOW, 0.f, 1.f);
     MEMLNaut::Instance()->disp->AddView(nnInputsGraphView);
 
+    memoryStoreModeView = std::make_shared<SingleSelectView>("Mem Mode");
+    MEMLNaut::Instance()->disp->AddView(memoryStoreModeView);
+    memoryStoreModeView->setOptions(memOptions);
+    memoryStoreModeView->setNewVoiceCallback([this](size_t idx) {
+        memoryStoreMode = static_cast<MEMORY_STORE_MODES>(idx);
+    });
 
     msgView = std::make_shared<MessageView>("Messages");
     MEMLNaut::Instance()->disp->AddView(msgView);
@@ -583,7 +589,68 @@ void InterfaceRL::generateAction(bool donthesitate) {
 //     replayMem.add(trainItem, millis());
 // }
 
+float euclideanDistance(const std::vector<float>& a, const std::vector<float>& b) {
+    float sum = 0.0f;
+    for (size_t i = 0; i < a.size(); ++i) {
+        float diff = a[i] - b[i];
+        sum += diff * diff;
+    }
+    return sqrtf(sum);
+}
+
+void InterfaceRL::removeItemsAtDistance(std::vector<float> &experienceState, const float distThreshold) {
+    std::vector<size_t> indicesToRemove;
+    for(size_t i=0; i < replayMem.size(); i++) {
+        const trainStatelessRLItem& item = replayMem.getItem(i);   
+        float dist = euclideanDistance(item.input, experienceState);
+        if (dist < distThreshold) { 
+            indicesToRemove.push_back(i); 
+            if (msgView) msgView->post("Removing similar memory item");
+        }
+    }
+    replayMem.removeItems(indicesToRemove);             
+}
+
+void InterfaceRL::decayItemsAtDistance(std::vector<float> &experienceState, const float distThreshold) {
+    std::vector<size_t> indicesToRemove;
+    for(size_t i=0; i < replayMem.size(); i++) {
+        trainStatelessRLItem& item = replayMem.getItem(i);   
+        float dist = euclideanDistance(item.input, experienceState);
+        if (dist < distThreshold) { 
+            float decayFactor = (dist/distThreshold);
+            item.reward *= decayFactor; // Decay reward 
+            if (item.reward < 0.05f) {
+                indicesToRemove.push_back(i); 
+            }
+            if (msgView) msgView->post("Decaying memory item");
+            Serial.printf("Decayed item %d reward to %f\n", i, item.reward);
+        }
+    }
+    replayMem.removeItems(indicesToRemove);             
+}
+
 void InterfaceRL::storeExperience(float reward, std::vector<float> &experienceState, std::vector<float> &experienceAction ) {
     trainStatelessRLItem trainItem = {experienceState, experienceAction, reward * rewardScale}; // state is s_t, action is a_t, reward is r_t, nextState is s_t
+    switch(memoryStoreMode) {
+        case MEMORY_STORE_MODES::ADD:
+            // Already added above
+            break;
+        case MEMORY_STORE_MODES::REPLACE_5_PERCENT:
+        {
+            removeItemsAtDistance(experienceState, 0.05f);
+            break;
+        }
+        case MEMORY_STORE_MODES::REPLACE_15_PERCENT:
+        {
+            removeItemsAtDistance(experienceState, 0.15f);
+            break;
+        }
+        case MEMORY_STORE_MODES::REWARD_DECAY_10_PERCENT:
+            decayItemsAtDistance(experienceState, 0.10f);
+            break;
+        case MEMORY_STORE_MODES::REWARD_DECAY_20_PERCENT:
+            decayItemsAtDistance(experienceState, 0.20f);
+            break;
+    }
     replayMem.add(trainItem, millis());
 }

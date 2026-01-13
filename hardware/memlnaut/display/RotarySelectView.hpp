@@ -26,21 +26,6 @@ public:
 
 
     void OnSetup() override {
-        // graphHeight = area.h - 20;
-        // xstep = static_cast<float>(area.w) / static_cast<float>(NPOINTS - 1);
-        // sprite = new TFT_eSprite(scr);
-        // sprite->createSprite(area.w, graphHeight);
-
-        // sprTitle = new TFT_eSprite(scr);
-        // sprTitle->createSprite(100,20);
-
-        // sprMax = new TFT_eSprite(scr);
-        // sprMax->createSprite(100,15);
-
-        // sprTitle->fillSprite(TFT_BLACK);
-        // sprTitle->setTextColor(TFT_SILVER, TFT_BLACK);
-        // sprTitle->setTextFont(2);
-        // sprTitle->drawString(this->name_, 0, 0);
 
         options.push_back("VoiceSpace 1");
         options.push_back("VoiceSpace 2");

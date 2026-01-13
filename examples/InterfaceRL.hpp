@@ -20,17 +20,9 @@
 #include "../hardware/memlnaut/display/BarGraphView.hpp"
 #include "../hardware/memlnaut/display/BlockSelectView.hpp"
 #include "../hardware/memlnaut/display/RLStatsView.hpp"
+#include "../hardware/memlnaut/display/SingleSelectView.hpp"
 
 #define RL_MEM __not_in_flash("rlmem")
-
-//#define XIASRI 1
-
-// struct trainRLItem {
-//     std::vector<float> state ;
-//     std::vector<float> action;
-//     float reward;
-//     std::vector<float> nextState;
-// };
 
 struct trainStatelessRLItem {
     std::vector<float> input ;
@@ -48,6 +40,14 @@ public:
         JOYSTICK,
         MACHINE_LISTENING,
         JOYSTICK_AND_MACHINE_LISTENING
+    };
+
+    enum class MEMORY_STORE_MODES {
+        ADD,
+        REPLACE_5_PERCENT,
+        REPLACE_15_PERCENT,
+        REWARD_DECAY_10_PERCENT,
+        REWARD_DECAY_20_PERCENT
     };
 
    InterfaceRL() : InterfaceBase()
@@ -172,6 +172,7 @@ public:
     std::shared_ptr<BarGraphView> nnInputsGraphView;
     std::shared_ptr<BarGraphView> nnOutputsGraphView;
     std::shared_ptr<RLStatsView> rlStatsView;
+    std::shared_ptr<SingleSelectView> memoryStoreModeView;
 
 protected:
     // Helper methods for trigger actions
@@ -181,6 +182,7 @@ protected:
     bool _save_RL_to_SD(String id);
     bool _load_RL_from_SD(String id);
     void _forget_replay_mem_interf();
+    
 
 private:
 
@@ -198,6 +200,12 @@ private:
     std::vector<size_t> itemsToRemove;
 
     size_t analysisParamsOffset = 0;
+
+    MEMORY_STORE_MODES memoryStoreMode = MEMORY_STORE_MODES::ADD;
+    std::array<String, 5> memOptions = {"Add", "Replace 5%", "Replace 15%", "Reward Decay 10%", "Reward Decay 20%"};
+    void removeItemsAtDistance(std::vector<float> &experienceState, const float distThreshold);
+    void decayItemsAtDistance(std::vector<float> &experienceState, const float distThreshold);
+
 
 
 
