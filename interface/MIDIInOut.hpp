@@ -10,6 +10,9 @@
 #include "hardware/dma.h"
 #include "hardware/uart.h"
 
+#define MIDI_USB_CLIENT
+
+
 
 class MIDIInOut
 {

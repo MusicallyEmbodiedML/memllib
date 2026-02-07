@@ -14,6 +14,14 @@ struct CustomMIDISettings : public midi::DefaultSettings {
 
 MIDI_CREATE_CUSTOM_INSTANCE(HardwareSerial, Serial2, MIDI, CustomMIDISettings);
 
+
+#ifdef MIDI_USB_CLIENT
+#include <Adafruit_TinyUSB.h>
+Adafruit_USBD_MIDI usb_midi;
+MIDI_CREATE_INSTANCE(Adafruit_USBD_MIDI, usb_midi, USBMIDI);
+#endif
+
+
 MIDIInOut* MIDIInOut::instance_ = nullptr;
 
 MIDIInOut::MIDIInOut() : n_outputs_(0),
@@ -42,6 +50,11 @@ MIDIInOut::MIDIInOut() : n_outputs_(0),
     memset(rx_dma_buffer_, 0, sizeof(rx_dma_buffer_));
     memset(parser_data_, 0, sizeof(parser_data_));
     memset(msg_queue_, 0, sizeof(msg_queue_));
+#ifdef MIDI_USB_CLIENT
+    // TinyUSB setup - must be before Serial
+    TinyUSBDevice.setManufacturerDescriptor("ELI");
+    TinyUSBDevice.setProductDescriptor("MEMLNaut MIDI");
+#endif
 }
 
 MIDIInOut::~MIDIInOut() {
@@ -152,6 +165,16 @@ void MIDIInOut::Setup(size_t n_outputs,
     // Serial2.flush();
     // MEMORY_BARRIER();
 
+#ifdef MIDI_USB_CLIENT
+    USBMIDI.begin(MIDI_CHANNEL_OMNI);
+    
+    // Set up callbacks for incoming MIDI
+    USBMIDI.setHandleNoteOn(handleNoteOn);
+    USBMIDI.setHandleNoteOff(handleNoteOff);
+    MIDI.setHandleControlChange(handleControlChange);    
+
+#endif    
+
      DEBUG_PRINTLN("MIDI setup complete");
     // Serial2.flush();  // Ensure the message is sent completely
 }
@@ -179,6 +202,7 @@ void MIDIInOut::Poll()
         // Process queued messages with rate limiting
         processQueuedMessages();
     }
+    USBMIDI.read();
 }
 
 
