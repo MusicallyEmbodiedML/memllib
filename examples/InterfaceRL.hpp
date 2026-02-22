@@ -84,7 +84,7 @@ public:
 
     inline void randomiseTheNetwork()
     {
-        synthMapping->RandomiseWeightsAndBiasesLin(-0.9f,0.9f, 0, 0.5);
+        synthMapping->RandomiseWeightsAndBiasesLin(-0.9f,1.1f, -0.9f, 0.3f);
         newInput = true;
         resetMinMaxFlag = true;
     }
