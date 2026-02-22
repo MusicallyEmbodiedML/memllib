@@ -44,12 +44,14 @@ MIDIInOut::MIDIInOut() : n_outputs_(0),
                          msg_read_pos_(0),
                          max_messages_per_poll_(16),
                          max_bytes_per_poll_(64),
-                         track_changes_(true) {
+                         track_changes_(true),
+                         queue_write_pos_(0) {
     instance_ = this;
     memset(tx_dma_buffer_, 0, sizeof(tx_dma_buffer_));
     memset(rx_dma_buffer_, 0, sizeof(rx_dma_buffer_));
     memset(parser_data_, 0, sizeof(parser_data_));
     memset(msg_queue_, 0, sizeof(msg_queue_));
+    memset(midi_queue_buffer_, 0, sizeof(midi_queue_buffer_));
 #ifdef MIDI_USB_CLIENT
     // TinyUSB setup - must be before Serial
     TinyUSBDevice.setManufacturerDescriptor("ELI");
@@ -429,6 +431,84 @@ bool MIDIInOut::sendNoteOff(uint8_t note_number, uint8_t velocity) {
     MIDI.sendNoteOff(note_number, velocity, note_channel_);
     MEMORY_BARRIER();
     return true;
+}
+
+// Buffered MIDI queue implementation
+bool MIDIInOut::queueNoteOn(uint8_t note, uint8_t velocity) {
+    if (note > 127 || velocity > 127) {
+        return false;
+    }
+
+    // Auto-flush if not enough space
+    if (queue_write_pos_ + 3 > MIDI_QUEUE_BUFFER_SIZE) {
+        flushQueue();
+    }
+
+    midi_queue_buffer_[queue_write_pos_++] = 0x90 | ((note_channel_ - 1) & 0x0F);
+    midi_queue_buffer_[queue_write_pos_++] = note & 0x7F;
+    midi_queue_buffer_[queue_write_pos_++] = velocity & 0x7F;
+
+    return true;
+}
+
+bool MIDIInOut::queueNoteOff(uint8_t note, uint8_t velocity) {
+    if (note > 127 || velocity > 127) {
+        return false;
+    }
+
+    // Auto-flush if not enough space
+    if (queue_write_pos_ + 3 > MIDI_QUEUE_BUFFER_SIZE) {
+        flushQueue();
+    }
+
+    midi_queue_buffer_[queue_write_pos_++] = 0x80 | ((note_channel_ - 1) & 0x0F);
+    midi_queue_buffer_[queue_write_pos_++] = note & 0x7F;
+    midi_queue_buffer_[queue_write_pos_++] = velocity & 0x7F;
+
+    return true;
+}
+
+bool MIDIInOut::queueCC(uint8_t cc_number, uint8_t value) {
+    if (cc_number > 127 || value > 127) {
+        return false;
+    }
+
+    // Auto-flush if not enough space
+    if (queue_write_pos_ + 3 > MIDI_QUEUE_BUFFER_SIZE) {
+        flushQueue();
+    }
+
+    midi_queue_buffer_[queue_write_pos_++] = 0xB0 | ((send_channel_ - 1) & 0x0F);
+    midi_queue_buffer_[queue_write_pos_++] = cc_number & 0x7F;
+    midi_queue_buffer_[queue_write_pos_++] = value & 0x7F;
+
+    return true;
+}
+
+size_t MIDIInOut::flushQueue() {
+    if (queue_write_pos_ == 0) {
+        return 0;  // Nothing to send
+    }
+
+    size_t bytes_to_send = queue_write_pos_;
+
+    // Wait for any existing DMA to complete
+    waitForDMA();
+
+    // Copy queue to DMA buffer
+    memcpy(tx_dma_buffer_, midi_queue_buffer_, bytes_to_send);
+
+    // Send via DMA or fallback to Serial2
+    if (tx_dma_channel_ >= 0) {
+        sendViaDMADirect(bytes_to_send);
+    } else {
+        Serial2.write(tx_dma_buffer_, bytes_to_send);
+    }
+
+    // Reset queue position
+    queue_write_pos_ = 0;
+
+    return bytes_to_send;
 }
 
 // DMA Implementation

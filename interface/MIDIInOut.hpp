@@ -77,6 +77,36 @@ public:
     bool sendNoteOff(uint8_t note_number, uint8_t velocity = 0);
 
     /**
+     * @brief Queue a MIDI Note On message for buffered transmission
+     * @param note MIDI note number (0-127)
+     * @param velocity Note velocity (0-127)
+     * @return true if queued successfully, false if invalid params
+     */
+    bool queueNoteOn(uint8_t note, uint8_t velocity);
+
+    /**
+     * @brief Queue a MIDI Note Off message for buffered transmission
+     * @param note MIDI note number (0-127)
+     * @param velocity Note velocity (0-127, typically 0)
+     * @return true if queued successfully, false if invalid params
+     */
+    bool queueNoteOff(uint8_t note, uint8_t velocity);
+
+    /**
+     * @brief Queue a MIDI Control Change message for buffered transmission
+     * @param cc_number CC number (0-127)
+     * @param value CC value (0-127)
+     * @return true if queued successfully, false if invalid params
+     */
+    bool queueCC(uint8_t cc_number, uint8_t value);
+
+    /**
+     * @brief Flush all queued MIDI messages via DMA
+     * @return Number of bytes sent, 0 if queue was empty
+     */
+    size_t flushQueue();
+
+    /**
      * @brief Poll input. Put in a regular loop.
      */
     void Poll();
@@ -287,6 +317,11 @@ private:
         float clamped = param > 1.0f ? 1.0f : (param < 0.0f ? 0.0f : param);
         return static_cast<uint8_t>(clamped * mapping.scale_factor + mapping.min_value + 0.5f);
     }
+
+    // Buffered MIDI queue support
+    static constexpr size_t MIDI_QUEUE_BUFFER_SIZE = 1024;
+    uint8_t midi_queue_buffer_[MIDI_QUEUE_BUFFER_SIZE];
+    size_t queue_write_pos_;  // No volatile needed - single-threaded user code only
 };
 
 #endif  // __MIDI_IN_OUT_HPP__
