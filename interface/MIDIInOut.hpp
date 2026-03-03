@@ -100,6 +100,11 @@ public:
      */
     bool queueCC(uint8_t cc_number, uint8_t value);
 
+    bool queueClock();
+    bool queueClockStart();
+    bool queueClockStop();
+
+
     /**
      * @brief Flush all queued MIDI messages via DMA
      * @return Number of bytes sent, 0 if queue was empty

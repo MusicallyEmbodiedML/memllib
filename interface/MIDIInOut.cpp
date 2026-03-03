@@ -468,6 +468,32 @@ bool MIDIInOut::queueNoteOff(uint8_t note, uint8_t velocity) {
     return true;
 }
 
+
+bool MIDIInOut::queueClock() {
+    if (queue_write_pos_ + 1 > MIDI_QUEUE_BUFFER_SIZE) {
+        flushQueue();
+    }
+    midi_queue_buffer_[queue_write_pos_++] = 0xF8 ;
+    return true;
+}
+bool MIDIInOut::queueClockStart() {
+    if (queue_write_pos_ + 1 > MIDI_QUEUE_BUFFER_SIZE) {
+        flushQueue();
+    }
+    midi_queue_buffer_[queue_write_pos_++] = 0xFA ;
+    return true;
+}
+
+
+bool MIDIInOut::queueClockStop() {
+    if (queue_write_pos_ + 1 > MIDI_QUEUE_BUFFER_SIZE) {
+        flushQueue();
+    }
+    midi_queue_buffer_[queue_write_pos_++] = 0xFC ;
+    return true;
+}
+
+
 bool MIDIInOut::queueCC(uint8_t cc_number, uint8_t value) {
     if (cc_number > 127 || value > 127) {
         return false;

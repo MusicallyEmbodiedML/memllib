@@ -223,8 +223,11 @@ void MEMLNaut::setADC3Callback(AnalogCallback cb, uint16_t threshold) {
 }
 void MEMLNaut::setRVGain1Callback(AnalogCallback cb, uint16_t threshold) {
     //adcStates[3] = {analogRead(Pins::RV_GAIN1) / ADC_SCALE, threshold, cb};
-    DEBUG_PRINTLN("RVGain1 overridden - only controls audio volume");
+    // DEBUG_PRINTLN("RVGain1 overridden - only controls audio volume");
+    //this overrides the volume control
+    adcStates[3] = {analogRead(Pins::RV_GAIN1) / ADC_SCALE, threshold, cb};
 }
+
 void MEMLNaut::setRVGain1Volume(uint16_t threshold) {
     adcStates[3] = {
         analogRead(Pins::RV_GAIN1) / ADC_SCALE,
