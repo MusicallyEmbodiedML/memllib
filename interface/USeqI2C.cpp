@@ -33,9 +33,9 @@ bool USeqI2C::begin(uint8_t sda_pin, uint8_t scl_pin, uint32_t frequency) {
     delay(10);  // Match reference implementation delay
 
     // Only set clock if frequency is different from default
-    if (frequency != 100000) {
-        Wire1.setClock(frequency);
-    }
+    // if (frequency != 100000) {
+    Wire1.setClock(frequency);
+    // }
 
     initialized_ = true;
 
@@ -93,9 +93,11 @@ bool USeqI2C::sendValues(const float* values, size_t count) {
 }
 
 bool USeqI2C::transmit_(const void* data, size_t size) {
+    
     Wire1.beginTransmission(slave_address_);
     size_t written = Wire1.write(static_cast<const uint8_t*>(data), size);
     int result = Wire1.endTransmission(true);
+    
 
     return (result == 0 && written == size);
 }

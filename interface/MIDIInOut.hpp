@@ -104,6 +104,10 @@ public:
     bool queueClockStart();
     bool queueClockStop();
 
+    unsigned long midiClockTS=0;
+    unsigned long deltaTMinus1=0, deltaTMinus2=0;
+    void updateTempoEstimate();
+
 
     /**
      * @brief Flush all queued MIDI messages via DMA
@@ -159,6 +163,17 @@ public:
      * standard range of 0-127.
      */
     using midi_note_callback_t = std::function<void(const bool, const uint8_t, const uint8_t)>;
+
+    using midi_bpm_callback_t = std::function<void(const float)>;
+    void SetBPMCallback(midi_bpm_callback_t callback) {
+        bpm_callback_ = callback;
+    };
+
+    using midi_transport_callback_t = std::function<void(const bool)>;
+    void SetTransportCallback(midi_transport_callback_t callback) {
+        transport_callback_ = callback;
+    };
+
 
     /**
      * @brief Set the callback to be called when a MIDI CC message is received.
@@ -247,6 +262,8 @@ protected:
     size_t n_outputs_;
     midi_cc_callback_t cc_callback_;
     midi_note_callback_t note_callback_;
+    midi_bpm_callback_t bpm_callback_ = nullptr;
+    midi_transport_callback_t transport_callback_ = nullptr;
     uint8_t send_channel_;  // Store the MIDI send channel (1-16)
     uint8_t note_channel_;  // Store the MIDI note channel (1-16)
     bool refresh_uart_;

@@ -52,7 +52,7 @@ public:
      * @param frequency I2C frequency in Hz (default: 100000)
      * @return true if initialization successful, false otherwise
      */
-    bool begin(uint8_t sda_pin = Pins::USEQ_SDA, uint8_t scl_pin = Pins::USEQ_SCL, uint32_t frequency = 100000);
+    bool begin(uint8_t sda_pin = Pins::USEQ_SDA, uint8_t scl_pin = Pins::USEQ_SCL, uint32_t frequency = 1000000);
 
     /**
      * @brief Send a vector of float values via I2C
@@ -91,6 +91,7 @@ private:
     uint8_t slave_address_;     ///< I2C slave address
     bool initialized_;          ///< Initialization status
     float send_buffer_[kMaxValues]; ///< Internal buffer for sending data
+    float read_buffer_[kMaxValues]; ///< Internal buffer for sending data
 
     /**
      * @brief Internal function to perform I2C transmission

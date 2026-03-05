@@ -204,7 +204,7 @@ void MIDIInOut::Poll()
         // Process queued messages with rate limiting
         processQueuedMessages();
     }
-    USBMIDI.read();
+    // USBMIDI.read();
 }
 
 
@@ -661,12 +661,55 @@ void MIDIInOut::processRxBuffer() {
     }
 }
 
+unsigned long medianOf3(unsigned long a, unsigned long b, unsigned long c) {
+    if (a > b) std::swap(a, b);
+    if (b > c) std::swap(b, c);
+    if (a > b) std::swap(a, b);
+    return b;
+}
+
+int counter=0;
+void MIDIInOut::updateTempoEstimate() {
+    unsigned long now = micros();
+    unsigned long delta = now - midiClockTS;
+    if (delta < 10000)
+    {
+        delta = deltaTMinus1; // Ignore unrealistic short intervals (could be due to jitter)
+    }
+    unsigned long deltaSmoothed = medianOf3(deltaTMinus1, deltaTMinus2, delta);
+    float ticksPerSecond = 1000000.f/deltaSmoothed;
+    float bpm = ticksPerSecond * 60.f / 24.f;
+    counter++;
+    if (counter >= 12) { 
+        Serial.printf("---------Estimated BPM: %.2f, %f\n", bpm, deltaSmoothed);
+        if (bpm_callback_) {
+            bpm_callback_(bpm);
+        }
+        counter = 0;
+    };
+    deltaTMinus2 = deltaTMinus1;
+    deltaTMinus1 = delta;
+    midiClockTS = now;
+}
+
 void MIDIInOut::processMidiByte(uint8_t byte) {
     // Check if this is a status byte
     if (byte & 0x80) {
         // System Real-Time messages (single byte, can interrupt other messages)
-        if (byte >= 0xF8) {
-            // Ignore system real-time for now (Clock, Start, Stop, etc.)
+        if (byte == 0xF8) {
+            updateTempoEstimate();
+            return;
+        }
+        if (byte == 0xFA) {
+            if (transport_callback_) {
+                transport_callback_(true);  // Start
+            }
+            return;
+        }  
+        if (byte == 0xFC) {
+            if (transport_callback_) {
+                transport_callback_(false);  // Stop
+            }
             return;
         }
 
