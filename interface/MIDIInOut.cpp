@@ -672,19 +672,24 @@ int counter=0;
 void MIDIInOut::updateTempoEstimate() {
     unsigned long now = micros();
     unsigned long delta = now - midiClockTS;
-    if (delta < 10000)
+    if (delta < 100)
     {
         delta = deltaTMinus1; // Ignore unrealistic short intervals (could be due to jitter)
     }
     unsigned long deltaSmoothed = medianOf3(deltaTMinus1, deltaTMinus2, delta);
     float ticksPerSecond = 1000000.f/deltaSmoothed;
+    static float lastBPM = 140.f;
     float bpm = ticksPerSecond * 60.f / 24.f;
-    counter++;
-    if (counter >= 12) { 
-        Serial.printf("---------Estimated BPM: %.2f, %f\n", bpm, deltaSmoothed);
+    if (fabs(bpm - lastBPM) > 0.1f) {
+        lastBPM = bpm;
+        // Serial.printf("---------New BPM: %.2f, %f\n", bpm, deltaSmoothed);
         if (bpm_callback_) {
             bpm_callback_(bpm);
         }
+    }
+    counter++;
+    if (counter >= 12) { 
+        // Serial.printf("---------Estimated BPM: %.2f, %f\n", bpm, deltaSmoothed);
         counter = 0;
     };
     deltaTMinus2 = deltaTMinus1;
