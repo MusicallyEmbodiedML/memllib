@@ -677,14 +677,15 @@ void MIDIInOut::updateTempoEstimate() {
         delta = deltaTMinus1; // Ignore unrealistic short intervals (could be due to jitter)
     }
     unsigned long deltaSmoothed = medianOf3(deltaTMinus1, deltaTMinus2, delta);
-    float ticksPerSecond = 1000000.f/deltaSmoothed;
-    static float lastBPM = 140.f;
-    float bpm = ticksPerSecond * 60.f / 24.f;
-    if (fabs(bpm - lastBPM) > 0.1f) {
-        lastBPM = bpm;
-        // Serial.printf("---------New BPM: %.2f, %f\n", bpm, deltaSmoothed);
-        if (bpm_callback_) {
-            bpm_callback_(bpm);
+    if (deltaSmoothed > 0.f) {
+        float ticksPerSecond = 1000000.f/deltaSmoothed;
+        static float lastBPM = 140.f;
+        float bpm = ticksPerSecond * 60.f / 24.f;
+        if (fabs(bpm - lastBPM) > 0.1f) {
+            lastBPM = bpm;
+            if (bpm_callback_) {
+                bpm_callback_(bpm);
+            }
         }
     }
     counter++;
