@@ -476,20 +476,38 @@ public:
         cutoff1 = fminf(cutoff1, maxiSettings::sampleRate * 0.45f);
         cutoff1 = fmaxf(cutoff1, 10.f);
         resonance = fmaxf(0.5f, fminf(resonance, 20.f));
-        
+
         // Chamberlin SVF coefficients
         const float omega = TWOPI * cutoff1 * maxiSettings::one_over_sampleRate;
         const float f = 2.f * sinf(omega * 0.5f);
         const float q = 1.f / resonance;
         const float qAdjust = 1.f + q * f + f * f;
-        
+
         // State variable filter topology
         svf_low += f * svf_band;
         const float high = input - svf_low - q * svf_band;  // HIGH PASS output
         svf_band += f * high / qAdjust;
-        
+
         return high;  // Return highpass instead of lowpass
-    }    
+    }
+
+    /** A resonant band pass filter (Chamberlin SVF)
+    * \param input A signal
+    * \param cutoff1 The centre frequency (in Hz)
+    * \param resonance The Q / resonance (higher = narrower bandwidth)
+    */
+    __force_inline float bandpassChamberlain(float input, float cutoff1, float resonance) {
+        const float omega = TWOPI * cutoff1 * maxiSettings::one_over_sampleRate;
+        const float f = 2.f * sinf(omega * 0.5f);
+        const float q = 1.f / resonance;
+        const float qAdjust = 1.f + q * f + f * f;
+
+        svf_low += f * svf_band;
+        const float high = input - svf_low - q * svf_band;
+        svf_band += f * high / qAdjust;
+
+        return svf_band;
+    }
 
     /** A resonant band pass filter
     * \param input A signal
@@ -3367,5 +3385,40 @@ private:
     maxiFilter mf;
 
 
+};
+
+template<size_t DELAYTIME>
+class DynamicDelay {
+    static_assert((DELAYTIME & (DELAYTIME - 1)) == 0, "DELAYTIME must be a power of 2");
+    static constexpr size_t MASK = DELAYTIME - 1;
+
+public:
+    DynamicDelay() : smoothed_size(static_cast<float>(DELAYTIME)) {}
+
+    void setSmoothCoeff(float c) { smooth_coeff = c; }
+
+    float __force_inline read(float target_size) {
+        smoothed_size = smoothed_size * smooth_coeff + target_size * (1.0f - smooth_coeff);
+
+        float read_pos = static_cast<float>(write_index) - smoothed_size;
+        if (read_pos < 0.0f) read_pos += static_cast<float>(DELAYTIME);
+
+        size_t i1 = static_cast<size_t>(read_pos);
+        float frac = read_pos - static_cast<float>(i1);
+        size_t i2 = (i1 + 1) & MASK;
+
+        return delay_line[i1] + frac * (delay_line[i2] - delay_line[i1]);
+    }
+
+    void __force_inline write(float input) {
+        delay_line[write_index] = input;
+        write_index = (write_index + 1) & MASK;
+    }
+
+private:
+    std::array<float, DELAYTIME> delay_line{};
+    size_t write_index = 0;
+    float smoothed_size;
+    float smooth_coeff = 0.997f;
 };
 #endif
