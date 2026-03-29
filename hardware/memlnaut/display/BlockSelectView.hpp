@@ -10,9 +10,9 @@ class BlockSelectView : public ViewBase {
 public:
     using OnSelectCallback = std::function<void(size_t)>;
 
-    BlockSelectView(String name, int _buttonColour_ = TFT_BLUE, size_t nButtons_=8, size_t buttonWidth_=60, size_t buttonHeight_=60, int fontColour_=TFT_WHITE, std::vector<String> buttonNames_ = {}, int buttonAltColour_=TFT_BLUE)
+    BlockSelectView(String name, int _buttonColour_ = TFT_BLUE, size_t nButtons_=8, size_t buttonWidth_=60, size_t buttonHeight_=60, int fontColour_=TFT_WHITE, std::vector<String> buttonNames_ = {}, int buttonAltColour_=TFT_BLUE, uint8_t buttonFontNum_=4)
                 : ViewBase(name), buttonColour(_buttonColour_), buttonAltColour(buttonAltColour_),
-                nButtons(nButtons_), buttonWidth(buttonWidth_), buttonHeight(buttonHeight_), fontColour(fontColour_)
+                nButtons(nButtons_), buttonWidth(buttonWidth_), buttonHeight(buttonHeight_), fontColour(fontColour_), buttonFontNum(buttonFontNum_)
     {
         rows = (nButtons > 4) ? 2 : 1;
         cols = (nButtons + 1) / rows;
@@ -45,7 +45,7 @@ public:
         for(int i=0; i < cols; i++) {
             for(int j=0; j < rows; j++) {
                 if (idx <= nButtons) {
-                    auto button = std::make_shared<ButtonView>(buttonNames[idx-1], idx, altColour[idx-1] ? buttonAltColour : buttonColour, fontColour);
+                    auto button = std::make_shared<ButtonView>(buttonNames[idx-1], idx, altColour[idx-1] ? buttonAltColour : buttonColour, fontColour, buttonFontNum);
                     rect bounds = { static_cast<int>(area.x + 10 + (i * (buttonWidth+10))), static_cast<int>(area.y + 10 + (j*(buttonHeight+10))), static_cast<int>(buttonWidth), static_cast<int>(buttonHeight) };
                     AddSubView(button, bounds);
                     button->SetReleaseCallback([this](size_t id) { 
@@ -94,6 +94,7 @@ private:
     int fontColour = TFT_WHITE;
     std::vector<String> buttonNames;
     std::vector<bool> altColour;
+    uint8_t buttonFontNum = 4;
 };
 
 #endif 

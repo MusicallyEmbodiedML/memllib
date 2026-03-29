@@ -5,7 +5,6 @@
 // display.hpp is included via InterfaceRL.hpp
 
 
-static const String FILENAMEROOT("mlp_rl_");
 
 
 // Protected helper method implementations
@@ -409,17 +408,102 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
 }
 
 
+void InterfaceRL::setModeInfo(const String& modeRoot, const String& modeTag) {
+    _modeRoot = modeRoot;
+    _modeTag = modeTag;
+}
+
 bool InterfaceRL::_save_RL_to_SD(String id) {
-    bool success = true;
-    // Save actor and actorTarget
-    success = success && synthMapping->SaveMLPNetworkSD((FILENAMEROOT + id + String("_net.bin")).c_str());
+    String dir = "/" + _modeRoot;
+    String path = dir + "/" + id + ".bin";
+
+    if (!SD.exists(dir.c_str())) {
+        SD.mkdir(dir.c_str());
+    }
+
+    auto file = SD.open(path.c_str(), FILE_WRITE);
+    if (!file) {
+        Serial.println("Failed to open file for writing: " + path);
+        return false;
+    }
+    file.seek(0);
+
+    MEMLFileHeader header;
+    memcpy(header.magic, "MEML", 4);
+    header.format_version = MEML_FILE_FORMAT_VERSION;
+    memset(header.mode_tag, 0, sizeof(header.mode_tag));
+    strncpy(header.mode_tag, _modeTag.c_str(), sizeof(header.mode_tag) - 1);
+
+    std::vector<uint8_t> extraData;
+    if (_extraSaveFn) {
+        extraData = _extraSaveFn();
+    }
+    header.extra_size = static_cast<uint16_t>(extraData.size());
+
+    if (file.write((const char*)&header, sizeof(header)) != sizeof(header)) {
+        file.close();
+        return false;
+    }
+    if (!extraData.empty()) {
+        if (file.write(extraData.data(), extraData.size()) != extraData.size()) {
+            file.close();
+            return false;
+        }
+    }
+
+    bool success = synthMapping->SaveMLPNetworkToFile(file);
+    file.close();
     return success;
 }
 
 bool InterfaceRL::_load_RL_from_SD(String id) {
-    bool success = true;
-    // Load actor and actorTarget
-    success = success && synthMapping->LoadMLPNetworkSD((FILENAMEROOT + id + String("_net.bin")).c_str());
+    String path = "/" + _modeRoot + "/" + id + ".bin";
+
+    auto file = SD.open(path.c_str(), FILE_READ);
+    if (!file) {
+        Serial.println("File not found: " + path);
+        return false;
+    }
+
+    MEMLFileHeader header;
+    if (file.read((uint8_t*)&header, sizeof(header)) != sizeof(header)) {
+        file.close();
+        Serial.println("File too small to contain header");
+        return false;
+    }
+    if (memcmp(header.magic, "MEML", 4) != 0) {
+        file.close();
+        Serial.println("Unrecognised file format (bad magic)");
+        return false;
+    }
+    if (header.format_version > MEML_FILE_FORMAT_VERSION) {
+        file.close();
+        Serial.println("File saved with newer firmware (version " + String(header.format_version) + ")");
+        return false;
+    }
+    char expected_tag[17] = {};
+    strncpy(expected_tag, _modeTag.c_str(), 16);
+    if (memcmp(header.mode_tag, expected_tag, 16) != 0) {
+        char tag_buf[17] = {};
+        memcpy(tag_buf, header.mode_tag, 16);
+        file.close();
+        Serial.println(String("Wrong mode: file is for '") + tag_buf + "'");
+        return false;
+    }
+
+    if (header.extra_size > 0) {
+        std::vector<uint8_t> extraData(header.extra_size);
+        if (file.read(extraData.data(), header.extra_size) != header.extra_size) {
+            file.close();
+            return false;
+        }
+        if (_extraLoadFn) {
+            _extraLoadFn(extraData.data(), header.extra_size, header.format_version);
+        }
+    }
+
+    bool success = synthMapping->LoadMLPNetworkFromFile(file);
+    file.close();
     return success;
 }
 

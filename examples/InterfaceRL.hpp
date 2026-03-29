@@ -21,6 +21,7 @@
 #include "../hardware/memlnaut/display/BlockSelectView.hpp"
 #include "../hardware/memlnaut/display/RLStatsView.hpp"
 #include "../hardware/memlnaut/display/SingleSelectView.hpp"
+#include "InterfaceRLFileFormat.hpp"
 
 #define RL_MEM __not_in_flash("rlmem")
 
@@ -151,6 +152,13 @@ public:
     
     void bindMIDI(std::shared_ptr<MIDIInOut> midi_interf, bool enableFootcontroller=false);
 
+    void setModeInfo(const String& modeRoot, const String& modeTag);
+
+    using ExtraSaveDataFn = std::function<std::vector<uint8_t>()>;
+    using ExtraLoadDataFn = std::function<void(const uint8_t*, uint16_t, uint16_t)>;
+    void setExtraSaveCallback(ExtraSaveDataFn fn) { _extraSaveFn = fn; }
+    void setExtraLoadCallback(ExtraLoadDataFn fn) { _extraLoadFn = fn; }
+
     void trigger_like();
     void trigger_dislike();
 
@@ -239,6 +247,11 @@ private:
     bool resetMinMaxFlag = false;
 
     spin_lock_t *mlpActive;
+
+    String _modeRoot{"mlp_rl"};
+    String _modeTag{"Unknown"};
+    ExtraSaveDataFn _extraSaveFn;
+    ExtraLoadDataFn _extraLoadFn;
 
 };
 
