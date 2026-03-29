@@ -159,6 +159,11 @@ public:
     void setExtraSaveCallback(ExtraSaveDataFn fn) { _extraSaveFn = fn; }
     void setExtraLoadCallback(ExtraLoadDataFn fn) { _extraLoadFn = fn; }
 
+    using RVCallback = std::function<void(float)>;
+    void setRVX1Override(RVCallback fn) { rvX1Override = std::move(fn); }
+    void setRVY1Override(RVCallback fn) { rvY1Override = std::move(fn); }
+    void setRVZ1Override(RVCallback fn) { rvZ1Override = std::move(fn); }
+
     void trigger_like();
     void trigger_dislike();
 
@@ -196,6 +201,10 @@ private:
 
     OnMIDICtrlCallback midi5cb = nullptr;
     OnMIDICtrlCallback midi6cb = nullptr;
+
+    RVCallback rvX1Override;
+    RVCallback rvY1Override;
+    RVCallback rvZ1Override;
 
     static constexpr size_t bias=1;
 

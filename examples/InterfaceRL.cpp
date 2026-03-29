@@ -175,25 +175,14 @@ void InterfaceRL::bind_RL_interface(INPUT_MODES input_mode, bool joystick4D) {
     });
 
 
-    MEMLNaut::Instance()->setRVX1Callback([this](float value) { // scr_ref no longer captured directly
-        this->setRewardScaleInterf(value);
-    });
+    MEMLNaut::Instance()->setRVX1Callback(
+        rvX1Override ? rvX1Override : RVCallback([this](float value) { this->setRewardScaleInterf(value); }));
 
-    MEMLNaut::Instance()->setRVY1Callback([this](float value) {
-        // this->setRewardScaleInterf(value);
-        this->setLRScale(value);
-    });
+    MEMLNaut::Instance()->setRVY1Callback(
+        rvY1Override ? rvY1Override : RVCallback([this](float value) { this->setLRScale(value); }));
 
-    MEMLNaut::Instance()->setRVZ1Callback([this](float value) { // scr_ref no longer captured directly
-        // value *= 0.1f; // Scale down the value
-        // this->setLearningRate(value);
-        // String msg = "LR: " + String(value,8);
-        // if (msgView) msgView->post(msg);
-        // this->setDiscountFactor(value);
-        // String msg = "Discount factor: " + String(value);
-        // if (msgView) msgView->post(msg);
-        setNoiseLevel(value);
-    });
+    MEMLNaut::Instance()->setRVZ1Callback(
+        rvZ1Override ? rvZ1Override : RVCallback([this](float value) { setNoiseLevel(value); }));
     // Set up loop callback
     MEMLNaut::Instance()->setLoopCallback([this]() {
         uint32_t save = spin_lock_blocking(mlpActive);
