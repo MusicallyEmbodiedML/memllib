@@ -37,7 +37,14 @@ public:
 
     
     void OnDraw() override {
-    }  
+        TFT_eSprite textSprite(scr);
+        textSprite.createSprite(area.w, 20);
+        textSprite.fillSprite(TFT_BLACK);
+        textSprite.setTextColor(TFT_WHITE, TFT_BLACK);
+        textSprite.setTextFont(2);
+        textSprite.drawString(isFocused() ? "Press to confirm" : "Press to select", 10, 0);
+        textSprite.pushSprite(area.x, area.y + 165);
+    }
 
     bool acceptsFocus() override {
         return true;
@@ -51,7 +58,8 @@ public:
     }
 
     void removeFocus() override{
-        hasFocus = false;   
+        hasFocus = false;
+        redraw();
     }
 
     void HandleRotaryEncChange(int inc) override {
