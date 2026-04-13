@@ -648,6 +648,7 @@ void InterfaceRL::generateAction(bool donthesitate) {
                 }
             }
         }
+        if (paramTransformHook) paramTransformHook(mappingOutput);
         SendParamsToQueue(mappingOutput);
         action = mappingOutput;
         nnOutputsGraphView->UpdateValues(mappingOutput, resetMinMaxFlag);

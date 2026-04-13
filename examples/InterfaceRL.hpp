@@ -187,6 +187,8 @@ public:
     std::shared_ptr<RLStatsView> rlStatsView;
     std::shared_ptr<SingleSelectView> memoryStoreModeView;
 
+    const std::vector<float>& getLastAction() const { return action; }
+
 protected:
     // Helper methods for trigger actions
     void _perform_like_action();
@@ -237,7 +239,6 @@ private:
     float learningRate = 1e-3;
     float learningRateScaled = learningRate;
     std::vector<float> action;
-
 
     ReplayMemory<trainStatelessRLItem> replayMem;
     static constexpr size_t memoryLimit = 64;

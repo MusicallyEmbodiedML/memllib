@@ -3,6 +3,7 @@
 
 #include "pico/util/queue.h"
 #include <vector>
+#include <functional>
 #include "MIDIInOut.hpp"
 #include <memory>
 #include <span>
@@ -37,6 +38,10 @@ public:
     inline void SetMIDIInterface(std::shared_ptr<MIDIInOut> midi) {
         midi_ = midi;
     }
+
+    // Optional transform applied to params before queuing and before storing as training action.
+    // Set this to apply FocusManager::applyInPlace or similar.
+    std::function<void(std::vector<float>&)> paramTransformHook;
 
     // Queue management
     void SendParamsToQueue(const std::vector<float>& data);
