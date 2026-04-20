@@ -109,7 +109,8 @@ void InterfaceRL::bind_RL_interface(INPUT_MODES input_mode, bool joystick4D) {
     });
 
 
-    if (input_mode != INPUT_MODES::MACHINE_LISTENING) {
+    if (input_mode != INPUT_MODES::MACHINE_LISTENING &&
+        input_mode != INPUT_MODES::SERIAL_INPUT) {
         MEMLNaut::Instance()->setJoySWCallback([this](bool state) {
             //button down
             if (state) {

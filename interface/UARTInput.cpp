@@ -8,6 +8,8 @@ UARTInput::UARTInput(const std::vector<size_t>& sensor_indexes,
                      size_t sensor_tx,
                      size_t baud_rate) :
     sensor_indexes_(sensor_indexes),
+    sensor_rx_(sensor_rx),
+    sensor_tx_(sensor_tx),
     slipBuffer{ 0 },
     filters_(),
     value_states_{ 0 },
@@ -22,9 +24,6 @@ UARTInput::UARTInput(const std::vector<size_t>& sensor_indexes,
     value_states_.reserve(kMaxChannels);
     filters_.resize(kMaxChannels);
     value_states_.resize(kMaxChannels, 0.5f);
-
-    // Tie RX to a known level to avoid floating
-    pinMode(sensor_rx, INPUT_PULLDOWN);
 
     Serial1.setTX(sensor_tx);
     Serial1.setRX(sensor_rx);
@@ -54,7 +53,10 @@ void UARTInput::Poll()
         DEBUG_PRINT(Serial1 ? "Yes" : "No");
         DEBUG_PRINT(", Target Baud Rate: ");
         DEBUG_PRINTLN(baud_rate_);
-        // Start at current baud rate
+        // Re-apply pin config before begin() — calling begin() without setTX/setRX
+        // would reset Serial1 to default pins, discarding the constructor's setup.
+        Serial1.setTX(sensor_tx_);
+        Serial1.setRX(sensor_rx_);
         Serial1.begin(baud_rate_);
         DEBUG_PRINTLN("PIO_UART refreshed.");
         DEBUG_PRINT("Serial available: ");
@@ -100,7 +102,7 @@ void UARTInput::Poll()
                         size_t maxOut = sizeof(outBuf);
                         size_t got = SLIP::decode(slipBuffer, spiIdx,
                                 reinterpret_cast<uint8_t*>(outBuf), maxOut);
-                        //DEBUG_PRINTF("Got %zu bytes\n", got);
+                        // DEBUG_PRINTF("Got %zu bytes\n", got);
                         {
                             //spiMessage msg;
                             //memcpy(&msg, outBuf, maxOut);
@@ -121,39 +123,39 @@ void UARTInput::Poll()
     }
 }
 
-void UARTInput::Parse_(spiMessage msg)
-{
-    static const float kEventThresh = 0.01;
+// void UARTInput::Parse_(spiMessage msg)
+// {
+//     static const float kEventThresh = 0.001;
 
-    //DEBUG_PRINTLN(String("-- Chan ") + msg.msg + String(" Value ") + msg.value);
+//     DEBUG_PRINTLN(String("-- Chan ") + msg.msg + String(" Value ") + msg.value);
 
-    // Find if this message's index is in our tracked indexes
-    auto index = where(sensor_indexes_, msg.msg);
-    if (index >= 0) {
-        // Protect against infs and nans
-        if (std::isnan(msg.value) || std::isinf(msg.value)) {
-            msg.value = value_states_[index];
-        }
+//     // Find if this message's index is in our tracked indexes
+//     auto index = where(sensor_indexes_, msg.msg);
+//     if (index >= 0) {
+//         // Protect against infs and nans
+//         if (std::isnan(msg.value) || std::isinf(msg.value)) {
+//             msg.value = value_states_[index];
+//         }
 
-        float filtered_value = filters_[index].process(msg.value);
-        float prev_value = value_states_[index];
+//         float filtered_value = filters_[index].process(msg.value);
+//         float prev_value = value_states_[index];
 
-        // Trigger callback whenever any value has changed
-        if (std::abs(filtered_value - prev_value) > kEventThresh) {
-            if (callback_) callback_(msg.msg, filtered_value);
-        }
+//         // Trigger callback whenever any value has changed
+//         if (std::abs(filtered_value - prev_value) > kEventThresh) {
+//             if (callback_) callback_(msg.msg, filtered_value);
+//         }
 
-        // Print the value (Arduino scope) if it's the observed channel
-        if (kObservedChan == msg.msg) {
-            DEBUG_PRINT("Low:0.00,High:1.00,Value:");
-            DEBUG_PRINT(msg.value, 8);
-            DEBUG_PRINT(",FilteredValue:");
-            DEBUG_PRINTLN(filtered_value, 8);
-        }
+//         // Print the value (Arduino scope) if it's the observed channel
+//         if (kObservedChan == msg.msg) {
+//             DEBUG_PRINT("Low:0.00,High:1.00,Value:");
+//             DEBUG_PRINT(msg.value, 8);
+//             DEBUG_PRINT(",FilteredValue:");
+//             DEBUG_PRINTLN(filtered_value, 8);
+//         }
 
-        value_states_[index] = filtered_value;
-    }
-}
+//         value_states_[index] = filtered_value;
+//     }
+// }
 
 void UARTInput::ParseBuf_(float* buf, size_t len)
 {
@@ -170,24 +172,27 @@ void UARTInput::ParseBuf_(float* buf, size_t len)
             if (std::isnan(raw_value) || std::isinf(raw_value)) {
                 raw_value = value_states_[i];
             }
-
-            float filtered_value = filters_[i].process(raw_value);
-            float prev_value = value_states_[i];
+            if (callback_) {
+                callback_(i, raw_value);
+            }
+        
+            // float filtered_value = filters_[i].process(raw_value);
+            // float prev_value = value_states_[i];
 
             // Trigger callback whenever any value has changed
-            if (std::abs(filtered_value - prev_value) > kEventThresh) {
-                changed = true;
-                if (callback_) callback_(i, filtered_value);
-            }
+            // if (std::abs(filtered_value - prev_value) > kEventThresh) {
+            //     changed = true;
+            //     Serial.println("UART input: " + String(i) + " value: " + String(filtered_value));
+            // }
 
-            // Print the value (Arduino scope) if it's the observed channel
-            if (kObservedChan == i) {
-                DEBUG_PRINT("Low:0.00,High:1.00,Value:");
-                DEBUG_PRINT(raw_value, 8);
-                DEBUG_PRINT(",FilteredValue:");
-                DEBUG_PRINTLN(filtered_value, 8);
-            }
-            value_states_[i] = filtered_value;
+            // // Print the value (Arduino scope) if it's the observed channel
+            // if (kObservedChan == i) {
+            //     DEBUG_PRINT("Low:0.00,High:1.00,Value:");
+            //     DEBUG_PRINT(raw_value, 8);
+            //     DEBUG_PRINT(",FilteredValue:");
+            //     DEBUG_PRINTLN(filtered_value, 8);
+            // }
+            value_states_[i] = raw_value;
         }
     }
 }

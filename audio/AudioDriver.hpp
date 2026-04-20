@@ -108,13 +108,13 @@ class AudioDriver {
     static inline size_t GetSampleRate() { return kSampleRate; }
     static size_t GetSysClockSpeed() {
 		if (kSampleRate == 48000) {
-	        return 132000 * 2; 
+	        return 132000 * 2;
 		} else if (kSampleRate == 44100) {
 			return 135475 * 2;
 		} else if (kSampleRate == 32000) {
-		    return 132000 * 2; 
+		    return 132000 * 2;
 		} else if (kSampleRate == 24000) {
-		    return 132000 * 2; 
+		    return 132000 * 2;
 		} else {
 			panic("Unsupported sample rate for SGTL5000");
 		}

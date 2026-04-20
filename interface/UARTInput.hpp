@@ -55,6 +55,8 @@ public:
 protected:
     static const size_t kSlipBufferSize_ = 128;
     std::vector<size_t> sensor_indexes_;
+    size_t sensor_rx_;
+    size_t sensor_tx_;
     uint8_t slipBuffer[kSlipBufferSize_];
     std::vector<MedianFilter<float>> filters_;
     std::vector<float> value_states_;
@@ -76,7 +78,7 @@ protected:
     SPISTATES spiState;
     int spiIdx;
 
-    void Parse_(spiMessage msg);
+    // void Parse_(spiMessage msg);
     void ParseBuf_(float* buf, size_t len = kMaxChannels);
 
 private:

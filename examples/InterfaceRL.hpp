@@ -40,7 +40,8 @@ public:
     enum class INPUT_MODES {
         JOYSTICK,
         MACHINE_LISTENING,
-        JOYSTICK_AND_MACHINE_LISTENING
+        JOYSTICK_AND_MACHINE_LISTENING,
+        SERIAL_INPUT
     };
 
     enum class MEMORY_STORE_MODES {
@@ -147,7 +148,12 @@ public:
     void bindUARTInput(std::shared_ptr<UARTInput> uart_input,
         const std::vector<size_t>& kUARTListenInputs)
     {
-        DEBUG_PRINTLN("bindUARTInput not implemented yet");
+        uart_input->SetCallback([this](size_t channel, float value) {
+            // Serial.println("UART input: " + String(channel) + " value: " + String(value));
+            if (channel < controlInput.size()) {
+                setState(channel, value);
+            }
+        });
     }
     
     void bindMIDI(std::shared_ptr<MIDIInOut> midi_interf, bool enableFootcontroller=false);
