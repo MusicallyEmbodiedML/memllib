@@ -20,7 +20,10 @@ PERF_DECLARE(AUDIOLOOP);
 
 AUDIO_MEM uint32_t AUDIOLOOP_MEAN=0;
 
-constexpr int sampleRate = kSampleRate; // minimum for many i2s DACs
+size_t kSampleRate = 48000;
+float kSampleRateRcpr = 1.0f / 48000.f;
+
+int sampleRate = static_cast<int>(kSampleRate);
 constexpr int bitsPerSample = 32;
 
 constexpr float amplitude = 1 << (bitsPerSample - 2); // amplitude of square wave = 1/2 of maximum
@@ -269,6 +272,11 @@ bool AudioDriver::Setup() {
     return Setup(config);
 }
 
+
+void AudioDriver::SetSampleRate(size_t rate) {
+    kSampleRate = rate;
+    kSampleRateRcpr = 1.0f / static_cast<float>(rate);
+}
 
 stereosample_t AudioDriver::silence_(stereosample_t x) {
     x.L = 0;

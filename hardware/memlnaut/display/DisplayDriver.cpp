@@ -202,8 +202,10 @@ void DisplayDriver::PollTouch() {
             // }
             isTouchPressed_ = true;
         } else if (isTouchPressed_) {
-            //drag event
-        } 
+            if (pressed) {
+                views_[currentViewIndex_]->HandleTouchDrag(lastTouchX, lastTouchY);
+            }
+        }
         if (!pressed && isTouchPressed_) {
             // If touch was released, handle release
             // views_[currentViewIndex_]->HandleRelease();

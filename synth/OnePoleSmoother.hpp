@@ -6,9 +6,15 @@
 template<size_t n_channels>
 class OnePoleSmoother {
  public:
+    OnePoleSmoother() : sample_rate_(48000.f), b1_(0.f), y_ { 0 } {}
     OnePoleSmoother(float time_ms, float sample_rate) :
         sample_rate_(sample_rate),
         y_ { 0 } {
+        SetTimeMs(time_ms);
+    }
+    void Setup(float time_ms, float sample_rate) {
+        sample_rate_ = sample_rate;
+        for (unsigned int c = 0; c < n_channels; c++) y_[c] = 0.f;
         SetTimeMs(time_ms);
     }
     void SetTimeMs(float time_ms) {

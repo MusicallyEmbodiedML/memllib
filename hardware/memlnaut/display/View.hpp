@@ -13,12 +13,9 @@ public:
     void Setup(TFT_eSPI* tft, rect bounds);  // No longer virtual
     virtual void OnSetup() = 0;  // New virtual setup hook
     virtual void OnDraw() = 0;  
-    virtual void OnTouchDown(size_t x, size_t y) {
-
-    };  
-    virtual void OnTouchUp(size_t x, size_t y) {
-
-    };
+    virtual void OnTouchDown(size_t x, size_t y) {};
+    virtual void OnTouchDrag(size_t x, size_t y) {};
+    virtual void OnTouchUp(size_t x, size_t y) {};
     //called when a view is displayed  
     virtual void OnDisplay() {
         for(auto& subview: subviews) {
@@ -61,6 +58,16 @@ public:
             }
         }
         OnTouchDown(x,y);
+    }
+
+    void HandleTouchDrag(size_t x, size_t y) {
+        for(auto& subview: subviews) {
+            if (subview->area.x <= x && x < subview->area.x + subview->area.w &&
+                subview->area.y <= y && y < subview->area.y + subview->area.h) {
+                subview->HandleTouchDrag(x, y);
+            }
+        }
+        OnTouchDrag(x, y);
     }
 
     void HandleTouchRelease(size_t x, size_t y) {

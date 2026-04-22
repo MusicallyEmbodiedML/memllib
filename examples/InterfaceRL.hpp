@@ -255,7 +255,7 @@ private:
     std::vector<float> action;
 
     ReplayMemory<trainStatelessRLItem> replayMem;
-    static constexpr size_t memoryLimit = 64;
+    static constexpr size_t memoryLimit = 32;
     static constexpr size_t batchSize = 8;
 
     std::vector<float> mappingOutput;

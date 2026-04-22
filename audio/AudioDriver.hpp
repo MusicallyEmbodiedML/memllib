@@ -9,9 +9,8 @@
 extern "C" {
 
 const size_t kBufferSize = AUDIO_BUFFER_FRAMES;
-// constexpr size_t kSampleRate = 48000;
-constexpr size_t kSampleRate = 32000;
-constexpr float kSampleRateRcpr = 1.0/kSampleRate;
+extern size_t kSampleRate;
+extern float kSampleRateRcpr;
 const size_t kNChannels = 2;
 
 struct stereosample_t {
@@ -106,6 +105,7 @@ class AudioDriver {
     }
 
     static inline size_t GetSampleRate() { return kSampleRate; }
+    static void SetSampleRate(size_t rate);
     static size_t GetSysClockSpeed() {
 		if (kSampleRate == 48000) {
 	        return 132000 * 2;
