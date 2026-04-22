@@ -115,6 +115,20 @@ void DisplayDriver::Draw() {
 
 }
 
+void DisplayDriver::NavigateToView(const std::shared_ptr<ViewBase>& target) {
+    auto it = std::find(views_.begin(), views_.end(), target);
+    if (it == views_.end()) return;
+    size_t targetIndex = static_cast<size_t>(it - views_.begin());
+    if (targetIndex == currentViewIndex_) return;
+    views_[currentViewIndex_]->setVisible(false);
+    views_[currentViewIndex_]->removeFocus();
+    views_[currentViewIndex_]->OnHide();
+    currentViewIndex_ = targetIndex;
+    views_[currentViewIndex_]->setVisible(true);
+    views_[currentViewIndex_]->OnDisplay();
+    redraw_internal_ = true;
+}
+
 void DisplayDriver::ChangeView(int delta) {
     if (!redraw_internal_) { //wait until the current redraw is finished
         auto lastViewIndex = currentViewIndex_;

@@ -72,6 +72,13 @@ public:
         textSprite.pushSprite(area.x,area.y + area.h - 25);
     }  
 
+    void updateButtonName(size_t idx, const String& newName) {
+        if (idx < buttons.size()) {
+            buttons[idx]->name_ = newName;
+            buttons[idx]->redraw();
+        }
+    }
+
     void SetMessage(const String &__msg) {
         msg = __msg;
         redraw();

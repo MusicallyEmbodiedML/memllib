@@ -21,6 +21,7 @@
 #include "../hardware/memlnaut/display/BlockSelectView.hpp"
 #include "../hardware/memlnaut/display/RLStatsView.hpp"
 #include "../hardware/memlnaut/display/SingleSelectView.hpp"
+#include "../hardware/memlnaut/display/NameInputView.hpp"
 #include "InterfaceRLFileFormat.hpp"
 
 #define RL_MEM __not_in_flash("rlmem")
@@ -188,6 +189,7 @@ public:
     std::shared_ptr<MessageView> msgView;
     std::shared_ptr<BlockSelectView> fileSaveView;
     std::shared_ptr<BlockSelectView> fileLoadView;
+    std::shared_ptr<NameInputView> nameInputView;
     std::shared_ptr<BarGraphView> nnInputsGraphView;
     std::shared_ptr<BarGraphView> nnOutputsGraphView;
     std::shared_ptr<RLStatsView> rlStatsView;
@@ -203,6 +205,12 @@ protected:
     bool _save_RL_to_SD(String id);
     bool _load_RL_from_SD(String id);
     void _forget_replay_mem_interf();
+    void _saveSlotNames();
+    void _loadSlotNames();
+
+    static constexpr int kNumSlots = 8;
+    String slotNames[kNumSlots];
+    int pendingSaveSlot = -1;
     
 
 private:

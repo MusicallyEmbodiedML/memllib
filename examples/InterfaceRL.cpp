@@ -355,30 +355,22 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
     MEMLNaut::Instance()->disp->AddView(msgView);
 
     fileSaveView = std::make_shared<BlockSelectView>("Save Model", TFT_BLUE);
-    fileSaveView->SetOnSelectCallback([this] (size_t id) {
-        fileSaveView->SetMessage("Saving model " + String(id));
-        uint32_t save = spin_lock_blocking(mlpActive);
-        if (MEMLNaut::Instance()->startSD()) {
-            if (this->_save_RL_to_SD(String(id))) {
-                fileSaveView->SetMessage("Model saved successfully to slot " + String(id));
-            } else {
-                fileSaveView->SetMessage("Failed to save model");
-            }
-            MEMLNaut::Instance()->stopSD();
-        } else {
-            fileSaveView->SetMessage("SD card error - is it inserted and formatted?");
-        }
-        spin_unlock(mlpActive, save);
+    fileSaveView->SetOnSelectCallback([this](size_t id) {
+        pendingSaveSlot = static_cast<int>(id) - 1;
+        nameInputView->reset(slotNames[pendingSaveSlot]);
+        MEMLNaut::Instance()->disp->NavigateToView(nameInputView);
     });
     MEMLNaut::Instance()->disp->AddView(fileSaveView);
 
     fileLoadView = std::make_shared<BlockSelectView>("Load Model", TFT_PURPLE);
-    fileLoadView->SetOnSelectCallback([this] (size_t id) {
-        fileLoadView->SetMessage("Loading model " + String(id));
+    fileLoadView->SetOnSelectCallback([this](size_t id) {
+        int slotIdx = static_cast<int>(id) - 1;
+        String filename = (slotNames[slotIdx].length() > 0) ? slotNames[slotIdx] : String(id);
+        fileLoadView->SetMessage("Loading " + filename);
         uint32_t save = spin_lock_blocking(mlpActive);
         if (MEMLNaut::Instance()->startSD()) {
-            if (this->_load_RL_from_SD(String(id))) {
-                fileLoadView->SetMessage("Model loaded successfully ");
+            if (this->_load_RL_from_SD(filename)) {
+                fileLoadView->SetMessage("Loaded " + filename);
             } else {
                 fileLoadView->SetMessage("Failed to load model");
             }
@@ -387,20 +379,49 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
             fileLoadView->SetMessage("SD card error - is it inserted and formatted?");
         }
         spin_unlock(mlpActive, save);
-
     });
     MEMLNaut::Instance()->disp->AddView(fileLoadView);
 
-    
-
-
-
+    nameInputView = std::make_shared<NameInputView>("Name");
+    nameInputView->setCallbacks(
+        [this](const String& name) {
+            if (pendingSaveSlot >= 0 && pendingSaveSlot < kNumSlots) {
+                String displayName = (name.length() > 0) ? name : String(pendingSaveSlot + 1);
+                slotNames[pendingSaveSlot] = name;
+                fileSaveView->updateButtonName(static_cast<size_t>(pendingSaveSlot), displayName);
+                fileLoadView->updateButtonName(static_cast<size_t>(pendingSaveSlot), displayName);
+                fileSaveView->SetMessage("Saving as " + displayName);
+                uint32_t save = spin_lock_blocking(mlpActive);
+                if (MEMLNaut::Instance()->startSD()) {
+                    _saveSlotNames();
+                    if (this->_save_RL_to_SD(displayName)) {
+                        fileSaveView->SetMessage("Saved as " + displayName);
+                    } else {
+                        fileSaveView->SetMessage("Failed to save model");
+                    }
+                    MEMLNaut::Instance()->stopSD();
+                } else {
+                    fileSaveView->SetMessage("SD card error - is it inserted and formatted?");
+                }
+                spin_unlock(mlpActive, save);
+            }
+            MEMLNaut::Instance()->disp->NavigateToView(fileSaveView);
+        },
+        [this]() {
+            MEMLNaut::Instance()->disp->NavigateToView(fileSaveView);
+        }
+    );
+    MEMLNaut::Instance()->disp->AddView(nameInputView);
 }
 
 
 void InterfaceRL::setModeInfo(const String& modeRoot, const String& modeTag) {
     _modeRoot = modeRoot;
     _modeTag = modeTag;
+    if (MEMLNaut::Instance()->startSD()) {
+        _loadSlotNames();
+        MEMLNaut::Instance()->stopSD();
+    }
 }
 
 bool InterfaceRL::_save_RL_to_SD(String id) {
@@ -497,7 +518,36 @@ bool InterfaceRL::_load_RL_from_SD(String id) {
     return success;
 }
 
+void InterfaceRL::_saveSlotNames() {
+    String dir = "/" + _modeRoot;
+    if (!SD.exists(dir.c_str())) {
+        SD.mkdir(dir.c_str());
+    }
+    String path = dir + "/slots.txt";
+    auto file = SD.open(path.c_str(), FILE_WRITE);
+    if (!file) return;
+    file.seek(0);
+    for (int i = 0; i < kNumSlots; i++) {
+        file.println(slotNames[i]);
+    }
+    file.close();
+}
 
+void InterfaceRL::_loadSlotNames() {
+    String path = "/" + _modeRoot + "/slots.txt";
+    auto file = SD.open(path.c_str(), FILE_READ);
+    if (!file) return;
+    for (int i = 0; i < kNumSlots; i++) {
+        String line = file.readStringUntil('\n');
+        line.trim();
+        slotNames[i] = line;
+        if (line.length() > 0) {
+            fileSaveView->updateButtonName(static_cast<size_t>(i), line);
+            fileLoadView->updateButtonName(static_cast<size_t>(i), line);
+        }
+    }
+    file.close();
+}
 
 
 void InterfaceRL::optimise() {

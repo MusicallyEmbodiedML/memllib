@@ -50,6 +50,7 @@ public:
     unsigned long GetLastDrawTime() const { return lastDrawTime_; }
 
     void ChangeView(int delta);
+    void NavigateToView(const std::shared_ptr<ViewBase>& target);
 
     void RotaryIncEvent(int delta) {
         if (currentViewIndex_ < views_.size()) {
