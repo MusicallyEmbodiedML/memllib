@@ -134,6 +134,9 @@ public:
         // Override in subclass if needed
     }
 
+    // Returns pointer to children if this view is a section container, else nullptr
+    virtual std::vector<std::shared_ptr<ViewBase>>* getSectionChildren() { return nullptr; }
+
 protected:
     explicit ViewBase(String &name)  // Changed parameter type
             : name_(name)

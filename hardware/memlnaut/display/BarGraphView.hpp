@@ -18,13 +18,25 @@ public:
         offsetX = 5;
         offsetY = 5;
         barSectionWidth = (area.w - (2 * offsetX)) / static_cast<float>(newValues.size());
-        barSectionHeight = area.h - (2 * offsetY);
+        barSectionHeight = area.h - (2 * offsetY) - 18;
         rangeTotal = rangeHigh - rangeLow;
         rangeTotalInv = 1.f / rangeTotal;
-    }  
+    }
 
     void OnDisplay() override {
     };
+
+    void setStatus(float loss, size_t memCount, float lr, float noise) {
+        statusLoss_ = loss;
+        statusMemCount_ = memCount;
+        statusLR_ = lr;
+        statusNoise_ = noise;
+    }
+
+    void flashCommand(const String& cmd) {
+        statusCmd_ = cmd;
+        cmdExpiry_ = millis() + 3000;
+    }
 
     void UpdateValues(const std::vector<float>& values, bool resetMinMax=false) {
         for(size_t i=0; i < values.size(); i++) {
@@ -33,6 +45,9 @@ public:
         if (resetMinMax) {
             runningMax = values;
             runningMin = values;
+        }
+        if (!statusCmd_.isEmpty() && millis() > cmdExpiry_) {
+            statusCmd_ = "";
         }
         redraw();
     }
@@ -105,15 +120,37 @@ public:
             //     scr->drawLine(x,oldminy, x+barwidth, oldminy, TFT_PINK);
             // }
         }
-        oldValues = newValues;  // Update old values after drawing
+        oldValues = newValues;
         drawnValues = true;
-    }  
+
+        int statusY = area.y + area.h - 18;
+        scr->fillRect(area.x, statusY, area.w, 18, TFT_BLACK);
+        scr->setTextColor(TFT_DARKGREY, TFT_BLACK);
+        scr->setTextFont(1);
+        scr->setCursor(area.x + 2, statusY + 4);
+        char buf[48];
+        snprintf(buf, sizeof(buf), "L:%.3f M:%d LR:%.2f N:%.2f",
+                 statusLoss_, (int)statusMemCount_, statusLR_, statusNoise_);
+        scr->print(buf);
+        if (!statusCmd_.isEmpty()) {
+            scr->setTextColor(TFT_YELLOW, TFT_BLACK);
+            scr->setCursor(area.x + area.w - 68, statusY + 4);
+            scr->print(statusCmd_);
+        }
+    }
 
 
 
 private:
     std::vector<float> newValues, oldValues;
     int colour = TFT_GREEN;
+
+    float statusLoss_{0.f};
+    size_t statusMemCount_{0};
+    float statusLR_{0.f};
+    float statusNoise_{0.f};
+    String statusCmd_{};
+    unsigned long cmdExpiry_{0};
     int barwidth = 2;
     float rangeLow = 0.0f;
     float rangeHigh = 1.0f;

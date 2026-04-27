@@ -20,6 +20,7 @@ void InterfaceRL::_perform_like_action() {
     };
     String msg = likemsgs[rand() % likemsgs.size()];
     this->storeExperience(1.f, controlInput, action);
+    if (nnOutputsGraphView) nnOutputsGraphView->flashCommand("LIKE");
     DEBUG_PRINTLN(msg);
     if (msgView) msgView->post(msg);
 }
@@ -37,6 +38,7 @@ void InterfaceRL::_perform_dislike_action() {
     };
     String msg = dislikemsgs[rand() % dislikemsgs.size()];
     this->storeExperience(-1.f, controlInput, action);
+    if (nnOutputsGraphView) nnOutputsGraphView->flashCommand("DISLIKE");
     DEBUG_PRINTLN(msg);
     if (msgView) msgView->post(msg);
 }
@@ -45,6 +47,7 @@ void InterfaceRL::_perform_randomiseRL_action() {
 
     this->randomiseTheNetwork();
     this->generateAction(true);
+    if (nnOutputsGraphView) nnOutputsGraphView->flashCommand("RANDOMISE");
     DEBUG_PRINTLN("Randomising networks");
     if (msgView) msgView->post("Scrambling the network");
 }
@@ -207,6 +210,7 @@ void InterfaceRL::setRewardScaleInterf(float value)
 void InterfaceRL::_forget_replay_mem_interf()
 {
     this->forgetMemory();
+    if (nnOutputsGraphView) nnOutputsGraphView->flashCommand("CLEAR");
     static APP_SRAM std::vector<String> forgetmsgs = {
         "Erasing my memory", "Forgetting everything", "Memory wiped","Thank you Susan?",
         "Starting afresh", "Why care about the past?","Living in the moment"
@@ -336,23 +340,30 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
 
     itemsToRemove.reserve(replayMem.getMemoryLimit());
 
-    // GUI
+    // GUI — Neural Net section
+    nnSection = std::make_shared<SectionView>("Neural Net");
+
     nnOutputsGraphView = std::make_shared<BarGraphView>("NN Outputs", n_outputs, 4, TFT_GREEN, 0.f, 1.f);
-    MEMLNaut::Instance()->disp->AddView(nnOutputsGraphView);
+    nnSection->addChild(nnOutputsGraphView);
     rlStatsView = std::make_shared<RLStatsView>("RL Stats");
-    MEMLNaut::Instance()->disp->AddView(rlStatsView);
+    nnSection->addChild(rlStatsView);
     nnInputsGraphView = std::make_shared<BarGraphView>("NN Inputs", n_inputs, 10, TFT_YELLOW, 0.f, 1.f);
-    MEMLNaut::Instance()->disp->AddView(nnInputsGraphView);
+    nnSection->addChild(nnInputsGraphView);
 
     memoryStoreModeView = std::make_shared<SingleSelectView>("Mem Mode");
-    MEMLNaut::Instance()->disp->AddView(memoryStoreModeView);
     memoryStoreModeView->setOptions(memOptions);
     memoryStoreModeView->setNewVoiceCallback([this](size_t idx) {
         memoryStoreMode = static_cast<MEMORY_STORE_MODES>(idx);
     });
+    nnSection->addChild(memoryStoreModeView);
 
     msgView = std::make_shared<MessageView>("Messages");
-    MEMLNaut::Instance()->disp->AddView(msgView);
+    nnSection->addChild(msgView);
+
+    MEMLNaut::Instance()->disp->AddView(nnSection);
+
+    // File section
+    fileSection = std::make_shared<SectionView>("File");
 
     fileSaveView = std::make_shared<BlockSelectView>("Save Model", TFT_BLUE);
     fileSaveView->SetOnSelectCallback([this](size_t id) {
@@ -360,7 +371,7 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
         nameInputView->reset(slotNames[pendingSaveSlot]);
         MEMLNaut::Instance()->disp->NavigateToView(nameInputView);
     });
-    MEMLNaut::Instance()->disp->AddView(fileSaveView);
+    fileSection->addChild(fileSaveView);
 
     fileLoadView = std::make_shared<BlockSelectView>("Load Model", TFT_PURPLE);
     fileLoadView->SetOnSelectCallback([this](size_t id) {
@@ -380,7 +391,7 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
         }
         spin_unlock(mlpActive, save);
     });
-    MEMLNaut::Instance()->disp->AddView(fileLoadView);
+    fileSection->addChild(fileLoadView);
 
     nameInputView = std::make_shared<NameInputView>("Name");
     nameInputView->setCallbacks(
@@ -411,7 +422,8 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
             MEMLNaut::Instance()->disp->NavigateToView(fileSaveView);
         }
     );
-    MEMLNaut::Instance()->disp->AddView(nameInputView);
+    fileSection->addChild(nameInputView);
+    MEMLNaut::Instance()->disp->AddView(fileSection);
 }
 
 
@@ -670,6 +682,9 @@ void InterfaceRL::optimise() {
         //     lossPositive = 0.f;
         // }        
         rlStatsView->setLoss(lossPositive);
+        if (nnOutputsGraphView) nnOutputsGraphView->setStatus(
+            lossPositive, replayMem.size(), learningRateScaled,
+            ou_noises.empty() ? 0.f : ou_noises[0]->getSigma());
         // Serial.printf("l %f\n", lossPositive);
 
     }

@@ -48,8 +48,8 @@ void DisplayDriver::Setup() {
     mainArea = {0, topBarHeight + 5, screenWidth_, screenHeight_ - topBarHeight - 5};
 
     // Set up views
-    currentViewIndex_ = 0;
-    for (auto &view : views_) {
+    frames_[0].index = 0;
+    for (auto &view : frames_[0].views) {
         view->SetGrid(grid_);
         view->Setup(&tft_, mainArea);
     }
@@ -61,94 +61,161 @@ void DisplayDriver::Setup() {
 }
 
 void DisplayDriver::Draw() {
-    // Serial.println("display draw");
     lastDrawTime_ = millis();
 
-    // Check if any of the views need redrawing
-    bool needRedraw = false;
+    auto& frame = currentFrame();
+
     if (redraw_internal_) {
-
-        // Clear screen
         tft_.fillScreen(TFT_BLACK);
-        // tft_.setTextColor(TFT_WHITE);
         tft_.fillRect(0, 0, tft_.width(), 30, TFT_WHITE);
-
-        // Clear the redraw flag now that screen is cleared
-        // This allows rapid view changes while ensuring old content is removed
         redraw_internal_ = false;
 
-        // tft_.setFreeFont(&FreeSansBoldOblique24pt7b);
-        // tft_.setTextFont(4);
+        leftButton.fillSprite(TFT_WHITE);
+        rightButton.fillSprite(TFT_WHITE);
 
-        // Draw back arrow in first column of first row if not on first view
-        if (currentViewIndex_ > 0) {
-            // tft_.drawString("<", grid_.widthStep / 2, grid_.heightStep / 2);
+        if (stackDepth_ > 0) {
+            // Inside a section: left button is Back
+            leftButton.setTextFont(4);
+            leftButton.setTextColor(TFT_BLUE, TFT_WHITE);
+            leftButton.setTextDatum(TL_DATUM);
+            leftButton.drawString("^", 3, 3);
             leftButton.pushSprite(0, 0);
 
-        }
-        // Draw forward arrow in last column of first row if not on last view
-        if (currentViewIndex_ < views_.size() - 1) {
-            // tft_.drawString(">", (grid_.widthElements - 1) * grid_.widthStep + grid_.widthStep / 2, grid_.heightStep / 2);
-            rightButton.pushSprite(tft_.width() - rightButton.width(), 0);
+            // Right arrow if not at last child
+            if (frame.index < frame.views.size() - 1) {
+                rightButton.pushSprite(tft_.width() - rightButton.width(), 0);
+            }
 
-        }
-        title.fillSprite(TFT_WHITE);
-        // Draw title of current view between arrows
-        if (currentViewIndex_ < views_.size()) {
-            const String &viewName = views_[currentViewIndex_]->GetName();
-            title.drawString(viewName.c_str(), 3,3);
-
-            // tft_.drawString(viewName.c_str(), grid_.widthStep, grid_.heightStep / 2);
+            // Title: "Section > View"
+            title.fillSprite(TFT_WHITE);
+            title.setTextFont(4);
+            title.setTextColor(TFT_BLUE, TFT_WHITE);
+            title.setTextDatum(TL_DATUM);
+            String titleStr = frame.sectionName + ">" + frame.views[frame.index]->GetName();
+            title.drawString(titleStr.c_str(), 3, 3);
+            title.pushSprite(40, 0);
         } else {
-            title.drawString("No View", 3,3);
-            // tft_.drawString("No View", grid_.widthStep, grid_.heightStep / 2, 2);
+            // Top level: existing behaviour
+            if (frame.index > 0) {
+                leftButton.pushSprite(0, 0);
+            }
+            if (frame.index < frame.views.size() - 1) {
+                rightButton.pushSprite(tft_.width() - rightButton.width(), 0);
+            }
+            title.fillSprite(TFT_WHITE);
+            if (frame.index < frame.views.size()) {
+                title.drawString(frame.views[frame.index]->GetName().c_str(), 3, 3);
+            } else {
+                title.drawString("No View", 3, 3);
+            }
+            title.pushSprite(40, 0);
         }
-        title.pushSprite(40, 0);
-        views_[currentViewIndex_]->redraw();
-    }
-    if (currentViewIndex_ < views_.size()) {
-        // if (views_[currentViewIndex_]->NeedRedraw()) {
-        views_[currentViewIndex_]->Draw();
-        // }
-    }
 
-
+        if (frame.index < frame.views.size()) {
+            frame.views[frame.index]->redraw();
+        }
+    }
+    if (frame.index < frame.views.size()) {
+        frame.views[frame.index]->Draw();
+    }
 }
 
 void DisplayDriver::NavigateToView(const std::shared_ptr<ViewBase>& target) {
-    auto it = std::find(views_.begin(), views_.end(), target);
-    if (it == views_.end()) return;
-    size_t targetIndex = static_cast<size_t>(it - views_.begin());
-    if (targetIndex == currentViewIndex_) return;
-    views_[currentViewIndex_]->setVisible(false);
-    views_[currentViewIndex_]->removeFocus();
-    views_[currentViewIndex_]->OnHide();
-    currentViewIndex_ = targetIndex;
-    views_[currentViewIndex_]->setVisible(true);
-    views_[currentViewIndex_]->OnDisplay();
+    // Search top-level views first
+    auto& topViews = frames_[0].views;
+    for (size_t i = 0; i < topViews.size(); i++) {
+        if (topViews[i] == target) {
+            // Hide current view (wherever we are)
+            auto& cf = currentFrame();
+            if (cf.index < cf.views.size()) {
+                cf.views[cf.index]->setVisible(false);
+                cf.views[cf.index]->removeFocus();
+                cf.views[cf.index]->OnHide();
+            }
+            if (stackDepth_ > 0) {
+                frames_[1].views.clear();
+                stackDepth_ = 0;
+            }
+            frames_[0].index = i;
+            topViews[i]->setVisible(true);
+            topViews[i]->OnDisplay();
+            redraw_internal_ = true;
+            return;
+        }
+        // Search section children
+        auto* children = topViews[i]->getSectionChildren();
+        if (children) {
+            for (size_t j = 0; j < children->size(); j++) {
+                if ((*children)[j] == target) {
+                    navigateInto(*children, topViews[i]->GetName(), j);
+                    return;
+                }
+            }
+        }
+    }
+}
+
+void DisplayDriver::navigateInto(const std::vector<std::shared_ptr<ViewBase>>& children,
+                                  const String& sectionName, size_t startIndex) {
+    if (children.empty()) return;
+
+    // Hide current view
+    auto& cf = currentFrame();
+    if (cf.index < cf.views.size()) {
+        cf.views[cf.index]->setVisible(false);
+        cf.views[cf.index]->removeFocus();
+        cf.views[cf.index]->OnHide();
+    }
+
+    frames_[1].views = children;
+    frames_[1].sectionName = sectionName;
+    frames_[1].index = constrain((int)startIndex, 0, (int)children.size() - 1);
+    stackDepth_ = 1;
+
+    children[frames_[1].index]->setVisible(true);
+    children[frames_[1].index]->OnDisplay();
+    redraw_internal_ = true;
+}
+
+void DisplayDriver::navigateBack() {
+    if (stackDepth_ == 0) return;
+
+    auto& frame = frames_[1];
+    if (frame.index < frame.views.size()) {
+        frame.views[frame.index]->setVisible(false);
+        frame.views[frame.index]->removeFocus();
+        frame.views[frame.index]->OnHide();
+    }
+    frame.views.clear();
+    stackDepth_ = 0;
+
+    auto& top = frames_[0];
+    if (top.index < top.views.size()) {
+        top.views[top.index]->setVisible(true);
+        top.views[top.index]->OnDisplay();
+    }
     redraw_internal_ = true;
 }
 
 void DisplayDriver::ChangeView(int delta) {
-    if (!redraw_internal_) { //wait until the current redraw is finished
-        auto lastViewIndex = currentViewIndex_;
-        bool viewChange = false;
-        if (delta < 0 && currentViewIndex_ > 0) {
-            currentViewIndex_--;
-            viewChange = true;
-        } else if (delta > 0 && currentViewIndex_ < views_.size() - 1) {
-            currentViewIndex_++;
-            viewChange = true;
-        }
-        if (viewChange) {
-            // If view changed, redraw the new view
-            redraw_internal_ = true;
-            views_[lastViewIndex]->setVisible(false);
-            views_[lastViewIndex]->removeFocus();
-            views_[lastViewIndex]->OnHide();  // Call OnHide for the old view
-            views_[currentViewIndex_]->setVisible(true);
-            views_[currentViewIndex_]->OnDisplay();  // Call OnDisplay for the new view
-        }
+    if (redraw_internal_) return;
+    auto& frame = currentFrame();
+    size_t lastIndex = frame.index;
+    bool viewChange = false;
+    if (delta < 0 && frame.index > 0) {
+        frame.index--;
+        viewChange = true;
+    } else if (delta > 0 && frame.index < frame.views.size() - 1) {
+        frame.index++;
+        viewChange = true;
+    }
+    if (viewChange) {
+        redraw_internal_ = true;
+        frame.views[lastIndex]->setVisible(false);
+        frame.views[lastIndex]->removeFocus();
+        frame.views[lastIndex]->OnHide();
+        frame.views[frame.index]->setVisible(true);
+        frame.views[frame.index]->OnDisplay();
     }
 }
 
@@ -162,60 +229,27 @@ void DisplayDriver::PollTouch() {
         lastTouchY = y;
     }
 
-    if (currentViewIndex_ < views_.size()) {
-        bool viewChange = false;
+    auto& frame = currentFrame();
+    if (frame.index < frame.views.size()) {
         if (pressed && !isTouchPressed_) {
-            auto lastViewIndex = currentViewIndex_;
-            // If within first row, handle navigation
-            if (y <= leftButton.height()) {
-                // if (x < leftButton.width() && currentViewIndex_ > 0) {
-                //     // Navigate to previous view
-                //     currentViewIndex_--;
-                //     redraw_internal_ = true;
-                //     viewChange = true;
-                // }
-                // else if (x > tft_.width() - rightButton.width() && currentViewIndex_ < views_.size() - 1) {
-                //     // Navigate to next view
-                //     currentViewIndex_++;
-                //     redraw_internal_ = true;
-                //     viewChange = true;
-                // }
-                if (x < leftButton.width()) {
-                    ChangeView(-1);
-                }
-                else if (x > tft_.width() - rightButton.width()) {
+            if (y <= (uint16_t)topBarHeight) {
+                if (x < (uint16_t)leftButton.width()) {
+                    if (stackDepth_ > 0) navigateBack();
+                    else ChangeView(-1);
+                } else if (x > (uint16_t)(tft_.width() - rightButton.width())) {
                     ChangeView(1);
                 }
             } else {
-                // Handle touch in the current view
-                // if (gridX < grid_.widthElements && gridY < grid_.heightElements) {
-                    // Pass raw coordinates to the current view 
-                    views_[currentViewIndex_]->HandleTouch(lastTouchX, lastTouchY);
-                // }
+                frame.views[frame.index]->HandleTouch(lastTouchX, lastTouchY);
             }
-            // if (viewChange) {
-            //     // If view changed, redraw the new view
-            //     views_[lastViewIndex]->setVisible(false);
-            //     views_[lastViewIndex]->OnHide();  // Call OnHide for the old view
-            //     views_[currentViewIndex_]->setVisible(true);
-            //     views_[currentViewIndex_]->OnDisplay();  // Call OnDisplay for the new view
-            // }
             isTouchPressed_ = true;
         } else if (isTouchPressed_) {
             if (pressed) {
-                views_[currentViewIndex_]->HandleTouchDrag(lastTouchX, lastTouchY);
+                frame.views[frame.index]->HandleTouchDrag(lastTouchX, lastTouchY);
             }
         }
         if (!pressed && isTouchPressed_) {
-            // If touch was released, handle release
-            // views_[currentViewIndex_]->HandleRelease();
-            // If released, check if any button was released
-            views_[currentViewIndex_]->HandleTouchRelease(lastTouchX,lastTouchY);
-            Serial.println("Touch released");   
-            Serial.print("x: ");
-            Serial.print(x);
-            Serial.print(", y: ");
-            Serial.println(y);
+            frame.views[frame.index]->HandleTouchRelease(lastTouchX, lastTouchY);
             isTouchPressed_ = false;
         }
     }

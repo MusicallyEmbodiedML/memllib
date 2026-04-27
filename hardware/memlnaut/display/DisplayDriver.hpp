@@ -26,7 +26,7 @@ public:
     void Draw();
     inline void AddView(const std::shared_ptr<ViewBase> &view)
     {
-        views_.push_back(view);
+        frames_[0].views.push_back(view);
         view->SetGrid(grid_);
         if (tft_initialized_) {
             view->Setup(&tft_, mainArea);
@@ -35,9 +35,10 @@ public:
     }
     inline void InsertViewAfter(const std::shared_ptr<ViewBase> &existingView, const std::shared_ptr<ViewBase> &newView)
     {
-        auto it = std::find(views_.begin(), views_.end(), existingView);
-        if (it != views_.end()) {
-            views_.insert(it + 1, newView);
+        auto& topViews = frames_[0].views;
+        auto it = std::find(topViews.begin(), topViews.end(), existingView);
+        if (it != topViews.end()) {
+            topViews.insert(it + 1, newView);
             newView->SetGrid(grid_);
             if (tft_initialized_) {
                 newView->Setup(&tft_, mainArea);
@@ -51,37 +52,48 @@ public:
 
     void ChangeView(int delta);
     void NavigateToView(const std::shared_ptr<ViewBase>& target);
+    void navigateInto(const std::vector<std::shared_ptr<ViewBase>>& children,
+                      const String& sectionName, size_t startIndex = 0);
+    void navigateBack();
 
     void RotaryIncEvent(int delta) {
-        if (currentViewIndex_ < views_.size()) {
-            auto& currentView = views_[currentViewIndex_];
+        auto& frame = currentFrame();
+        if (frame.index < frame.views.size()) {
+            auto& currentView = frame.views[frame.index];
             if (currentView->isFocused()) {
                 currentView->HandleRotaryEncChange(delta);
-            }else{
+            } else {
                 ChangeView(delta);
             }
         }
     }
     void RotarySwitchEvent() {
-        if (currentViewIndex_ < views_.size()) {
-            auto& currentView = views_[currentViewIndex_];
+        auto& frame = currentFrame();
+        if (frame.index < frame.views.size()) {
+            auto& currentView = frame.views[frame.index];
             if (currentView->isFocused()) {
                 currentView->HandleRotaryEncSwitch();
             } else {
-                if (currentView->setFocus()) {
-                }
+                currentView->setFocus();
             }
         }
     }
 
 private:
+    struct NavFrame {
+        std::vector<std::shared_ptr<ViewBase>> views;
+        size_t index = 0;
+        String sectionName;
+    };
+
+    NavFrame& currentFrame() { return frames_[stackDepth_]; }
+
     // Internal TFT hardware instance
     TFT_eSPI tft_;
-    
 
-    // Views
-    std::vector<std::shared_ptr<ViewBase>> views_;
-    size_t currentViewIndex_;
+    // Navigation stack (depth 0 = top level, depth 1 = inside section)
+    NavFrame frames_[2];
+    int stackDepth_ = 0;
 
     // Calibration
     uint16_t calData_[5] = { 421, 3470, 270, 3492, 7 };

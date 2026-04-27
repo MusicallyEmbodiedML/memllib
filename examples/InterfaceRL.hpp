@@ -22,6 +22,7 @@
 #include "../hardware/memlnaut/display/RLStatsView.hpp"
 #include "../hardware/memlnaut/display/SingleSelectView.hpp"
 #include "../hardware/memlnaut/display/NameInputView.hpp"
+#include "../hardware/memlnaut/display/SectionView.hpp"
 #include "InterfaceRLFileFormat.hpp"
 
 #define RL_MEM __not_in_flash("rlmem")
@@ -97,7 +98,7 @@ public:
     {
         synthMapping->PurturbWeights(500);
         if (msgView) msgView->post("Jolting network");
-
+        if (nnOutputsGraphView) nnOutputsGraphView->flashCommand("JOLT");
     }
 
     inline void setOptimiseDivisor(size_t newDiv) {
@@ -194,6 +195,9 @@ public:
     std::shared_ptr<BarGraphView> nnOutputsGraphView;
     std::shared_ptr<RLStatsView> rlStatsView;
     std::shared_ptr<SingleSelectView> memoryStoreModeView;
+    // Section views grouping the above
+    std::shared_ptr<SectionView> nnSection;
+    std::shared_ptr<SectionView> fileSection;
 
     const std::vector<float>& getLastAction() const { return action; }
 
