@@ -21,10 +21,14 @@ public:
     }
 
     void OnSetup() override {
+        Serial.println("DBG: SectionView::OnSetup " + name_);
         for (auto& child : children_) {
+            Serial.println("DBG:   setting up child: " + child->GetName());
             child->SetGrid(grid_);
             child->Setup(scr, area);
+            Serial.println("DBG:   child ok: " + child->GetName());
         }
+        Serial.println("DBG: SectionView::OnSetup done " + name_);
     }
 
     void OnDraw() override {
