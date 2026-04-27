@@ -341,15 +341,20 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
     itemsToRemove.reserve(replayMem.getMemoryLimit());
 
     // GUI — Neural Net section
+    Serial.println("DBG: creating nnSection");
     nnSection = std::make_shared<SectionView>("Neural Net");
 
+    Serial.println("DBG: creating nnOutputsGraphView");
     nnOutputsGraphView = std::make_shared<BarGraphView>("NN Outputs", n_outputs, 4, TFT_GREEN, 0.f, 1.f);
     nnSection->addChild(nnOutputsGraphView);
+    Serial.println("DBG: creating rlStatsView");
     rlStatsView = std::make_shared<RLStatsView>("RL Stats");
     nnSection->addChild(rlStatsView);
+    Serial.println("DBG: creating nnInputsGraphView");
     nnInputsGraphView = std::make_shared<BarGraphView>("NN Inputs", n_inputs, 10, TFT_YELLOW, 0.f, 1.f);
     nnSection->addChild(nnInputsGraphView);
 
+    Serial.println("DBG: creating memoryStoreModeView");
     memoryStoreModeView = std::make_shared<SingleSelectView>("Mem Mode");
     memoryStoreModeView->setOptions(memOptions);
     memoryStoreModeView->setNewVoiceCallback([this](size_t idx) {
@@ -357,14 +362,19 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
     });
     nnSection->addChild(memoryStoreModeView);
 
+    Serial.println("DBG: creating msgView");
     msgView = std::make_shared<MessageView>("Messages");
     nnSection->addChild(msgView);
 
+    Serial.println("DBG: AddView(nnSection)");
     MEMLNaut::Instance()->disp->AddView(nnSection);
+    Serial.println("DBG: nnSection added ok");
 
     // File section
+    Serial.println("DBG: creating fileSection");
     fileSection = std::make_shared<SectionView>("File");
 
+    Serial.println("DBG: creating fileSaveView");
     fileSaveView = std::make_shared<BlockSelectView>("Save Model", TFT_BLUE);
     fileSaveView->SetOnSelectCallback([this](size_t id) {
         pendingSaveSlot = static_cast<int>(id) - 1;
@@ -423,7 +433,9 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
         }
     );
     fileSection->addChild(nameInputView);
+    Serial.println("DBG: AddView(fileSection)");
     MEMLNaut::Instance()->disp->AddView(fileSection);
+    Serial.println("DBG: fileSection added ok");
 }
 
 
