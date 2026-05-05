@@ -44,12 +44,24 @@ public:
     void setLastAction(const String& a) {
         if (a != lastAction_) { lastAction_ = a; redraw(); }
     }
+    void setNoiseActive(bool active) {
+        if (active != noiseActive_) {
+            noiseActive_ = active;
+            if (active) {
+                barGraph->setSpectrumColors(TFT_RED, TFT_YELLOW);
+            } else {
+                barGraph->setSpectrumColors(TFT_GREEN, TFT_BLUE);
+            }
+            barGraph->redraw();
+        }
+    }
 
 private:
     std::shared_ptr<BarGraphView> barGraph;
     float loss_{0.f};
     size_t memSize_{0};
     String lastAction_{""};
+    bool noiseActive_{false};
 };
 
 #endif // __RL_VIEW_HPP__

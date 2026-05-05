@@ -140,6 +140,7 @@ public:
         for(auto& ou_noise: ou_noises) {
             ou_noise->setSigma(level);
         }
+        if (nnOutputsGraphView) nnOutputsGraphView->setNoiseActive(level > 0.f);
     }
 
     void bind_RL_interface(INPUT_MODES input_mode = INPUT_MODES::JOYSTICK, bool joystick4D = false);
