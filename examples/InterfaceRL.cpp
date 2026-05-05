@@ -20,6 +20,7 @@ void InterfaceRL::_perform_like_action() {
     };
     String msg = likemsgs[rand() % likemsgs.size()];
     this->storeExperience(1.f, controlInput, action);
+    if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("yes");
     DEBUG_PRINTLN(msg);
     if (msgView) msgView->post(msg);
 }
@@ -37,6 +38,7 @@ void InterfaceRL::_perform_dislike_action() {
     };
     String msg = dislikemsgs[rand() % dislikemsgs.size()];
     this->storeExperience(-1.f, controlInput, action);
+    if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("no");
     DEBUG_PRINTLN(msg);
     if (msgView) msgView->post(msg);
 }
@@ -45,6 +47,7 @@ void InterfaceRL::_perform_randomiseRL_action() {
 
     this->randomiseTheNetwork();
     this->generateAction(true);
+    if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("scramble");
     DEBUG_PRINTLN("Randomising networks");
     if (msgView) msgView->post("Scrambling the network");
 }
@@ -117,12 +120,14 @@ void InterfaceRL::bind_RL_interface(INPUT_MODES input_mode, bool joystick4D) {
                 //store output
                 savedAction = action;
                 actionBeingDragged=true;
+                if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("drag");
                 msgView->post("Where do you want it?");
             }else{
                 //button up
                 if (actionBeingDragged) {
                     this->storeExperience(1.f, controlInput, savedAction);
                     actionBeingDragged=false;
+                    if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("drop");
                     msgView->post("Here!");
                 }
             }
@@ -164,12 +169,14 @@ void InterfaceRL::bind_RL_interface(INPUT_MODES input_mode, bool joystick4D) {
             //store output
             savedAction = action;
             actionBeingDragged=true;
+            if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("drag");
             msgView->post("Where do you want it?");
         }else{
             //button up
             if (actionBeingDragged) {
                 this->storeExperience(1.f, controlInput, savedAction);
                 actionBeingDragged=false;
+                if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("drop");
                 msgView->post("Here!");
             }
         }
@@ -207,6 +214,7 @@ void InterfaceRL::setRewardScaleInterf(float value)
 void InterfaceRL::_forget_replay_mem_interf()
 {
     this->forgetMemory();
+    if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("forget");
     static APP_SRAM std::vector<String> forgetmsgs = {
         "Erasing my memory", "Forgetting everything", "Memory wiped","Thank you Susan?",
         "Starting afresh", "Why care about the past?","Living in the moment"
@@ -337,7 +345,7 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
     itemsToRemove.reserve(replayMem.getMemoryLimit());
 
     // GUI
-    nnOutputsGraphView = std::make_shared<BarGraphView>("NN Outputs", n_outputs, 4, TFT_GREEN, 0.f, 1.f);
+    nnOutputsGraphView = std::make_shared<RLView>("RL", n_outputs, 4, TFT_GREEN, 0.f, 1.f);
     MEMLNaut::Instance()->disp->AddView(nnOutputsGraphView);
     rlStatsView = std::make_shared<RLStatsView>("RL Stats");
     MEMLNaut::Instance()->disp->AddView(rlStatsView);
@@ -670,6 +678,10 @@ void InterfaceRL::optimise() {
         //     lossPositive = 0.f;
         // }        
         rlStatsView->setLoss(lossPositive);
+        if (nnOutputsGraphView) {
+            nnOutputsGraphView->setLoss(lossPositive);
+            nnOutputsGraphView->setMemorySize(replayMem.size());
+        }
         // Serial.printf("l %f\n", lossPositive);
 
     }

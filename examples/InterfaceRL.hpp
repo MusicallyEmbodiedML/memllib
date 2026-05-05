@@ -18,6 +18,7 @@
 
 #include "../hardware/memlnaut/display/MessageView.hpp"
 #include "../hardware/memlnaut/display/BarGraphView.hpp"
+#include "../hardware/memlnaut/display/RLView.hpp"
 #include "../hardware/memlnaut/display/BlockSelectView.hpp"
 #include "../hardware/memlnaut/display/RLStatsView.hpp"
 #include "../hardware/memlnaut/display/SingleSelectView.hpp"
@@ -96,8 +97,8 @@ public:
     inline void joltNetworks()
     {
         synthMapping->PurturbWeights(500);
+        if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("jolt");
         if (msgView) msgView->post("Jolting network");
-
     }
 
     inline void setOptimiseDivisor(size_t newDiv) {
@@ -191,7 +192,7 @@ public:
     std::shared_ptr<BlockSelectView> fileLoadView;
     std::shared_ptr<NameInputView> nameInputView;
     std::shared_ptr<BarGraphView> nnInputsGraphView;
-    std::shared_ptr<BarGraphView> nnOutputsGraphView;
+    std::shared_ptr<RLView> nnOutputsGraphView;
     std::shared_ptr<RLStatsView> rlStatsView;
     std::shared_ptr<SingleSelectView> memoryStoreModeView;
 
