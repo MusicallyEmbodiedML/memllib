@@ -787,19 +787,25 @@ float euclideanDistance(const std::vector<float>& a, const std::vector<float>& b
     return sqrtf(sum);
 }
 
-void InterfaceRL::removeItemsAtDistance(std::vector<float> &experienceState, const float distThreshold, const float reward) {
+bool InterfaceRL::removeItemsAtDistance(std::vector<float> &experienceState, const float distThreshold, const float reward) {
     std::vector<size_t> indicesToRemove;
+    bool accumulated = false;
     for(size_t i=0; i < replayMem.size(); i++) {
-        const trainStatelessRLItem& item = replayMem.getItem(i);   
-        if ((item.reward > 0 && reward > 0) || (item.reward < 0 && reward < 0)) { // Only consider items with same reward sign
-            float dist = euclideanDistance(item.input, experienceState);
-            if (dist < distThreshold) { 
-                indicesToRemove.push_back(i); 
+        trainStatelessRLItem& item = replayMem.getItem(i);
+        float dist = euclideanDistance(item.input, experienceState);
+        if (dist < distThreshold) {
+            if (reward < 0.f && item.reward < 0.f) {
+                // Strengthen existing dislike rather than replacing it
+                item.reward = std::max(item.reward + reward, -1.0f);
+                accumulated = true;
+            } else if ((item.reward > 0.f && reward > 0.f) || (item.reward < 0.f && reward < 0.f)) {
+                indicesToRemove.push_back(i);
                 if (msgView) msgView->post("Removing similar memory item");
             }
         }
     }
-    replayMem.removeItems(indicesToRemove);             
+    replayMem.removeItems(indicesToRemove);
+    return accumulated;
 }
 
 void InterfaceRL::decayItemsAtDistance(std::vector<float> &experienceState, const float distThreshold) {
@@ -822,25 +828,19 @@ void InterfaceRL::decayItemsAtDistance(std::vector<float> &experienceState, cons
 
 void InterfaceRL::storeExperience(float reward, std::vector<float> &experienceState, std::vector<float> &experienceAction ) {
     trainStatelessRLItem trainItem = {experienceState, experienceAction, reward * rewardScale}; // state is s_t, action is a_t, reward is r_t, nextState is s_t
+    bool skip_add = false;
     switch(memoryStoreMode) {
         case MEMORY_STORE_MODES::ADD:
-            // Already added above
             break;
         case MEMORY_STORE_MODES::REPLACE_5_PERCENT:
-        {
-            removeItemsAtDistance(experienceState, 0.05f, reward);
+            skip_add = removeItemsAtDistance(experienceState, 0.05f, trainItem.reward);
             break;
-        }
         case MEMORY_STORE_MODES::REPLACE_10_PERCENT:
-        {
-            removeItemsAtDistance(experienceState, 0.10f, reward);
+            skip_add = removeItemsAtDistance(experienceState, 0.10f, trainItem.reward);
             break;
-        }
         case MEMORY_STORE_MODES::REPLACE_15_PERCENT:
-        {
-            removeItemsAtDistance(experienceState, 0.15f, reward);
+            skip_add = removeItemsAtDistance(experienceState, 0.15f, trainItem.reward);
             break;
-        }
         case MEMORY_STORE_MODES::REWARD_DECAY_10_PERCENT:
             decayItemsAtDistance(experienceState, 0.10f);
             break;
@@ -848,6 +848,6 @@ void InterfaceRL::storeExperience(float reward, std::vector<float> &experienceSt
             decayItemsAtDistance(experienceState, 0.20f);
             break;
     }
-    replayMem.add(trainItem, millis());
+    if (!skip_add) replayMem.add(trainItem, millis());
     if (nnOutputsGraphView) nnOutputsGraphView->setMemorySize(replayMem.size());
 }

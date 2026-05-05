@@ -248,7 +248,7 @@ private:
     DISLIKE_MODE dislikeMode = DISLIKE_MODE::NEGATIVE_LR;
     static constexpr float kGeometricPushScale = 0.5f;
     std::array<String, 2> dislikeModeOptions = {"Neg LR", "Geom Push"};
-    void removeItemsAtDistance(std::vector<float> &experienceState, const float distThreshold, const float reward);
+    bool removeItemsAtDistance(std::vector<float> &experienceState, const float distThreshold, const float reward);
     void decayItemsAtDistance(std::vector<float> &experienceState, const float distThreshold);
 
 
