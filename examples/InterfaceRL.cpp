@@ -358,7 +358,7 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
     fileSaveView->SetOnSelectCallback([this](size_t id) {
         pendingSaveSlot = static_cast<int>(id) - 1;
         nameInputView->reset(slotNames[pendingSaveSlot]);
-        MEMLNaut::Instance()->disp->NavigateToView(nameInputView);
+        MEMLNaut::Instance()->disp->ShowDialog(nameInputView);
     });
     MEMLNaut::Instance()->disp->AddView(fileSaveView);
 
@@ -405,13 +405,13 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
                 }
                 spin_unlock(mlpActive, save);
             }
-            MEMLNaut::Instance()->disp->NavigateToView(fileSaveView);
+            MEMLNaut::Instance()->disp->DismissDialog();
         },
         [this]() {
-            MEMLNaut::Instance()->disp->NavigateToView(fileSaveView);
+            MEMLNaut::Instance()->disp->DismissDialog();
         }
     );
-    MEMLNaut::Instance()->disp->AddView(nameInputView);
+    MEMLNaut::Instance()->disp->RegisterDialog(nameInputView);
 }
 
 

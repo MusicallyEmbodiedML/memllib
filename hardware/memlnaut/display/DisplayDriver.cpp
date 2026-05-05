@@ -80,36 +80,35 @@ void DisplayDriver::Draw() {
         // tft_.setFreeFont(&FreeSansBoldOblique24pt7b);
         // tft_.setTextFont(4);
 
-        // Draw back arrow in first column of first row if not on first view
-        if (currentViewIndex_ > 0) {
-            // tft_.drawString("<", grid_.widthStep / 2, grid_.heightStep / 2);
-            leftButton.pushSprite(0, 0);
-
-        }
-        // Draw forward arrow in last column of first row if not on last view
-        if (currentViewIndex_ < views_.size() - 1) {
-            // tft_.drawString(">", (grid_.widthElements - 1) * grid_.widthStep + grid_.widthStep / 2, grid_.heightStep / 2);
-            rightButton.pushSprite(tft_.width() - rightButton.width(), 0);
-
-        }
         title.fillSprite(TFT_WHITE);
-        // Draw title of current view between arrows
-        if (currentViewIndex_ < views_.size()) {
-            const String &viewName = views_[currentViewIndex_]->GetName();
-            title.drawString(viewName.c_str(), 3,3);
-
-            // tft_.drawString(viewName.c_str(), grid_.widthStep, grid_.heightStep / 2);
+        if (dialogView_) {
+            // Dialog active: no nav arrows, show dialog title
+            title.drawString(dialogView_->GetName().c_str(), 3, 3);
+            title.pushSprite(40, 0);
+            dialogView_->redraw();
         } else {
-            title.drawString("No View", 3,3);
-            // tft_.drawString("No View", grid_.widthStep, grid_.heightStep / 2, 2);
+            // Draw back arrow in first column of first row if not on first view
+            if (currentViewIndex_ > 0) {
+                leftButton.pushSprite(0, 0);
+            }
+            // Draw forward arrow in last column of first row if not on last view
+            if (currentViewIndex_ < views_.size() - 1) {
+                rightButton.pushSprite(tft_.width() - rightButton.width(), 0);
+            }
+            // Draw title of current view between arrows
+            if (currentViewIndex_ < views_.size()) {
+                title.drawString(views_[currentViewIndex_]->GetName().c_str(), 3, 3);
+            } else {
+                title.drawString("No View", 3, 3);
+            }
+            title.pushSprite(40, 0);
+            views_[currentViewIndex_]->redraw();
         }
-        title.pushSprite(40, 0);
-        views_[currentViewIndex_]->redraw();
     }
-    if (currentViewIndex_ < views_.size()) {
-        // if (views_[currentViewIndex_]->NeedRedraw()) {
+    if (dialogView_) {
+        dialogView_->Draw();
+    } else if (currentViewIndex_ < views_.size()) {
         views_[currentViewIndex_]->Draw();
-        // }
     }
 
 
@@ -129,7 +128,22 @@ void DisplayDriver::NavigateToView(const std::shared_ptr<ViewBase>& target) {
     redraw_internal_ = true;
 }
 
+void DisplayDriver::ShowDialog(const std::shared_ptr<ViewBase>& dialog) {
+    dialogView_ = dialog;
+    dialog->OnDisplay();
+    redraw_internal_ = true;
+}
+
+void DisplayDriver::DismissDialog() {
+    if (dialogView_) {
+        dialogView_->OnHide();
+        dialogView_ = nullptr;
+        redraw_internal_ = true;
+    }
+}
+
 void DisplayDriver::ChangeView(int delta) {
+    if (dialogView_) return;
     if (!redraw_internal_) { //wait until the current redraw is finished
         auto lastViewIndex = currentViewIndex_;
         bool viewChange = false;
@@ -180,18 +194,17 @@ void DisplayDriver::PollTouch() {
                 //     redraw_internal_ = true;
                 //     viewChange = true;
                 // }
-                if (x < leftButton.width()) {
-                    ChangeView(-1);
-                }
-                else if (x > tft_.width() - rightButton.width()) {
-                    ChangeView(1);
+                if (!dialogView_) {
+                    if (x < leftButton.width()) {
+                        ChangeView(-1);
+                    }
+                    else if (x > tft_.width() - rightButton.width()) {
+                        ChangeView(1);
+                    }
                 }
             } else {
-                // Handle touch in the current view
-                // if (gridX < grid_.widthElements && gridY < grid_.heightElements) {
-                    // Pass raw coordinates to the current view 
-                    views_[currentViewIndex_]->HandleTouch(lastTouchX, lastTouchY);
-                // }
+                auto& activeView = dialogView_ ? dialogView_ : views_[currentViewIndex_];
+                activeView->HandleTouch(lastTouchX, lastTouchY);
             }
             // if (viewChange) {
             //     // If view changed, redraw the new view
@@ -208,7 +221,8 @@ void DisplayDriver::PollTouch() {
             // If touch was released, handle release
             // views_[currentViewIndex_]->HandleRelease();
             // If released, check if any button was released
-            views_[currentViewIndex_]->HandleTouchRelease(lastTouchX,lastTouchY);
+            auto& activeView = dialogView_ ? dialogView_ : views_[currentViewIndex_];
+            activeView->HandleTouchRelease(lastTouchX, lastTouchY);
             Serial.println("Touch released");   
             Serial.print("x: ");
             Serial.print(x);

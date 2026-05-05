@@ -33,6 +33,12 @@ public:
         }
         redraw_internal_ = true;
     }
+    inline void RegisterDialog(const std::shared_ptr<ViewBase>& view) {
+        view->SetGrid(grid_);
+        if (tft_initialized_) {
+            view->Setup(&tft_, mainArea);
+        }
+    }
     inline void InsertViewAfter(const std::shared_ptr<ViewBase> &existingView, const std::shared_ptr<ViewBase> &newView)
     {
         auto it = std::find(views_.begin(), views_.end(), existingView);
@@ -51,8 +57,14 @@ public:
 
     void ChangeView(int delta);
     void NavigateToView(const std::shared_ptr<ViewBase>& target);
+    void ShowDialog(const std::shared_ptr<ViewBase>& dialog);
+    void DismissDialog();
 
     void RotaryIncEvent(int delta) {
+        if (dialogView_) {
+            dialogView_->HandleRotaryEncChange(delta);
+            return;
+        }
         if (currentViewIndex_ < views_.size()) {
             auto& currentView = views_[currentViewIndex_];
             if (currentView->isFocused()) {
@@ -63,6 +75,10 @@ public:
         }
     }
     void RotarySwitchEvent() {
+        if (dialogView_) {
+            dialogView_->HandleRotaryEncSwitch();
+            return;
+        }
         if (currentViewIndex_ < views_.size()) {
             auto& currentView = views_[currentViewIndex_];
             if (currentView->isFocused()) {
@@ -82,6 +98,7 @@ private:
     // Views
     std::vector<std::shared_ptr<ViewBase>> views_;
     size_t currentViewIndex_;
+    std::shared_ptr<ViewBase> dialogView_{nullptr};
 
     // Calibration
     uint16_t calData_[5] = { 421, 3470, 270, 3492, 7 };
