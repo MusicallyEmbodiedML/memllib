@@ -52,17 +52,14 @@ void InterfaceRL::_perform_randomiseRL_action() {
     if (msgView) msgView->post("Scrambling the network");
 }
 
-// Public trigger methods (updated to call protected helpers)
+// Public trigger methods — called from ISR context, so only set a flag.
+// The actual action runs in the main-loop loopCallback before optimise().
 void InterfaceRL::trigger_like() {
-    DEBUG_PRINTLN("Like!");
-    _perform_like_action();
-    DEBUG_PRINTLN("Liked!");
+    pendingLike_ = true;
 }
 
 void InterfaceRL::trigger_dislike() {
-    DEBUG_PRINTLN("Dislike!");
-    _perform_dislike_action();
-    DEBUG_PRINTLN("Disliked!");
+    pendingDislike_ = true;
 }
 
 // void InterfaceRL::trigger_randomiseRL() {
@@ -115,18 +112,15 @@ void InterfaceRL::bind_RL_interface(INPUT_MODES input_mode, bool joystick4D) {
     if (input_mode != INPUT_MODES::MACHINE_LISTENING &&
         input_mode != INPUT_MODES::SERIAL_INPUT) {
         MEMLNaut::Instance()->setJoySWCallback([this](bool state) {
-            //button down
             if (state) {
-                //store output
                 savedAction = action;
-                actionBeingDragged=true;
+                actionBeingDragged = true;
                 if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("drag");
                 msgView->post("Where do you want it?");
-            }else{
-                //button up
+            } else {
                 if (actionBeingDragged) {
-                    this->storeExperience(1.f, controlInput, savedAction);
-                    actionBeingDragged=false;
+                    actionBeingDragged = false;
+                    pendingDragStore_ = true;  // deferred: storeExperience in loopCallback
                     if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("drop");
                     msgView->post("Here!");
                 }
@@ -163,19 +157,16 @@ void InterfaceRL::bind_RL_interface(INPUT_MODES input_mode, bool joystick4D) {
         }
     });
 
-    MEMLNaut::Instance()->setTogA1Callback([this](bool state) { // scr_ref no longer captured directly
-        //tiggle up
+    MEMLNaut::Instance()->setTogA1Callback([this](bool state) {
         if (state) {
-            //store output
             savedAction = action;
-            actionBeingDragged=true;
+            actionBeingDragged = true;
             if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("drag");
             msgView->post("Where do you want it?");
-        }else{
-            //button up
+        } else {
             if (actionBeingDragged) {
-                this->storeExperience(1.f, controlInput, savedAction);
-                actionBeingDragged=false;
+                actionBeingDragged = false;
+                pendingDragStore_ = true;  // deferred: storeExperience in loopCallback
                 if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("drop");
                 msgView->post("Here!");
             }
@@ -193,11 +184,24 @@ void InterfaceRL::bind_RL_interface(INPUT_MODES input_mode, bool joystick4D) {
         rvZ1Override ? rvZ1Override : RVCallback([this](float value) { setNoiseLevel(value); }));
     // Set up loop callback
     MEMLNaut::Instance()->setLoopCallback([this]() {
+        // Process deferred actions from ISR before touching replayMem in optimise
+        if (pendingLike_) {
+            pendingLike_ = false;
+            _perform_like_action();
+        }
+        if (pendingDislike_) {
+            pendingDislike_ = false;
+            _perform_dislike_action();
+        }
+        if (pendingDragStore_) {
+            pendingDragStore_ = false;
+            this->storeExperience(1.f, controlInput, savedAction);
+            if (nnOutputsGraphView) nnOutputsGraphView->setMemorySize(replayMem.size());
+        }
         uint32_t save = spin_lock_blocking(mlpActive);
         this->optimiseSometimes();
         this->generateAction();
         spin_unlock(mlpActive, save);
-
     });
 }
 
@@ -725,7 +729,7 @@ void InterfaceRL::optimise() {
         //     Serial.printf("WARNING: Invalid loss detected!\n");
         //     lossPositive = 0.f;
         // }        
-        rlStatsView->setLoss(lossPositive);
+        if (rlStatsView) rlStatsView->setLoss(lossPositive);
         if (nnOutputsGraphView) {
             nnOutputsGraphView->setLoss(lossPositive);
             nnOutputsGraphView->setMemorySize(replayMem.size());
@@ -783,14 +787,16 @@ float euclideanDistance(const std::vector<float>& a, const std::vector<float>& b
     return sqrtf(sum);
 }
 
-void InterfaceRL::removeItemsAtDistance(std::vector<float> &experienceState, const float distThreshold) {
+void InterfaceRL::removeItemsAtDistance(std::vector<float> &experienceState, const float distThreshold, const float reward) {
     std::vector<size_t> indicesToRemove;
     for(size_t i=0; i < replayMem.size(); i++) {
         const trainStatelessRLItem& item = replayMem.getItem(i);   
-        float dist = euclideanDistance(item.input, experienceState);
-        if (dist < distThreshold) { 
-            indicesToRemove.push_back(i); 
-            if (msgView) msgView->post("Removing similar memory item");
+        if ((item.reward > 0 && reward > 0) || (item.reward < 0 && reward < 0)) { // Only consider items with same reward sign
+            float dist = euclideanDistance(item.input, experienceState);
+            if (dist < distThreshold) { 
+                indicesToRemove.push_back(i); 
+                if (msgView) msgView->post("Removing similar memory item");
+            }
         }
     }
     replayMem.removeItems(indicesToRemove);             
@@ -822,17 +828,17 @@ void InterfaceRL::storeExperience(float reward, std::vector<float> &experienceSt
             break;
         case MEMORY_STORE_MODES::REPLACE_5_PERCENT:
         {
-            removeItemsAtDistance(experienceState, 0.05f);
+            removeItemsAtDistance(experienceState, 0.05f, reward);
             break;
         }
         case MEMORY_STORE_MODES::REPLACE_10_PERCENT:
         {
-            removeItemsAtDistance(experienceState, 0.10f);
+            removeItemsAtDistance(experienceState, 0.10f, reward);
             break;
         }
         case MEMORY_STORE_MODES::REPLACE_15_PERCENT:
         {
-            removeItemsAtDistance(experienceState, 0.15f);
+            removeItemsAtDistance(experienceState, 0.15f, reward);
             break;
         }
         case MEMORY_STORE_MODES::REWARD_DECAY_10_PERCENT:
@@ -843,4 +849,5 @@ void InterfaceRL::storeExperience(float reward, std::vector<float> &experienceSt
             break;
     }
     replayMem.add(trainItem, millis());
+    if (nnOutputsGraphView) nnOutputsGraphView->setMemorySize(replayMem.size());
 }

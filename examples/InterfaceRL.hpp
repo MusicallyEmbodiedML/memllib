@@ -247,7 +247,7 @@ private:
     DISLIKE_MODE dislikeMode = DISLIKE_MODE::NEGATIVE_LR;
     static constexpr float kGeometricPushScale = 0.5f;
     std::array<String, 2> dislikeModeOptions = {"Neg LR", "Geom Push"};
-    void removeItemsAtDistance(std::vector<float> &experienceState, const float distThreshold);
+    void removeItemsAtDistance(std::vector<float> &experienceState, const float distThreshold, const float reward);
     void decayItemsAtDistance(std::vector<float> &experienceState, const float distThreshold);
 
 
@@ -280,6 +280,11 @@ private:
     std::vector<std::unique_ptr<OrnsteinUhlenbeckNoise>> ou_noises;
 
     bool resetMinMaxFlag = false;
+
+    // Deferred actions: set from ISR, consumed in main-loop loopCallback before optimise()
+    volatile bool pendingLike_{false};
+    volatile bool pendingDislike_{false};
+    volatile bool pendingDragStore_{false};   // drag-release: store savedAction
 
     spin_lock_t *mlpActive;
 

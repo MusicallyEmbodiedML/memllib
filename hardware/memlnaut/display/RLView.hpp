@@ -3,7 +3,6 @@
 
 #include "View.hpp"
 #include "BarGraphView.hpp"
-#include <Arduino.h>
 
 class RLView : public ViewBase {
 public:
@@ -40,11 +39,9 @@ public:
         if (v != loss_) { loss_ = v; redraw(); }
     }
     void setMemorySize(size_t n) {
-        Serial.printf("[RLView] setMemorySize(%u) called, core=%d\n", (unsigned)n, (int)get_core_num());
         if (n != memSize_) { memSize_ = n; redraw(); }
     }
     void setLastAction(const String& a) {
-        Serial.printf("[RLView] setLastAction(%s) called, core=%d\n", a.c_str(), (int)get_core_num());
         if (a != lastAction_) { lastAction_ = a; redraw(); }
     }
 
