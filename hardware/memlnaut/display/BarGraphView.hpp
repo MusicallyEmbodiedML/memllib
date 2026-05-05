@@ -26,6 +26,12 @@ public:
     void OnDisplay() override {
     };
 
+    void setSpectrumColors(uint16_t low, uint16_t high) {
+        spectrumLow_ = low;
+        spectrumHigh_ = high;
+        useSpectrum_ = true;
+    }
+
     void UpdateValues(const std::vector<float>& values, bool resetMinMax=false) {
         for(size_t i=0; i < values.size(); i++) {
             newValues[i] = values[i];
@@ -70,8 +76,11 @@ public:
             // }
             // scr->drawLine(x,oldy, x+barwidth, oldy, TFT_BLACK);
             // scr->drawLine(x,newy, x+barwidth, newy, colour);
-            scr->fillRect(x,oldy, barwidth, 4, TFT_BLACK);
-            scr->fillRect(x,newy, barwidth, 4, colour);
+            uint16_t barColour = useSpectrum_
+                ? lerpRGB565(spectrumLow_, spectrumHigh_, normalizedNewValue)
+                : static_cast<uint16_t>(colour);
+            scr->fillRect(x, oldy, barwidth, 4, TFT_BLACK);
+            scr->fillRect(x, newy, barwidth, 4, barColour);
 
             // Update running max/min
             //TODO: what happens after reset?
@@ -112,9 +121,19 @@ public:
 
 
 private:
+    static uint16_t lerpRGB565(uint16_t c1, uint16_t c2, float t) {
+        int r = ((c1 >> 11) & 0x1F) + static_cast<int>((static_cast<int>((c2 >> 11) & 0x1F) - static_cast<int>((c1 >> 11) & 0x1F)) * t);
+        int g = ((c1 >>  5) & 0x3F) + static_cast<int>((static_cast<int>((c2 >>  5) & 0x3F) - static_cast<int>((c1 >>  5) & 0x3F)) * t);
+        int b = ( c1        & 0x1F) + static_cast<int>((static_cast<int>( c2        & 0x1F) - static_cast<int>( c1        & 0x1F)) * t);
+        return (static_cast<uint16_t>(r) << 11) | (static_cast<uint16_t>(g) << 5) | static_cast<uint16_t>(b);
+    }
+
     std::vector<float> newValues, oldValues;
     int colour = TFT_GREEN;
     int barwidth = 2;
+    bool useSpectrum_{false};
+    uint16_t spectrumLow_{TFT_GREEN};
+    uint16_t spectrumHigh_{TFT_BLUE};
     float rangeLow = 0.0f;
     float rangeHigh = 1.0f;
     float rangeTotal=1.f;

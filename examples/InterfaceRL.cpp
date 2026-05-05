@@ -347,16 +347,23 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
     // GUI
     nnOutputsGraphView = std::make_shared<RLView>("RL", n_outputs, 4, TFT_GREEN, 0.f, 1.f);
     MEMLNaut::Instance()->disp->AddView(nnOutputsGraphView);
-    rlStatsView = std::make_shared<RLStatsView>("RL Stats");
-    MEMLNaut::Instance()->disp->AddView(rlStatsView);
+    // rlStatsView = std::make_shared<RLStatsView>("RL Stats");
+    // MEMLNaut::Instance()->disp->AddView(rlStatsView);
     nnInputsGraphView = std::make_shared<BarGraphView>("NN Inputs", n_inputs, 10, TFT_YELLOW, 0.f, 1.f);
     MEMLNaut::Instance()->disp->AddView(nnInputsGraphView);
 
-    memoryStoreModeView = std::make_shared<SingleSelectView>("Mem Mode");
-    MEMLNaut::Instance()->disp->AddView(memoryStoreModeView);
-    memoryStoreModeView->setOptions(memOptions);
-    memoryStoreModeView->setNewVoiceCallback([this](size_t idx) {
-        memoryStoreMode = static_cast<MEMORY_STORE_MODES>(idx);
+    // memoryStoreModeView = std::make_shared<SingleSelectView>("Mem Mode");
+    // MEMLNaut::Instance()->disp->AddView(memoryStoreModeView);
+    // memoryStoreModeView->setOptions(memOptions);
+    // memoryStoreModeView->setNewVoiceCallback([this](size_t idx) {
+    //     memoryStoreMode = static_cast<MEMORY_STORE_MODES>(idx);
+    // });
+
+    dislikeModeView = std::make_shared<SingleSelectView>("Dislike Mode");
+    MEMLNaut::Instance()->disp->AddView(dislikeModeView);
+    dislikeModeView->setOptions(dislikeModeOptions);
+    dislikeModeView->setNewVoiceCallback([this](size_t idx) {
+        dislikeMode = static_cast<DISLIKE_MODE>(idx);
     });
 
     msgView = std::make_shared<MessageView>("Messages");
@@ -559,6 +566,24 @@ void InterfaceRL::_loadSlotNames() {
 
 
 void InterfaceRL::optimise() {
+    // Centroid of all positive items in replay memory for GEOMETRIC_PUSH mode
+    std::vector<float> meanPositiveAction(action.size(), 0.f);
+    size_t posMemCount = 0;
+    if (dislikeMode == DISLIKE_MODE::GEOMETRIC_PUSH) {
+        for (size_t i = 0; i < replayMem.size(); i++) {
+            const auto& item = replayMem.getItem(i);
+            if (item.reward > 0.f) {
+                for (size_t j = 0; j < meanPositiveAction.size(); j++) {
+                    meanPositiveAction[j] += item.action[j];
+                }
+                posMemCount++;
+            }
+        }
+        if (posMemCount > 0) {
+            for (auto& v : meanPositiveAction) v /= static_cast<float>(posMemCount);
+        }
+    }
+
     std::vector<size_t> sample = replayMem.sampleIndices(batchSize);
     if (sample.size() >1) {
         //run sample through network
@@ -661,12 +686,35 @@ void InterfaceRL::optimise() {
         }
         if (batchSizeNeg > 0){
             avgRewardNeg /= static_cast<float>(batchSizeNeg);
-            float effectiveLR_neg = learningRateScaled * 0.1f * avgRewardNeg;
-            // Serial.printf("[DEBUG] Neg batch: size=%d, avgReward=%f, LR=%f, effectiveLR=%f\n",
-            //              batchSizeNeg, avgRewardNeg, learningRateScaled, effectiveLR_neg);
-            lossNegative = synthMapping->TrainBatch(tsNegative, learningRateScaled * 0.3 * avgRewardNeg, 1, batchSize, 0.f, false);
-            // Serial.printf("[DEBUG] Loss after negative TrainBatch: %f (inf=%d, nan=%d)\n",
-            //              lossNegative, std::isinf(lossNegative), std::isnan(lossNegative));
+
+            if (dislikeMode == DISLIKE_MODE::GEOMETRIC_PUSH && posMemCount > 0) {
+                // Push disliked actions away from positive replay memory centroid
+                MLP<float>::training_pair_t tsGeometric;
+                tsGeometric.first = tsNegative.first;
+                tsGeometric.second.reserve(tsNegative.second.size());
+
+                float pushStep = fabsf(avgRewardNeg) * kGeometricPushScale;
+
+                for (const auto& neg_action : tsNegative.second) {
+                    float len = 0.f;
+                    std::vector<float> dir(neg_action.size());
+                    for (size_t j = 0; j < neg_action.size(); j++) {
+                        dir[j] = neg_action[j] - meanPositiveAction[j];
+                        len += dir[j] * dir[j];
+                    }
+                    len = sqrtf(len);
+                    std::vector<float> target(neg_action.size());
+                    for (size_t j = 0; j < neg_action.size(); j++) {
+                        float d = (len > 1e-6f) ? (dir[j] / len) : 0.f;
+                        target[j] = std::clamp(neg_action[j] + d * pushStep, 0.f, 1.f);
+                    }
+                    tsGeometric.second.push_back(std::move(target));
+                }
+                lossNegative = synthMapping->TrainBatch(tsGeometric, learningRateScaled * 0.3f, 1, batchSize, 0.f, false);
+            } else {
+                // Original: negative LR on disliked action (also fallback when no positive memories)
+                lossNegative = synthMapping->TrainBatch(tsNegative, learningRateScaled * 0.3f * avgRewardNeg, 1, batchSize, 0.f, false);
+            }
         }
 
         if (replayMem.removeItems(itemsToRemove)) {
@@ -775,6 +823,11 @@ void InterfaceRL::storeExperience(float reward, std::vector<float> &experienceSt
         case MEMORY_STORE_MODES::REPLACE_5_PERCENT:
         {
             removeItemsAtDistance(experienceState, 0.05f);
+            break;
+        }
+        case MEMORY_STORE_MODES::REPLACE_10_PERCENT:
+        {
+            removeItemsAtDistance(experienceState, 0.10f);
             break;
         }
         case MEMORY_STORE_MODES::REPLACE_15_PERCENT:

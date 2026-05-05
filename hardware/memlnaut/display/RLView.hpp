@@ -3,6 +3,7 @@
 
 #include "View.hpp"
 #include "BarGraphView.hpp"
+#include <Arduino.h>
 
 class RLView : public ViewBase {
 public:
@@ -17,6 +18,7 @@ public:
     void OnSetup() override {
         rect barArea = {area.x, area.y, area.w, area.h - kStatusBarHeight};
         AddSubView(barGraph, barArea);
+        barGraph->setSpectrumColors(TFT_GREEN, TFT_BLUE);
     }
 
     void OnDraw() override {
@@ -33,26 +35,20 @@ public:
         barGraph->UpdateValues(values, resetMinMax);
     }
 
+    // Safe to call from ISR — only updates state and sets redraw flag, no direct SPI
     void setLoss(float v) {
-        if (v != loss_) { loss_ = v; drawStatusItem(0, 98, "L:" + String(v, 4)); }
+        if (v != loss_) { loss_ = v; redraw(); }
     }
     void setMemorySize(size_t n) {
-        if (n != memSize_) { memSize_ = n; drawStatusItem(100, 98, "M:" + String(n)); }
+        Serial.printf("[RLView] setMemorySize(%u) called, core=%d\n", (unsigned)n, (int)get_core_num());
+        if (n != memSize_) { memSize_ = n; redraw(); }
     }
     void setLastAction(const String& a) {
-        if (a != lastAction_) { lastAction_ = a; drawStatusItem(200, area.w - 200, a); }
+        Serial.printf("[RLView] setLastAction(%s) called, core=%d\n", a.c_str(), (int)get_core_num());
+        if (a != lastAction_) { lastAction_ = a; redraw(); }
     }
 
 private:
-    void drawStatusItem(int xOffset, int w, const String& text) {
-        if (!scr) return;
-        int barY = area.y + area.h - kStatusBarHeight;
-        scr->fillRect(area.x + xOffset, barY, w, kStatusBarHeight, TFT_BLACK);
-        scr->setTextFont(1);
-        scr->setTextColor(TFT_WHITE, TFT_BLACK);
-        scr->drawString(text.c_str(), area.x + xOffset + 2, barY + 4);
-    }
-
     std::shared_ptr<BarGraphView> barGraph;
     float loss_{0.f};
     size_t memSize_{0};
