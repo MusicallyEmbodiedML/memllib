@@ -363,13 +363,6 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
     //     memoryStoreMode = static_cast<MEMORY_STORE_MODES>(idx);
     // });
 
-    dislikeModeView = std::make_shared<SingleSelectView>("Dislike Mode");
-    MEMLNaut::Instance()->disp->AddView(dislikeModeView);
-    dislikeModeView->setOptions(dislikeModeOptions);
-    dislikeModeView->setNewVoiceCallback([this](size_t idx) {
-        dislikeMode = static_cast<DISLIKE_MODE>(idx);
-    });
-
     msgView = std::make_shared<MessageView>("Messages");
     MEMLNaut::Instance()->disp->AddView(msgView);
 
@@ -570,22 +563,20 @@ void InterfaceRL::_loadSlotNames() {
 
 
 void InterfaceRL::optimise() {
-    // Centroid of all positive items in replay memory for GEOMETRIC_PUSH mode
+    // Centroid of positive items in replay memory — used by geometric push dislike
     std::vector<float> meanPositiveAction(action.size(), 0.f);
     size_t posMemCount = 0;
-    if (dislikeMode == DISLIKE_MODE::GEOMETRIC_PUSH) {
-        for (size_t i = 0; i < replayMem.size(); i++) {
-            const auto& item = replayMem.getItem(i);
-            if (item.reward > 0.f) {
-                for (size_t j = 0; j < meanPositiveAction.size(); j++) {
-                    meanPositiveAction[j] += item.action[j];
-                }
-                posMemCount++;
+    for (size_t i = 0; i < replayMem.size(); i++) {
+        const auto& item = replayMem.getItem(i);
+        if (item.reward > 0.f) {
+            for (size_t j = 0; j < meanPositiveAction.size(); j++) {
+                meanPositiveAction[j] += item.action[j];
             }
+            posMemCount++;
         }
-        if (posMemCount > 0) {
-            for (auto& v : meanPositiveAction) v /= static_cast<float>(posMemCount);
-        }
+    }
+    if (posMemCount > 0) {
+        for (auto& v : meanPositiveAction) v /= static_cast<float>(posMemCount);
     }
 
     std::vector<size_t> sample = replayMem.sampleIndices(batchSize);
@@ -691,7 +682,7 @@ void InterfaceRL::optimise() {
         if (batchSizeNeg > 0){
             avgRewardNeg /= static_cast<float>(batchSizeNeg);
 
-            if (dislikeMode == DISLIKE_MODE::GEOMETRIC_PUSH && posMemCount > 0) {
+            if (posMemCount > 0) {
                 // Push disliked actions away from positive replay memory centroid
                 MLP<float>::training_pair_t tsGeometric;
                 tsGeometric.first = tsNegative.first;
@@ -716,7 +707,7 @@ void InterfaceRL::optimise() {
                 }
                 lossNegative = synthMapping->TrainBatch(tsGeometric, learningRateScaled * 0.3f, 1, batchSize, 0.f, false);
             } else {
-                // Original: negative LR on disliked action (also fallback when no positive memories)
+                // Fallback: negative LR when replay memory has no positive items yet
                 lossNegative = synthMapping->TrainBatch(tsNegative, learningRateScaled * 0.3f * avgRewardNeg, 1, batchSize, 0.f, false);
             }
         }

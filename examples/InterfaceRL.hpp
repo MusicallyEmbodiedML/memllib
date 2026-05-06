@@ -55,11 +55,6 @@ public:
         REWARD_DECAY_20_PERCENT
     };
 
-    enum class DISLIKE_MODE {
-        NEGATIVE_LR,    // train with negative LR toward the disliked action
-        GEOMETRIC_PUSH  // push output away from centroid of positive replay memory
-    };
-
    InterfaceRL() : InterfaceBase()
 //    , ou_noise(0.02f, 0.0f, 0.2f, 0.001f, 0.0f)
 {
@@ -202,7 +197,6 @@ public:
     std::shared_ptr<RLView> nnOutputsGraphView;
     std::shared_ptr<RLStatsView> rlStatsView;
     std::shared_ptr<SingleSelectView> memoryStoreModeView;
-    std::shared_ptr<SingleSelectView> dislikeModeView;
 
     const std::vector<float>& getLastAction() const { return action; }
 
@@ -245,9 +239,7 @@ private:
 
     MEMORY_STORE_MODES memoryStoreMode = MEMORY_STORE_MODES::REPLACE_10_PERCENT;
     std::array<String, 6> memOptions = {"Add", "Replace 5%", "Replace 10%", "Replace 15%", "Reward Decay 10%", "Reward Decay 20%"};
-    DISLIKE_MODE dislikeMode = DISLIKE_MODE::NEGATIVE_LR;
     static constexpr float kGeometricPushScale = 0.5f;
-    std::array<String, 2> dislikeModeOptions = {"Neg LR", "Geom Push"};
     bool removeItemsAtDistance(std::vector<float> &experienceState, const float distThreshold, const float reward);
     void decayItemsAtDistance(std::vector<float> &experienceState, const float distThreshold);
 
