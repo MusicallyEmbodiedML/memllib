@@ -10,9 +10,9 @@ class BlockSelectView : public ViewBase {
 public:
     using OnSelectCallback = std::function<void(size_t)>;
 
-    BlockSelectView(String name, int _buttonColour_ = TFT_BLUE, size_t nButtons_=8, size_t buttonWidth_=60, size_t buttonHeight_=60, int fontColour_=TFT_WHITE, std::vector<String> buttonNames_ = {}, int buttonAltColour_=TFT_BLUE, uint8_t buttonFontNum_=4)
+    BlockSelectView(String name, int _buttonColour_ = TFT_BLUE, size_t nButtons_=8, size_t buttonWidth_=60, size_t buttonHeight_=60, int fontColour_=TFT_WHITE, std::vector<String> buttonNames_ = {}, int buttonAltColour_=TFT_BLUE, uint8_t buttonFontNum_=4, int altFontColour_=TFT_MAROON, int32_t altBorderWidth_=3)
                 : ViewBase(name), buttonColour(_buttonColour_), buttonAltColour(buttonAltColour_),
-                nButtons(nButtons_), buttonWidth(buttonWidth_), buttonHeight(buttonHeight_), fontColour(fontColour_), buttonFontNum(buttonFontNum_)
+                nButtons(nButtons_), buttonWidth(buttonWidth_), buttonHeight(buttonHeight_), fontColour(fontColour_), altFontColour(altFontColour_), altBorderWidth(altBorderWidth_), buttonFontNum(buttonFontNum_)
     {
         rows = (nButtons > 4) ? 2 : 1;
         cols = (nButtons + 1) / rows;
@@ -37,6 +37,8 @@ public:
     void toggleAlt(size_t index) {
         altColour[index] = !altColour[index];
         buttons[index]->setFillColour(altColour[index] ? buttonAltColour : buttonColour);
+        buttons[index]->setFontColour(altColour[index] ? altFontColour : fontColour);
+        buttons[index]->setBorderWidth(altColour[index] ? altBorderWidth : 1);
     }
 
 
@@ -99,6 +101,8 @@ private:
     size_t buttonWidth = 50;
     size_t buttonHeight = 50;
     int fontColour = TFT_WHITE;
+    int altFontColour = TFT_MAROON;
+    int32_t altBorderWidth = 3;
     std::vector<String> buttonNames;
     std::vector<bool> altColour;
     uint8_t buttonFontNum = 4;

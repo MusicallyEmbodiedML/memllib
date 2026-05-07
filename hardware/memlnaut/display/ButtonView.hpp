@@ -28,17 +28,25 @@ public:
         redraw();
     }
 
+    void setFontColour(int newCol) {
+        fontColour = newCol;
+        redraw();
+    }
+
+    void setBorderWidth(int w) {
+        borderWidth = w;
+        redraw();
+    }
+
     void OnDraw() override {
         TFT_eSprite sprite(scr);
-        constexpr int32_t lineheight = 30;
         sprite.createSprite(area.w, area.h);
 
-        // sprite.fillRect(area.x, area.y, area.w, area.h, fillColour);
         sprite.fillSprite(fillColour);
-        if (pressed) {
-            sprite.drawRect(0,0, area.w, area.h, TFT_RED);
-        } else {
-            sprite.drawRect(0,0, area.w, area.h, TFT_WHITE);
+        int32_t bw = pressed ? 1 : borderWidth;
+        int32_t col = pressed ? TFT_RED : TFT_WHITE;
+        for (int32_t i = 0; i < bw; i++) {
+            sprite.drawRect(i, i, area.w - 2*i, area.h - 2*i, col);
         }
         sprite.setTextColor(fontColour);
         sprite.setTextFont(fontNum);
@@ -72,6 +80,7 @@ private:
 
     bool pressed = false;
     uint8_t fontNum = 4;
+    int32_t borderWidth = 1;
 };
 
 #endif 

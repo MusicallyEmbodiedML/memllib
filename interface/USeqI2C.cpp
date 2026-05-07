@@ -30,6 +30,7 @@ bool USeqI2C::begin(uint8_t sda_pin, uint8_t scl_pin, uint32_t frequency) {
     Wire1.setSDA(sda_pin);
     Wire1.setSCL(scl_pin);
     Wire1.begin();
+    Wire1.setTimeout(2);  // 2 ms timeout to avoid blocking core 0 on unresponsive device
     delay(10);  // Match reference implementation delay
 
     // Only set clock if frequency is different from default
@@ -93,6 +94,7 @@ bool USeqI2C::sendValues(const float* values, size_t count) {
 }
 
 bool USeqI2C::transmit_(const void* data, size_t size) {
+    // Serial.printf("Transmitting %d bytes to I2C slave 0x%02X\n", size, slave_address_);
     
     Wire1.beginTransmission(slave_address_);
     size_t written = Wire1.write(static_cast<const uint8_t*>(data), size);
