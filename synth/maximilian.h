@@ -3534,6 +3534,57 @@ private:
     float smooth_coeff = 0.997f;
 };
 
+template<size_t DELAYTIME>
+class DynamicDelayI16 {
+    static_assert((DELAYTIME & (DELAYTIME - 1)) == 0, "DELAYTIME must be a power of 2");
+    static constexpr size_t MASK = DELAYTIME - 1;
+    static constexpr float kScale = 32767.0f;
+    static constexpr float kRcpScale = 1.0f / 32767.0f;
+
+public:
+    DynamicDelayI16() : smoothed_size(static_cast<float>(DELAYTIME)) {}
+
+    void setSmoothCoeff(float c) { smooth_coeff = c; }
+
+    float __force_inline read(float target_size) {
+        smoothed_size = smoothed_size * smooth_coeff + target_size * (1.0f - smooth_coeff);
+
+        float read_pos = static_cast<float>(write_index) - smoothed_size;
+        if (read_pos < 0.0f) read_pos += static_cast<float>(DELAYTIME);
+
+        size_t i1 = static_cast<size_t>(read_pos);
+        float frac = read_pos - static_cast<float>(i1);
+        size_t i2 = (i1 + 1) & MASK;
+
+        float s1 = static_cast<float>(delay_line[i1]) * kRcpScale;
+        float s2 = static_cast<float>(delay_line[i2]) * kRcpScale;
+        return s1 + frac * (s2 - s1);
+    }
+
+    void __force_inline write(float input) {
+        delay_line[write_index] = static_cast<int16_t>(input * kScale);
+        write_index = (write_index + 1) & MASK;
+    }
+
+    // Read at an arbitrary absolute buffer index — for grain engines
+    float __force_inline readAbsolute(float abs_pos) const {
+        size_t i1 = static_cast<size_t>(abs_pos) & MASK;
+        float frac = abs_pos - static_cast<float>(i1);
+        size_t i2 = (i1 + 1) & MASK;
+        float s1 = static_cast<float>(delay_line[i1]) * kRcpScale;
+        float s2 = static_cast<float>(delay_line[i2]) * kRcpScale;
+        return s1 + frac * (s2 - s1);
+    }
+
+    size_t getWriteIndex() const { return write_index; }
+
+private:
+    std::array<int16_t, DELAYTIME> delay_line{};
+    size_t write_index = 0;
+    float smoothed_size;
+    float smooth_coeff = 0.997f;
+};
+
 class maxiDynamicsLite {
 
     public:
