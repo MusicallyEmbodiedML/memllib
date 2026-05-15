@@ -174,6 +174,8 @@ public:
     void setRVY1Override(RVCallback fn) { rvY1Override = std::move(fn); }
     void setRVZ1Override(RVCallback fn) { rvZ1Override = std::move(fn); }
 
+    void setActiveDims(std::vector<bool> dims) { activeDims_ = std::move(dims); }
+
     void trigger_like();
     void trigger_dislike();
 
@@ -240,6 +242,10 @@ private:
     MEMORY_STORE_MODES memoryStoreMode = MEMORY_STORE_MODES::REPLACE_10_PERCENT;
     std::array<String, 6> memOptions = {"Add", "Replace 5%", "Replace 10%", "Replace 15%", "Reward Decay 10%", "Reward Decay 20%"};
     static constexpr float kGeometricPushScale = 0.5f;
+    static constexpr size_t kMaxDislikeMultiplier = 16;
+    size_t dislikeMultiplier_{1};
+    static constexpr size_t kCentroidK = 4;
+    std::vector<bool> activeDims_;
     bool removeItemsAtDistance(std::vector<float> &experienceState, const float distThreshold, const float reward);
     void decayItemsAtDistance(std::vector<float> &experienceState, const float distThreshold);
 

@@ -26,7 +26,7 @@ public:
         scr->setTextFont(1);
         scr->setTextColor(TFT_WHITE, TFT_BLACK);
         scr->drawString(("L:" + String(loss_, 4)).c_str(), area.x + 2, barY + 4);
-        scr->drawString(("M:" + String(memSize_)).c_str(), area.x + 100, barY + 4);
+        scr->drawString(("y:" + String(posCount_) + " n:" + String(negCount_) + " x" + String(multiplier_)).c_str(), area.x + 100, barY + 4);
         scr->drawString(lastAction_.c_str(), area.x + 200, barY + 4);
     }
 
@@ -38,8 +38,15 @@ public:
     void setLoss(float v) {
         if (v != loss_) { loss_ = v; redraw(); }
     }
-    void setMemorySize(size_t n) {
-        if (n != memSize_) { memSize_ = n; redraw(); }
+    void setMemoryCounts(size_t pos, size_t neg) {
+        if (pos != posCount_ || neg != negCount_) {
+            posCount_ = pos;
+            negCount_ = neg;
+            redraw();
+        }
+    }
+    void setDislikeMultiplier(size_t m) {
+        if (m != multiplier_) { multiplier_ = m; redraw(); }
     }
     void setLastAction(const String& a) {
         if (a != lastAction_) { lastAction_ = a; redraw(); }
@@ -59,7 +66,9 @@ public:
 private:
     std::shared_ptr<BarGraphView> barGraph;
     float loss_{0.f};
-    size_t memSize_{0};
+    size_t posCount_{0};
+    size_t negCount_{0};
+    size_t multiplier_{1};
     String lastAction_{""};
     bool noiseActive_{false};
 };

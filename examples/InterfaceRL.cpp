@@ -4,6 +4,14 @@
 #include "../hardware/memlnaut/MEMLNaut.hpp" // Required for MEMLNaut::Instance()
 // display.hpp is included via InterfaceRL.hpp
 
+float euclideanDistance(const std::vector<float>& a, const std::vector<float>& b) {
+    float sum = 0.0f;
+    for (size_t i = 0; i < a.size(); ++i) {
+        float diff = a[i] - b[i];
+        sum += diff * diff;
+    }
+    return sqrtf(sum);
+}
 
 
 
@@ -20,7 +28,11 @@ void InterfaceRL::_perform_like_action() {
     };
     String msg = likemsgs[rand() % likemsgs.size()];
     this->storeExperience(1.f, controlInput, action);
-    if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("yes");
+    dislikeMultiplier_ = 1;
+    if (nnOutputsGraphView) {
+        nnOutputsGraphView->setLastAction("yes");
+        nnOutputsGraphView->setDislikeMultiplier(dislikeMultiplier_);
+    }
     DEBUG_PRINTLN(msg);
     if (msgView) msgView->post(msg);
 }
@@ -37,8 +49,23 @@ void InterfaceRL::_perform_dislike_action() {
         "Let's move on!"
     };
     String msg = dislikemsgs[rand() % dislikemsgs.size()];
-    this->storeExperience(-1.f, controlInput, action);
-    if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("no");
+    // Accumulate into an existing nearby dislike rather than storing N identical copies
+    bool accumulated = false;
+    for (size_t i = 0; i < replayMem.size(); i++) {
+        auto& item = replayMem.getItem(i);
+        if (item.reward < 0.f && euclideanDistance(item.input, controlInput) < 0.05f) {
+            item.reward = std::max(item.reward - 1.0f, -static_cast<float>(kMaxDislikeMultiplier));
+            accumulated = true;
+            break;
+        }
+    }
+    if (!accumulated)
+        this->storeExperience(-1.f, controlInput, action);
+    dislikeMultiplier_ = std::min(dislikeMultiplier_ * 2, kMaxDislikeMultiplier);
+    if (nnOutputsGraphView) {
+        nnOutputsGraphView->setLastAction("no");
+        nnOutputsGraphView->setDislikeMultiplier(dislikeMultiplier_);
+    }
     DEBUG_PRINTLN(msg);
     if (msgView) msgView->post(msg);
 }
@@ -196,7 +223,12 @@ void InterfaceRL::bind_RL_interface(INPUT_MODES input_mode, bool joystick4D) {
         if (pendingDragStore_) {
             pendingDragStore_ = false;
             this->storeExperience(1.f, controlInput, savedAction);
-            if (nnOutputsGraphView) nnOutputsGraphView->setMemorySize(replayMem.size());
+            if (nnOutputsGraphView) {
+                size_t pos = 0;
+                for (size_t i = 0; i < replayMem.size(); i++)
+                    if (replayMem.getItem(i).reward > 0.f) pos++;
+                nnOutputsGraphView->setMemoryCounts(pos, replayMem.size() - pos);
+            }
         }
         uint32_t save = spin_lock_blocking(mlpActive);
         this->optimiseSometimes();
@@ -218,7 +250,11 @@ void InterfaceRL::setRewardScaleInterf(float value)
 void InterfaceRL::_forget_replay_mem_interf()
 {
     this->forgetMemory();
-    if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("forget");
+    dislikeMultiplier_ = 1;
+    if (nnOutputsGraphView) {
+        nnOutputsGraphView->setLastAction("forget");
+        nnOutputsGraphView->setDislikeMultiplier(dislikeMultiplier_);
+    }
     static APP_SRAM std::vector<String> forgetmsgs = {
         "Erasing my memory", "Forgetting everything", "Memory wiped","Thank you Susan?",
         "Starting afresh", "Why care about the past?","Living in the moment"
@@ -563,21 +599,32 @@ void InterfaceRL::_loadSlotNames() {
 
 
 void InterfaceRL::optimise() {
-    // Centroid of positive items in replay memory — used by geometric push dislike
-    std::vector<float> meanPositiveAction(action.size(), 0.f);
-    size_t posMemCount = 0;
+    // k-NN centroid: average the kCentroidK positive memories nearest to the current input.
+    // Using all positives regardless of input context produces a phantom centroid when
+    // likes span very different states — the k-NN version stays contextually relevant.
+    struct PosCandidate { float dist; size_t idx; };
+    std::vector<PosCandidate> candidates;
+    candidates.reserve(replayMem.size());
     for (size_t i = 0; i < replayMem.size(); i++) {
         const auto& item = replayMem.getItem(i);
-        if (item.reward > 0.f) {
-            for (size_t j = 0; j < meanPositiveAction.size(); j++) {
-                meanPositiveAction[j] += item.action[j];
-            }
-            posMemCount++;
-        }
+        if (item.reward > 0.f)
+            candidates.push_back({euclideanDistance(item.input, controlInput), i});
     }
-    if (posMemCount > 0) {
+    std::sort(candidates.begin(), candidates.end(),
+              [](const PosCandidate& a, const PosCandidate& b){ return a.dist < b.dist; });
+
+    std::vector<float> meanPositiveAction(action.size(), 0.f);
+    size_t posMemCount = 0;
+    const size_t kUsed = std::min(candidates.size(), kCentroidK);
+    for (size_t ci = 0; ci < kUsed; ci++) {
+        const auto& item = replayMem.getItem(candidates[ci].idx);
+        for (size_t j = 0; j < meanPositiveAction.size(); j++)
+            meanPositiveAction[j] += item.action[j];
+        posMemCount++;
+    }
+    const size_t totalPosCount = candidates.size();  // used for dynamic LR ratio
+    if (posMemCount > 0)
         for (auto& v : meanPositiveAction) v /= static_cast<float>(posMemCount);
-    }
 
     std::vector<size_t> sample = replayMem.sampleIndices(batchSize);
     if (sample.size() >1) {
@@ -595,56 +642,31 @@ void InterfaceRL::optimise() {
         tsNegative.second.reserve(sample.size());
 
 
-        for(auto &i: sample) {
-		//for(size_t i = 0; i < sample.size(); i++) {
-
-            // Validate input and action sizes
-            // if (sample[i].input.size() != n_inputs_ || sample[i].action.size() != n_outputs_) {
-            //     Serial.printf("ERROR: Invalid sample %d - input_size=%d (expected %d), action_size=%d (expected %d)\n",
-            //         i, sample[i].input.size(), n_inputs_, sample[i].action.size(), n_outputs_);
-            //     continue;
-            // }
-
+        // Positive batch: random sample (diversity for generalisation)
+        for (auto &i : sample) {
             if (replayMem.getItem(i).reward > 0) {
-                auto input = replayMem.getItem(i).input;
-                auto action = replayMem.getItem(i).action;
-                // Serial.printf("[DEBUG] Adding pos exp %d: reward=%f, input_size=%d, action_size=%d\n",
-                //              i, replayMem.getItem(i).reward, input.size(), action.size());
-
-                // Validate data before adding
-                // if (input.empty() || action.empty()) {
-                //     Serial.printf("[DEBUG] *** SKIPPING exp %d: empty input or action! ***\n", i);
-                //     continue;
-                // }
-
-                tsPositive.first.push_back(input);
-                tsPositive.second.push_back(action);
+                tsPositive.first.push_back(replayMem.getItem(i).input);
+                tsPositive.second.push_back(replayMem.getItem(i).action);
                 batchSizePos++;
-                avgRewardPos+=replayMem.getItem(i).reward;
-            }else{
-                auto input = replayMem.getItem(i).input;
-                auto action = replayMem.getItem(i).action;
+                avgRewardPos += replayMem.getItem(i).reward;
+            }
+        }
 
-                // Validate data before adding
-                // if (input.empty() || action.empty()) {
-                //     Serial.printf("[DEBUG] *** SKIPPING neg exp %d: empty input or action! ***\n", i);
-                //     continue;
-                // }
-
-                tsNegative.first.push_back(input);
-                tsNegative.second.push_back(action);
+        // Negative batch: scan ALL negatives so every dislike is guaranteed to push.
+        // Decay is applied here too so all items age uniformly regardless of sampling.
+        for (size_t i = 0; i < replayMem.size(); i++) {
+            float reward = replayMem.getItem(i).reward;
+            if (reward <= 0.f) {
+                tsNegative.first.push_back(replayMem.getItem(i).input);
+                tsNegative.second.push_back(replayMem.getItem(i).action);
                 batchSizeNeg++;
-                float reward = replayMem.getItem(i).reward;
-                avgRewardNeg+=reward;
-                //decay towards 0
-                const float rewardCom = 1.f+ reward;
-                reward = reward + (0.005 * rewardCom);
-				replayMem.getItem(i).reward = reward; 
-                if (reward > -0.01) {
+                avgRewardNeg += reward;
+                reward += 0.0025f * std::max(fabsf(reward), 1.0f);  // proportional decay: high-magnitude items expire in the same time as single dislikes
+                replayMem.getItem(i).reward = reward;
+                if (reward > -0.01f) {
                     itemsToRemove.push_back(i);
                 }
             }
-
         }
         float lossPositive{0.f};
         float lossNegative{0.f};
@@ -688,33 +710,55 @@ void InterfaceRL::optimise() {
                 tsGeometric.first = tsNegative.first;
                 tsGeometric.second.reserve(tsNegative.second.size());
 
-                float pushStep = fabsf(avgRewardNeg) * kGeometricPushScale;
+                float pushStep = std::clamp(fabsf(avgRewardNeg), 0.25f, 1.0f) * kGeometricPushScale;
 
                 for (const auto& neg_action : tsNegative.second) {
+                    // Fix 3: guard against size mismatch with old saved actions
+                    const size_t dimCount = std::min(neg_action.size(), meanPositiveAction.size());
                     float len = 0.f;
-                    std::vector<float> dir(neg_action.size());
-                    for (size_t j = 0; j < neg_action.size(); j++) {
+                    std::vector<float> dir(dimCount);
+                    for (size_t j = 0; j < dimCount; j++) {
                         dir[j] = neg_action[j] - meanPositiveAction[j];
                         len += dir[j] * dir[j];
                     }
                     len = sqrtf(len);
-                    std::vector<float> target(neg_action.size());
-                    for (size_t j = 0; j < neg_action.size(); j++) {
-                        float d = (len > 1e-6f) ? (dir[j] / len) : 0.f;
-                        target[j] = std::clamp(neg_action[j] + d * pushStep, 0.f, 1.f);
+                    const bool useRandom = (len <= 1e-4f);
+                    // Taper push for items already far from the positive centroid
+                    const float effectivePushStep = pushStep / (1.0f + len);
+                    std::vector<float> target(neg_action);  // copy keeps out-of-range dims intact
+                    for (size_t j = 0; j < dimCount; j++) {
+                        bool active = activeDims_.empty() || (j < activeDims_.size() && activeDims_[j]);
+                        if (!active) continue;
+                        float d = useRandom
+                            ? (static_cast<float>(rand() & 0xFF) / 127.5f - 1.f)
+                            : (dir[j] / len);
+                        target[j] = std::clamp(neg_action[j] + d * effectivePushStep, 0.f, 1.f);
                     }
                     tsGeometric.second.push_back(std::move(target));
                 }
-                lossNegative = synthMapping->TrainBatch(tsGeometric, learningRateScaled * 0.3f, 1, batchSize, 0.f, false);
+                // Dynamic LR ratio: push harder when dislikes are rare, gentler when they flood the buffer
+                const float negFraction = static_cast<float>(batchSizeNeg)
+                    / static_cast<float>(std::max(batchSizeNeg + totalPosCount, size_t{1}));
+                const float negLRRatio = 0.5f - 0.4f * negFraction;
+                lossNegative = synthMapping->TrainBatch(tsGeometric, learningRateScaled * negLRRatio, 1, batchSizeNeg, 0.f, false);
             } else {
                 // Fallback: negative LR when replay memory has no positive items yet
-                lossNegative = synthMapping->TrainBatch(tsNegative, learningRateScaled * 0.3f * avgRewardNeg, 1, batchSize, 0.f, false);
+                lossNegative = synthMapping->TrainBatch(tsNegative, learningRateScaled * 0.1f * avgRewardNeg, 1, batchSizeNeg, 0.f, false);
             }
         }
 
-        if (replayMem.removeItems(itemsToRemove)) {
-            itemsToRemove.clear();
-        };
+        // Fix 4: always clear — stale indices corrupt subsequent optimise() calls
+        // Each expired no halves the multiplier (mirrors how it doubled on each dislike press)
+        size_t expiredCount = itemsToRemove.size();
+        replayMem.removeItems(itemsToRemove);
+        itemsToRemove.clear();
+        if (expiredCount > 0) {
+            for (size_t i = 0; i < expiredCount; i++)
+                dislikeMultiplier_ = std::max(dislikeMultiplier_ / 2, size_t{1});
+            // If all nos are gone, fully reset regardless of halving remainder
+            if (replayMem.size() == totalPosCount) dislikeMultiplier_ = 1;
+            if (nnOutputsGraphView) nnOutputsGraphView->setDislikeMultiplier(dislikeMultiplier_);
+        }
 
         // if (std::isinf(lossPositive) || std::isnan(lossPositive)) {
         //     Serial.printf("WARNING: Invalid loss detected!\n");
@@ -723,7 +767,7 @@ void InterfaceRL::optimise() {
         if (rlStatsView) rlStatsView->setLoss(lossPositive);
         if (nnOutputsGraphView) {
             nnOutputsGraphView->setLoss(lossPositive);
-            nnOutputsGraphView->setMemorySize(replayMem.size());
+            nnOutputsGraphView->setMemoryCounts(totalPosCount, replayMem.size() - totalPosCount);
         }
         // Serial.printf("l %f\n", lossPositive);
 
@@ -769,14 +813,6 @@ void InterfaceRL::generateAction(bool donthesitate) {
 //     replayMem.add(trainItem, millis());
 // }
 
-float euclideanDistance(const std::vector<float>& a, const std::vector<float>& b) {
-    float sum = 0.0f;
-    for (size_t i = 0; i < a.size(); ++i) {
-        float diff = a[i] - b[i];
-        sum += diff * diff;
-    }
-    return sqrtf(sum);
-}
 
 bool InterfaceRL::removeItemsAtDistance(std::vector<float> &experienceState, const float distThreshold, const float reward) {
     std::vector<size_t> indicesToRemove;
@@ -840,5 +876,10 @@ void InterfaceRL::storeExperience(float reward, std::vector<float> &experienceSt
             break;
     }
     if (!skip_add) replayMem.add(trainItem, millis());
-    if (nnOutputsGraphView) nnOutputsGraphView->setMemorySize(replayMem.size());
+    if (nnOutputsGraphView) {
+        size_t pos = 0;
+        for (size_t i = 0; i < replayMem.size(); i++)
+            if (replayMem.getItem(i).reward > 0.f) pos++;
+        nnOutputsGraphView->setMemoryCounts(pos, replayMem.size() - pos);
+    }
 }

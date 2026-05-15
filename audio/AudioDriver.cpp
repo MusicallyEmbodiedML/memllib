@@ -16,11 +16,16 @@
 #define PASSTHROUGH   0
 
 
+extern "C" {
+    size_t kSampleRate = 48000;
+    float kSampleRateRcpr = 1.0f / 48000.0f;
+}
+
 PERF_DECLARE(AUDIOLOOP);
 
 AUDIO_MEM uint32_t AUDIOLOOP_MEAN=0;
 
-constexpr int sampleRate = kSampleRate; // minimum for many i2s DACs
+int sampleRate = (int)kSampleRate;
 constexpr int bitsPerSample = 32;
 
 constexpr float amplitude = 1 << (bitsPerSample - 2); // amplitude of square wave = 1/2 of maximum
@@ -280,4 +285,9 @@ stereosample_t AudioDriver::silence_(stereosample_t x) {
 //breaking change
 void AudioDriver::setDACVolume(float n) {
     codecCtl.dacVolume(n);
+}
+
+void AudioDriver::SetSampleRate(size_t rate) {
+    kSampleRate = rate;
+    kSampleRateRcpr = 1.0f / (float)rate;
 }
