@@ -22,6 +22,7 @@
 #include "../hardware/memlnaut/display/BlockSelectView.hpp"
 #include "../hardware/memlnaut/display/RLStatsView.hpp"
 #include "../hardware/memlnaut/display/SingleSelectView.hpp"
+#include "../hardware/memlnaut/display/RotarySelectView.hpp"
 #include "../hardware/memlnaut/display/NameInputView.hpp"
 #include "InterfaceRLFileFormat.hpp"
 
@@ -39,11 +40,24 @@ public:
 
     using OnMIDICtrlCallback = std::function<void(uint8_t)>;
 
+    static constexpr size_t kMaxNNInputs = 10;
+
     enum class INPUT_MODES {
         JOYSTICK,
         MACHINE_LISTENING,
         JOYSTICK_AND_MACHINE_LISTENING,
         SERIAL_INPUT
+    };
+
+    enum class INPUT_SOURCE : uint8_t {
+        JOYSTICK_3D = 0,
+        JOYSTICK_4D,
+        MACHINE_LISTENING,
+        MIDI_1CC,
+        MIDI_3CC,
+        MIDI_8CC,
+        COMBINED,
+        COUNT
     };
 
     enum class MEMORY_STORE_MODES {
@@ -183,6 +197,27 @@ public:
         out_action = action;
     }
 
+    size_t getActiveInputCount() const {
+        switch (input_source_) {
+            case INPUT_SOURCE::JOYSTICK_3D:       return 3;
+            case INPUT_SOURCE::JOYSTICK_4D:       return 4;
+            case INPUT_SOURCE::MACHINE_LISTENING: return 6;
+            case INPUT_SOURCE::MIDI_1CC:          return 1;
+            case INPUT_SOURCE::MIDI_3CC:          return 3;
+            case INPUT_SOURCE::MIDI_8CC:          return 8;
+            case INPUT_SOURCE::COMBINED:          return kMaxNNInputs;
+            default:                              return kMaxNNInputs;
+        }
+    }
+    void setInputSource(INPUT_SOURCE src) {
+        input_source_ = src;
+        saveInputSource();
+        if (nnInputsGraphView) nnInputsGraphView->setNumDisplayBars(getActiveInputCount());
+    }
+    INPUT_SOURCE getInputSource() const   { return input_source_; }
+    void setHasMachineListening(bool v)   { hasMachineListening_ = v; }
+    void addInputSourceView();
+
     void SetMIDI5Callback(OnMIDICtrlCallback _cb_) {
         midi5cb = _cb_;
     }    
@@ -236,6 +271,18 @@ private:
     bool actionBeingDragged=false;
 
     std::vector<size_t> itemsToRemove;
+
+    float raw_joystick_[4] = {};
+    float raw_ml_[6]       = {};
+    float raw_midi_[8]     = {};
+    INPUT_SOURCE input_source_ = INPUT_SOURCE::JOYSTICK_3D;
+
+    bool hasMachineListening_ = false;
+    static constexpr const char* kInputSourceFile = "/input_source.bin";
+    void assembleInputs();
+    void copyAndZero(const float* src, size_t n);
+    void saveInputSource();
+    void loadInputSource();
 
     size_t analysisParamsOffset = 0;
 

@@ -1,4 +1,5 @@
 #include "InterfaceRL.hpp"
+#include <LittleFS.h>
 #include "../utils/sharedMem.hpp" // Required for READ_VOLATILE, sharedMem constants and PERIODIC_DEBUG
 #include <Arduino.h>     // Required for Serial, millis, delay
 #include "../hardware/memlnaut/MEMLNaut.hpp" // Required for MEMLNaut::Instance()
@@ -112,70 +113,52 @@ void InterfaceRL::setOptimiseDivisorInterf(float value)
 
 void InterfaceRL::bind_RL_interface(INPUT_MODES input_mode, bool joystick4D) {
 
+    loadInputSource();
+    if (nnInputsGraphView) nnInputsGraphView->setNumDisplayBars(getActiveInputCount());
+
     // Set up momentary switch callbacks
-    MEMLNaut::Instance()->setMomA1Callback([this]() { // scr_ref no longer captured directly
+    MEMLNaut::Instance()->setMomA1Callback([this]() {
         if (MEMLNaut::Instance()->getMOMA1State()) {
             this->trigger_like();
         }
     });
-    MEMLNaut::Instance()->setMomA2Callback([this]() { // scr_ref no longer captured directly
+    MEMLNaut::Instance()->setMomA2Callback([this]() {
         if (MEMLNaut::Instance()->getMOMA2State()) {
             this->trigger_dislike();
         }
     });
-    MEMLNaut::Instance()->setMomB1Callback([this]() { // scr_ref no longer captured directly
+    MEMLNaut::Instance()->setMomB1Callback([this]() {
         if (MEMLNaut::Instance()->getMOMB1State()) {
-            // this->trigger_randomiseRL();
-            _perform_randomiseRL_action();            
+            _perform_randomiseRL_action();
         }
     });
-    MEMLNaut::Instance()->setMomB2Callback([this]() { // scr_ref no longer captured directly
+    MEMLNaut::Instance()->setMomB2Callback([this]() {
         if (MEMLNaut::Instance()->getMOMB2State()) {
             joltNetworks();
         }
     });
 
-
-    if (input_mode != INPUT_MODES::MACHINE_LISTENING &&
-        input_mode != INPUT_MODES::SERIAL_INPUT) {
-        MEMLNaut::Instance()->setJoySWCallback([this](bool state) {
-            if (state) {
-                savedAction = action;
-                actionBeingDragged = true;
-                if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("drag");
-                msgView->post("Where do you want it?");
-            } else {
-                if (actionBeingDragged) {
-                    actionBeingDragged = false;
-                    pendingDragStore_ = true;  // deferred: storeExperience in loopCallback
-                    if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("drop");
-                    msgView->post("Here!");
-                }
-            }
-        });
-        // Set up ADC callbacks
-        MEMLNaut::Instance()->setJoyXCallback([this](float value) {
-            this->setState(0, value);
-        });
-        MEMLNaut::Instance()->setJoyYCallback([this](float value) {
-            this->setState(1, value);
-        });
-        MEMLNaut::Instance()->setJoyZCallback([this](float value) {
-            this->setState(2, value);
-        });
-
-        if (joystick4D) {
-            MEMLNaut::Instance()->setADC3Callback([this](float value) {
-                this->setState(3, value);
-            });
-        }
-
-        if (input_mode == INPUT_MODES::JOYSTICK_AND_MACHINE_LISTENING) {
-            analysisParamsOffset = 3 + (joystick4D ? 1 : 0);
+    // Always register joystick callbacks — they write to raw_joystick_
+    // (ignored by assembleInputs() when a non-joystick source is active)
+    MEMLNaut::Instance()->setJoySWCallback([this](bool state) {
+        if (state) {
+            savedAction = action;
+            actionBeingDragged = true;
+            if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("drag");
+            msgView->post("Where do you want it?");
         } else {
-            analysisParamsOffset = 0;
+            if (actionBeingDragged) {
+                actionBeingDragged = false;
+                pendingDragStore_ = true;
+                if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("drop");
+                msgView->post("Here!");
+            }
         }
-    }
+    });
+    MEMLNaut::Instance()->setJoyXCallback([this](float value) { raw_joystick_[0] = value; newInput = true; });
+    MEMLNaut::Instance()->setJoyYCallback([this](float value) { raw_joystick_[1] = value; newInput = true; });
+    MEMLNaut::Instance()->setJoyZCallback([this](float value) { raw_joystick_[2] = value; newInput = true; });
+    MEMLNaut::Instance()->setADC3Callback([this](float value) { raw_joystick_[3] = value; newInput = true; });
 
 
     MEMLNaut::Instance()->setTogB1Callback([this](bool state) { // scr_ref no longer captured directly
@@ -267,8 +250,18 @@ void InterfaceRL::_forget_replay_mem_interf()
 
 void InterfaceRL::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf, bool enableFootcontroller)
 {
-    if (midi_interf && enableFootcontroller) {
-        midi_interf->SetCCCallback([this] (uint8_t cc_number, uint8_t cc_value) {
+    if (midi_interf) {
+        midi_interf->SetCCCallback([this, enableFootcontroller] (uint8_t cc_number, uint8_t cc_value) {
+            // Route CC1-CC8 to raw_midi_ when a MIDI input source is active
+            bool is_midi_source = (input_source_ == INPUT_SOURCE::MIDI_1CC ||
+                                   input_source_ == INPUT_SOURCE::MIDI_3CC ||
+                                   input_source_ == INPUT_SOURCE::MIDI_8CC);
+            if (is_midi_source && cc_number >= 1 && cc_number <= 8) {
+                raw_midi_[cc_number - 1] = static_cast<float>(cc_value) / 127.f;
+                newInput = true;
+                return;
+            }
+            if (!enableFootcontroller) return;
             Serial.printf("MIDI CC %d: %d\n", cc_number, cc_value);
             switch(cc_number) {
                 case 1:
@@ -348,11 +341,7 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
         RELU, RELU, HARDSIGMOID
     };
 
-    std::vector<size_t> layers_nodes = {
-        n_inputs,
-        16, 16,
-        n_outputs
-    };
+    layers_nodes = { n_inputs, 16, 16, n_outputs };
 
     controlInput.resize(layers_nodes[0]);
     action.resize(n_outputs, 0.5f);  // Initialize action vector with default values
@@ -563,6 +552,15 @@ bool InterfaceRL::_load_RL_from_SD(String id) {
 
     bool success = synthMapping->LoadMLPNetworkFromFile(file);
     file.close();
+
+    if (success && synthMapping->get_num_inputs() != (int)controlInput.size()) {
+        // Saved model has wrong input count — rebuild with current architecture
+        const std::vector<ACTIVATION_FUNCTIONS> activfuncs = { RELU, RELU, HARDSIGMOID };
+        synthMapping = std::make_shared<MLP<float>>(layers_nodes, activfuncs, loss::LOSS_MSE, 0, 0);
+        synthMapping->RandomiseWeightsAndBiasesLin(-1.2f, 0.9f, 0, 0.5f);
+        if (msgView) msgView->post("Model incompatible: wrong input size");
+        return false;
+    }
     return success;
 }
 
@@ -775,19 +773,82 @@ void InterfaceRL::optimise() {
 }
 
 void InterfaceRL::readAnalysisParameters(std::vector<float> params) {
-    //copy analysis parameters into control input vector
-    for(size_t i=0; i < params.size(); i++) {
-        controlInput[analysisParamsOffset+i] = params[i];
+    for (size_t i = 0; i < params.size() && i < 6; i++) {
+        raw_ml_[i] = params[i];
     }
     generateAction(true);
+}
+
+void InterfaceRL::assembleInputs() {
+    switch (input_source_) {
+        case INPUT_SOURCE::JOYSTICK_3D:       copyAndZero(raw_joystick_, 3); break;
+        case INPUT_SOURCE::JOYSTICK_4D:       copyAndZero(raw_joystick_, 4); break;
+        case INPUT_SOURCE::MACHINE_LISTENING: copyAndZero(raw_ml_,       6); break;
+        case INPUT_SOURCE::MIDI_1CC:          copyAndZero(raw_midi_,     1); break;
+        case INPUT_SOURCE::MIDI_3CC:          copyAndZero(raw_midi_,     3); break;
+        case INPUT_SOURCE::MIDI_8CC:          copyAndZero(raw_midi_,     8); break;
+        case INPUT_SOURCE::COMBINED:
+            memcpy(&controlInput[0], raw_joystick_, 4 * sizeof(float));
+            memcpy(&controlInput[4], raw_ml_,       6 * sizeof(float));
+            break;
+        default: break;
+    }
+}
+
+void InterfaceRL::copyAndZero(const float* src, size_t n) {
+    size_t i = 0;
+    for (; i < n && i < kMaxNNInputs; ++i) controlInput[i] = src[i];
+    for (; i < kMaxNNInputs; ++i)           controlInput[i] = 0.f;
+}
+
+void InterfaceRL::saveInputSource() {
+    FILE* f = fopen(kInputSourceFile, "wb");
+    if (f) { fwrite(&input_source_, sizeof(input_source_), 1, f); fclose(f); }
+}
+
+void InterfaceRL::loadInputSource() {
+    FILE* f = fopen(kInputSourceFile, "rb");
+    if (f) { fread(&input_source_, sizeof(input_source_), 1, f); fclose(f); }
+}
+
+void InterfaceRL::addInputSourceView() {
+    static const String srcNames[] = {
+        "3D Joystick", "4D Joystick", "Machine Listen",
+        "MIDI Mod Whl", "MIDI 3 CC", "MIDI 8 CC", "Combined"
+    };
+    std::vector<INPUT_SOURCE> available = {
+        INPUT_SOURCE::JOYSTICK_3D, INPUT_SOURCE::JOYSTICK_4D,
+        INPUT_SOURCE::MIDI_1CC, INPUT_SOURCE::MIDI_3CC, INPUT_SOURCE::MIDI_8CC
+    };
+    if (hasMachineListening_) {
+        available.push_back(INPUT_SOURCE::MACHINE_LISTENING);
+        available.push_back(INPUT_SOURCE::COMBINED);
+    }
+
+    std::vector<String> opts;
+    for (auto src : available) opts.push_back(srcNames[static_cast<size_t>(src)]);
+
+    size_t initialSel = 0;
+    auto it = std::find(available.begin(), available.end(), input_source_);
+    if (it != available.end()) initialSel = std::distance(available.begin(), it);
+
+    auto view = std::make_shared<RotarySelectView>("Input Source");
+    view->setOptions(std::span<String>(opts.data(), opts.size()));
+    view->setSelection(initialSel);
+    view->setNewSelectionCallback([this, available](size_t idx) {
+        if (idx < available.size()) setInputSource(available[idx]);
+    });
+    MEMLNaut::Instance()->disp->AddView(view);
 }
 
 void InterfaceRL::generateAction(bool donthesitate) {
     if (newInput || donthesitate) {
         newInput = false;
 
+        assembleInputs();
+
         if (!actionBeingDragged) {
-            synthMapping->GetOutput(controlInput, &mappingOutput); 
+            synthMapping->GetOutput(controlInput, &mappingOutput);
             for(size_t i=0; i < mappingOutput.size(); i++) {
                 const float noise = ou_noises[i]->sample();
                 mappingOutput[i] += noise;

@@ -26,17 +26,16 @@ public:
 
 
     void OnSetup() override {
-
-        options.push_back("VoiceSpace 1");
-        options.push_back("VoiceSpace 2");
-        options.push_back("VoiceSpace 3");
-        options.push_back("VoiceSpace 4");
-        options.push_back("VoiceSpace 5");
-        options.push_back("VoiceSpace 6");
-        options.push_back("VoiceSpace 7");
-        options.push_back("VoiceSpace 8");
-
-
+        if (options.empty()) {
+            options.push_back("VoiceSpace 1");
+            options.push_back("VoiceSpace 2");
+            options.push_back("VoiceSpace 3");
+            options.push_back("VoiceSpace 4");
+            options.push_back("VoiceSpace 5");
+            options.push_back("VoiceSpace 6");
+            options.push_back("VoiceSpace 7");
+            options.push_back("VoiceSpace 8");
+        }
     }  
 
     void OnDraw() override {
@@ -78,6 +77,17 @@ public:
     }
 
     void OnTouchUp(size_t x, size_t y) override {
+        constexpr size_t heights[] = {15, 25, 25, 25, 15};
+        int heightAccum = (int)area.y + 20;
+        for (int i = 0; i < 5; i++) {
+            if ((int)y >= heightAccum && (int)y < heightAccum + (int)heights[i]) {
+                int delta = i - 2;
+                int dir = delta > 0 ? 1 : -1;
+                for (int s = 0; s < abs(delta); s++) HandleRotaryEncChange(dir);
+                break;
+            }
+            heightAccum += (int)heights[i];
+        }
     }
 
 
@@ -87,6 +97,10 @@ public:
 
     void setOptions(std::span<String> newOptions) {
         options.assign(newOptions.begin(), newOptions.end());
+    }
+
+    void setSelection(size_t idx) {
+        if (idx < options.size()) selectedIndex = idx;
     }
 
     bool acceptsFocus() override {
@@ -102,6 +116,11 @@ public:
     void removeFocus() override{
         ViewBase::removeFocus();
         redraw();   
+    }
+
+    void HandleRotaryEncSwitch() override {
+        removeFocus();
+        redraw();
     }
 
     void HandleRotaryEncChange(int inc) override {

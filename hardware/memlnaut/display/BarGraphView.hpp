@@ -32,8 +32,22 @@ public:
         useSpectrum_ = true;
     }
 
+    void setNumDisplayBars(size_t n) {
+        if (n == 0 || n == newValues.size()) return;
+        newValues.assign(n, 0.f);
+        oldValues.assign(n, 0.f);
+        runningMax.assign(n, 0.f);
+        runningMin.assign(n, 0.f);
+        if (area.w > 0) {
+            barSectionWidth = (area.w - (2 * offsetX)) / static_cast<float>(n);
+            if (scr) scr->fillRect(area.x, area.y, area.w, area.h, TFT_BLACK);
+        }
+        redraw();
+    }
+
     void UpdateValues(const std::vector<float>& values, bool resetMinMax=false) {
-        for(size_t i=0; i < values.size(); i++) {
+        size_t n = std::min(values.size(), newValues.size());
+        for(size_t i=0; i < n; i++) {
             newValues[i] = values[i];
         }
         if (resetMinMax) {
