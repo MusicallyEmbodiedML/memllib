@@ -20,10 +20,10 @@
 #include "../hardware/memlnaut/display/BarGraphView.hpp"
 #include "../hardware/memlnaut/display/RLView.hpp"
 #include "../hardware/memlnaut/display/BlockSelectView.hpp"
-#include "../hardware/memlnaut/display/RLStatsView.hpp"
 #include "../hardware/memlnaut/display/SingleSelectView.hpp"
 #include "../hardware/memlnaut/display/RotarySelectView.hpp"
 #include "../hardware/memlnaut/display/NameInputView.hpp"
+#include "../hardware/memlnaut/display/CCSelectView.hpp"
 #include "InterfaceRLFileFormat.hpp"
 
 #define RL_MEM __not_in_flash("rlmem")
@@ -232,8 +232,8 @@ public:
     std::shared_ptr<NameInputView> nameInputView;
     std::shared_ptr<BarGraphView> nnInputsGraphView;
     std::shared_ptr<RLView> nnOutputsGraphView;
-    std::shared_ptr<RLStatsView> rlStatsView;
     std::shared_ptr<SingleSelectView> memoryStoreModeView;
+    std::shared_ptr<CCSelectView> ccSelectView;
 
     const std::vector<float>& getLastAction() const { return action; }
 
@@ -283,6 +283,8 @@ private:
     void copyAndZero(const float* src, size_t n);
     void saveInputSource();
     void loadInputSource();
+    void saveCCNumbers();
+    void loadCCNumbers();
 
     size_t analysisParamsOffset = 0;
 

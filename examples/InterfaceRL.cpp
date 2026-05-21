@@ -328,6 +328,10 @@ void InterfaceRL::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf, bool enableFo
     }
 
     midi_ = midi_interf;
+
+    if (ccSelectView && !ccSelectView->getSelectedCCs().empty()) {
+        midi_->SetParamCCNumbers(ccSelectView->getSelectedCCs());
+    }
 }
 
 void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
@@ -376,8 +380,6 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
     // GUI
     nnOutputsGraphView = std::make_shared<RLView>("RL", n_outputs, 4, TFT_GREEN, 0.f, 1.f);
     MEMLNaut::Instance()->disp->AddView(nnOutputsGraphView);
-    // rlStatsView = std::make_shared<RLStatsView>("RL Stats");
-    // MEMLNaut::Instance()->disp->AddView(rlStatsView);
     nnInputsGraphView = std::make_shared<BarGraphView>("NN Inputs", n_inputs, 10, TFT_YELLOW, 0.f, 1.f);
     MEMLNaut::Instance()->disp->AddView(nnInputsGraphView);
 
@@ -762,7 +764,6 @@ void InterfaceRL::optimise() {
         //     Serial.printf("WARNING: Invalid loss detected!\n");
         //     lossPositive = 0.f;
         // }        
-        if (rlStatsView) rlStatsView->setLoss(lossPositive);
         if (nnOutputsGraphView) {
             nnOutputsGraphView->setLoss(lossPositive);
             nnOutputsGraphView->setMemoryCounts(totalPosCount, replayMem.size() - totalPosCount);
@@ -839,6 +840,15 @@ void InterfaceRL::addInputSourceView() {
         if (idx < available.size()) setInputSource(available[idx]);
     });
     MEMLNaut::Instance()->disp->AddView(view);
+
+    size_t maxCC = midi_ ? midi_->getParamCount() : n_outputs_;
+    ccSelectView = std::make_shared<CCSelectView>(maxCC, "MIDI CC Out");
+    loadCCNumbers();
+    ccSelectView->setOnChangeCallback([this](const std::vector<uint8_t>& ccs) {
+        if (midi_) midi_->SetParamCCNumbers(ccs);
+        saveCCNumbers();
+    });
+    MEMLNaut::Instance()->disp->AddView(ccSelectView);
 }
 
 void InterfaceRL::generateAction(bool donthesitate) {
@@ -943,4 +953,36 @@ void InterfaceRL::storeExperience(float reward, std::vector<float> &experienceSt
             if (replayMem.getItem(i).reward > 0.f) pos++;
         nnOutputsGraphView->setMemoryCounts(pos, replayMem.size() - pos);
     }
+}
+
+void InterfaceRL::saveCCNumbers() {
+    if (!ccSelectView) return;
+    String path = "/" + _modeRoot + "_cc_numbers.bin";
+    FILE* f = fopen(path.c_str(), "wb");
+    if (f) {
+        const auto& ccs = ccSelectView->getSelectedCCs();
+        fwrite(ccs.data(), 1, ccs.size(), f);
+        fclose(f);
+    }
+}
+
+void InterfaceRL::loadCCNumbers() {
+    if (!ccSelectView) return;
+    String path = "/" + _modeRoot + "_cc_numbers.bin";
+    FILE* f = fopen(path.c_str(), "rb");
+    if (f) {
+        std::vector<uint8_t> ccs;
+        uint8_t b;
+        while (fread(&b, 1, 1, f) == 1) ccs.push_back(b);
+        fclose(f);
+        if (!ccs.empty()) {
+            ccSelectView->setSelectedCCs(ccs);
+            return;
+        }
+    }
+    // Default: CC1..n_outputs
+    size_t nDefault = std::min(ccSelectView->getMaxActive(), (size_t)32);
+    std::vector<uint8_t> defaults(nDefault);
+    for (size_t i = 0; i < nDefault; i++) defaults[i] = static_cast<uint8_t>(i + 1);
+    ccSelectView->setSelectedCCs(defaults);
 }

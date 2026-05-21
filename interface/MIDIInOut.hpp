@@ -257,6 +257,8 @@ public:
      */
     void SetMaxBytesPerPoll(uint32_t max_bytes) { max_bytes_per_poll_ = max_bytes; }
 
+    size_t getParamCount() const { return n_outputs_; }
+
 protected:
     std::vector<uint8_t> cc_numbers_;
     size_t n_outputs_;
