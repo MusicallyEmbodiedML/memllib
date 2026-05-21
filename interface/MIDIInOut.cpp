@@ -609,6 +609,15 @@ void MIDIInOut::waitForDMA() {
     dma_busy_ = false;
 }
 
+void MIDIInOut::sendRawBytes(const uint8_t* data, size_t length) {
+    if (length == 0) return;
+    if (tx_dma_channel_ >= 0) {
+        sendViaDMA(data, length);
+    } else {
+        Serial2.write(data, length);
+    }
+}
+
 // RX DMA Implementation
 bool MIDIInOut::setupRxDMA(uart_inst_t* uart) {
     // Claim DMA channel for RX (don't panic on failure)

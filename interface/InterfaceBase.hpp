@@ -43,6 +43,10 @@ public:
     // Set this to apply FocusManager::applyInPlace or similar.
     std::function<void(std::vector<float>&)> paramTransformHook;
 
+    // Optional output hook — when set, replaces the default SendParamsAsMIDICC() call.
+    // Use this to send SysEx or other non-CC output. If null, CC output is used as normal.
+    std::function<void(std::span<const float>)> paramOutputHook;
+
     // Queue management
     void SendParamsToQueue(const std::vector<float>& data);
 

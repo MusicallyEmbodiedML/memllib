@@ -116,6 +116,11 @@ public:
     size_t flushQueue();
 
     /**
+     * @brief Send arbitrary bytes directly (e.g. SysEx). Uses DMA when available.
+     */
+    void sendRawBytes(const uint8_t* data, size_t length);
+
+    /**
      * @brief Poll input. Put in a regular loop.
      */
     void Poll();

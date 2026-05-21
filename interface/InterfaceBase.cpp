@@ -33,7 +33,9 @@ void InterfaceBase::SendParamsToQueue(const std::vector<float>& data) {
         return;
     }
     queue_try_add(&queue_audioparam_, data.data());
-    if (midi_) {
+    if (paramOutputHook) {
+        paramOutputHook(data);
+    } else if (midi_) {
         midi_->SendParamsAsMIDICC(data);
     } else {
         DEBUG_PRINTLN("Warning: MIDI interface not set");
