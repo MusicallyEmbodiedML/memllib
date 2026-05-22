@@ -41,6 +41,14 @@ public:
         buttons[index]->setBorderWidth(altColour[index] ? altBorderWidth : 1);
     }
 
+    void setAltState(size_t index, bool on) {
+        if (index >= buttons.size()) return;
+        altColour[index] = on;
+        buttons[index]->setFillColour(on ? buttonAltColour : buttonColour);
+        buttons[index]->setFontColour(on ? altFontColour : fontColour);
+        buttons[index]->setBorderWidth(on ? altBorderWidth : 1);
+    }
+
 
     void OnSetup() override {
         int idx=1;
