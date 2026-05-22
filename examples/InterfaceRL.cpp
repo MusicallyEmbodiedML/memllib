@@ -812,7 +812,7 @@ void InterfaceRL::loadInputSource() {
     if (f) { fread(&input_source_, sizeof(input_source_), 1, f); fclose(f); }
 }
 
-void InterfaceRL::addInputSourceView() {
+void InterfaceRL::addInputSourceView(bool includeCCSelect) {
     static const String srcNames[] = {
         "3D Joystick", "4D Joystick", "Machine Listen",
         "MIDI Mod Whl", "MIDI 3 CC", "MIDI 8 CC", "Combined"
@@ -841,14 +841,16 @@ void InterfaceRL::addInputSourceView() {
     });
     MEMLNaut::Instance()->disp->AddView(view);
 
-    size_t maxCC = midi_ ? midi_->getParamCount() : n_outputs_;
-    ccSelectView = std::make_shared<CCSelectView>(maxCC, "MIDI CC Out");
-    loadCCNumbers();
-    ccSelectView->setOnChangeCallback([this](const std::vector<uint8_t>& ccs) {
-        if (midi_) midi_->SetParamCCNumbers(ccs);
-        saveCCNumbers();
-    });
-    MEMLNaut::Instance()->disp->AddView(ccSelectView);
+    if (includeCCSelect) {
+        size_t maxCC = midi_ ? midi_->getParamCount() : n_outputs_;
+        ccSelectView = std::make_shared<CCSelectView>(maxCC, "MIDI CC Out");
+        loadCCNumbers();
+        ccSelectView->setOnChangeCallback([this](const std::vector<uint8_t>& ccs) {
+            if (midi_) midi_->SetParamCCNumbers(ccs);
+            saveCCNumbers();
+        });
+        MEMLNaut::Instance()->disp->AddView(ccSelectView);
+    }
 }
 
 void InterfaceRL::generateAction(bool donthesitate) {
