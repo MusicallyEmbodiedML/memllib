@@ -80,9 +80,10 @@ public:
             int slot = slotOf(options_[optIdx].num);
             bool isSel = slot > 0;
 
-            uint16_t bg = isSel    ? (uint16_t)0x0340   // dark green
-                        : isCursor ? (uint16_t)TFT_NAVY
-                                   : (uint16_t)TFT_BLACK;
+            uint16_t bg = (isSel && isCursor) ? (uint16_t)0x0660   // bright green: selected + cursor
+                        : isSel               ? (uint16_t)0x0340   // dark green: selected
+                        : isCursor            ? (uint16_t)TFT_NAVY // navy: cursor only
+                                              : (uint16_t)TFT_BLACK;
 
             scr->fillRect(area.x, ry, area.w, kRowH - 1, bg);
             scr->setTextFont(2);
