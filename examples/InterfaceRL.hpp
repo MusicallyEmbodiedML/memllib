@@ -216,7 +216,7 @@ public:
     }
     INPUT_SOURCE getInputSource() const   { return input_source_; }
     void setHasMachineListening(bool v)   { hasMachineListening_ = v; }
-    void addInputSourceView();
+    void addInputSourceView(bool includeCCSelect = true);
 
     void SetMIDI5Callback(OnMIDICtrlCallback _cb_) {
         midi5cb = _cb_;
