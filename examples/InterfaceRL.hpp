@@ -190,6 +190,8 @@ public:
 
     void setActiveDims(std::vector<bool> dims) { activeDims_ = std::move(dims); }
 
+    std::function<void(std::vector<float>&)> inputInjectionHook;
+
     void trigger_like();
     void trigger_dislike();
 

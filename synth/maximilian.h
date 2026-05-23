@@ -3562,6 +3562,7 @@ public:
     }
 
     void __force_inline write(float input) {
+        input = fminf(fmaxf(input, -1.f), 1.f);
         delay_line[write_index] = static_cast<int16_t>(input * kScale);
         write_index = (write_index + 1) & MASK;
     }
@@ -3577,6 +3578,16 @@ public:
     }
 
     size_t getWriteIndex() const { return write_index; }
+
+    void fillRepeating(const int16_t* cycle, size_t cycleLen) {
+        size_t pos = 0;
+        while (pos < DELAYTIME) {
+            const size_t chunk = std::min(cycleLen, DELAYTIME - pos);
+            memcpy(&delay_line[pos], cycle, chunk * sizeof(int16_t));
+            pos += chunk;
+        }
+        write_index = 0;
+    }
 
 private:
     std::array<int16_t, DELAYTIME> delay_line{};

@@ -860,6 +860,7 @@ void InterfaceRL::generateAction(bool donthesitate) {
         newInput = false;
 
         assembleInputs();
+        if (inputInjectionHook) inputInjectionHook(controlInput);
 
         if (!actionBeingDragged) {
             synthMapping->GetOutput(controlInput, &mappingOutput);
