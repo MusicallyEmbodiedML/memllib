@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstddef>
 #include "maximilian.h"
+#include "../audio/AudioDriver.hpp"
 
 template<size_t BUFSIZE = 16384, size_t NGRAINS = 4>
 class GrainDelayI16 {
@@ -50,6 +51,37 @@ public:
         }
         out_ = sum * kNGrainGain;  // grains only — keeps tap out of the grain feedback path
         return out_ + tap_out_ * tap_level_;
+    }
+
+    stereosample_t __force_inline processStereo(float input) {
+        if (!frozen_) buf_.write(input + out_ * feedback_ + tap_out_ * tap_feedback_);
+
+        float sumL = 0.f, sumR = 0.f;
+        const float write_idx = static_cast<float>(buf_.getWriteIndex());
+
+        float tap_pos = write_idx - start_time_;
+        if (tap_pos < 0.f) tap_pos += kBufSizeF;
+        tap_out_ = buf_.readAbsolute(tap_pos);
+
+        for (size_t g = 0; g < NGRAINS; ++g) {
+            phase_[g] += phase_inc_;
+            if (phase_[g] >= 1.0f) {
+                phase_[g] -= 1.0f;
+                read_pos_[g] = write_idx - start_time_;
+                if (read_pos_[g] < 0.f) read_pos_[g] += kBufSizeF;
+            }
+            const size_t env_idx = static_cast<size_t>(phase_[g] * kEnvSize) & (kEnvSize - 1);
+            const float grainOut = buf_.readAbsolute(read_pos_[g]) * env_[env_idx];
+            if (g & 1) sumR += grainOut;
+            else       sumL += grainOut;
+            read_pos_[g] += grain_pitch_[g];
+            if (read_pos_[g] >= kBufSizeF) read_pos_[g] -= kBufSizeF;
+            if (read_pos_[g] < 0.f)        read_pos_[g] += kBufSizeF;
+        }
+        out_ = (sumL + sumR) * kNGrainGain;
+        const float tapContrib = tap_out_ * tap_level_;
+        return { sumL * kNGrainGain + tapContrib,
+                 sumR * kNGrainGain + tapContrib };
     }
 
     void setGrainLengthSamples(float samples) { phase_inc_ = 1.0f / samples; }

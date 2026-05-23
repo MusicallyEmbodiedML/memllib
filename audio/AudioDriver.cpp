@@ -258,7 +258,9 @@ bool AudioDriver::Setup(const codec_config_t &config) {
      DEBUG_PRINTF("config.line_level = %d\n", config.line_level);
     codecCtl.lineInLevel(config.line_level);
      DEBUG_PRINTF("config.mic_gain_dB = %d\n", config.mic_gain_dB);
-    codecCtl.micGain(config.mic_gain_dB);
+    if (config.mic_input) {
+        codecCtl.micGain(config.mic_gain_dB);
+    }
     codecCtl.lineOutLevel(20);
 
     return true;

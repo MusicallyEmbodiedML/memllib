@@ -209,6 +209,7 @@ public:
             default:                              return kMaxNNInputs;
         }
     }
+    const std::vector<float>& getControlInput() const { return controlInput; }
     void setInputSource(INPUT_SOURCE src) {
         input_source_ = src;
         saveInputSource();

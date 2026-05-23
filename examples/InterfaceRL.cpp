@@ -378,7 +378,9 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
     itemsToRemove.reserve(replayMem.getMemoryLimit());
 
     // GUI
-    nnOutputsGraphView = std::make_shared<RLView>("RL", n_outputs, 4, TFT_GREEN, 0.f, 1.f);
+    if (!nnOutputsGraphView) {
+        nnOutputsGraphView = std::make_shared<RLView>("RL", n_outputs, 4, TFT_GREEN, 0.f, 1.f);
+    }
     MEMLNaut::Instance()->disp->AddView(nnOutputsGraphView);
     nnInputsGraphView = std::make_shared<BarGraphView>("NN Inputs", n_inputs, 10, TFT_YELLOW, 0.f, 1.f);
     MEMLNaut::Instance()->disp->AddView(nnInputsGraphView);

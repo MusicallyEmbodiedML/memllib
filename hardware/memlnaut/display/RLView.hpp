@@ -15,7 +15,7 @@ public:
     {}
 
     void OnSetup() override {
-        rect barArea = {area.x, area.y, area.w, area.h - kStatusBarHeight};
+        rect barArea = getBarGraphArea();
         AddSubView(barGraph, barArea);
         barGraph->setSpectrumColors(TFT_GREEN, TFT_BLUE);
     }
@@ -61,6 +61,11 @@ public:
             }
             barGraph->redraw();
         }
+    }
+
+protected:
+    virtual rect getBarGraphArea() const {
+        return {area.x, area.y, area.w, area.h - kStatusBarHeight};
     }
 
 private:
