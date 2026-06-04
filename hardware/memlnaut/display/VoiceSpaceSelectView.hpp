@@ -77,6 +77,11 @@ public:
         voiceSpaceSelector->setOptions(newOptions);
     }
 
+    void setSelection(size_t idx) {
+        voiceSpaceSelector->setSelection(idx);
+        redraw();
+    }
+
 
 
 private:

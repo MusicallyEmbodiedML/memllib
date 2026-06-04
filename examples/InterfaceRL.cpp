@@ -266,22 +266,22 @@ void InterfaceRL::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf, bool enableFo
             switch(cc_number) {
                 case 1:
                 {
-                    this->_perform_like_action();
+                    if (cc_value > 0) this->_perform_like_action();
                     break;
                 }
                 case 2:
                 {
-                    this->_perform_dislike_action();
+                    if (cc_value > 0) this->_perform_dislike_action();
                     break;
                 }
                 case 3:
                 {
-                    this->_perform_randomiseRL_action();
+                    if (cc_value > 0) this->_perform_randomiseRL_action();
                     break;
                 }
                 case 4:
                 {
-                    this->_forget_replay_mem_interf();
+                    if (cc_value > 0) this->_forget_replay_mem_interf();
                     break;
                 }
                 case 5:
@@ -557,12 +557,13 @@ bool InterfaceRL::_load_RL_from_SD(String id) {
     bool success = synthMapping->LoadMLPNetworkFromFile(file);
     file.close();
 
-    if (success && synthMapping->get_num_inputs() != (int)controlInput.size()) {
-        // Saved model has wrong input count — rebuild with current architecture
+    if (success && (synthMapping->get_num_inputs()  != (int)controlInput.size()
+                 || synthMapping->get_num_outputs() != (int)n_outputs_)) {
+        // Saved model has wrong architecture (e.g. params added to the mode) — rebuild
         const std::vector<ACTIVATION_FUNCTIONS> activfuncs = { RELU, RELU, HARDSIGMOID };
         synthMapping = std::make_shared<MLP<float>>(layers_nodes, activfuncs, loss::LOSS_MSE, 0, 0);
         synthMapping->RandomiseWeightsAndBiasesLin(-1.2f, 0.9f, 0, 0.5f);
-        if (msgView) msgView->post("Model incompatible: wrong input size");
+        if (msgView) msgView->post("Model incompatible: wrong architecture");
         return false;
     }
     return success;
@@ -799,9 +800,15 @@ void InterfaceRL::assembleInputs() {
 }
 
 void InterfaceRL::copyAndZero(const float* src, size_t n) {
+    // Pad the unused input tail with a mid-range constant instead of 0. A constant input
+    // only adds a fixed term (Σ_j W1[i,j]·c_j) to each hidden unit — i.e. a per-unit
+    // layer-1 bias shift. With c=0.5 and random W1 this spreads effective biases to mixed
+    // signs, so units switch both on and off across a single-input sweep (e.g. mod wheel),
+    // giving a more non-linear, direction-changing output mapping than an all-zero tail.
+    static constexpr float kUnusedInputDefault = 0.5f;
     size_t i = 0;
     for (; i < n && i < kMaxNNInputs; ++i) controlInput[i] = src[i];
-    for (; i < kMaxNNInputs; ++i)           controlInput[i] = 0.f;
+    for (; i < kMaxNNInputs; ++i)           controlInput[i] = kUnusedInputDefault;
 }
 
 void InterfaceRL::saveInputSource() {

@@ -32,9 +32,11 @@ public:
         float sum = 0.f;
         const float write_idx = static_cast<float>(buf_.getWriteIndex());
 
-        float tap_pos = write_idx - start_time_;
-        if (tap_pos < 0.f) tap_pos += kBufSizeF;
-        tap_out_ = buf_.readAbsolute(tap_pos);
+        if (hasTap_) {
+            float tap_pos = write_idx - start_time_;
+            if (tap_pos < 0.f) tap_pos += kBufSizeF;
+            tap_out_ = buf_.readAbsolute(tap_pos);
+        }
 
         for (size_t g = 0; g < NGRAINS; ++g) {
             phase_[g] += phase_inc_;
@@ -59,9 +61,11 @@ public:
         float sumL = 0.f, sumR = 0.f;
         const float write_idx = static_cast<float>(buf_.getWriteIndex());
 
-        float tap_pos = write_idx - start_time_;
-        if (tap_pos < 0.f) tap_pos += kBufSizeF;
-        tap_out_ = buf_.readAbsolute(tap_pos);
+        if (hasTap_) {
+            float tap_pos = write_idx - start_time_;
+            if (tap_pos < 0.f) tap_pos += kBufSizeF;
+            tap_out_ = buf_.readAbsolute(tap_pos);
+        }
 
         for (size_t g = 0; g < NGRAINS; ++g) {
             phase_[g] += phase_inc_;
@@ -91,8 +95,8 @@ public:
     void setFeedback(float fb)       { feedback_ = fb; }
     void setPitch(float ratio)       { pitch_ = ratio; updateGrainPitches(); }
     void setPitchSpread(float spread){ pitch_spread_ = spread; updateGrainPitches(); }
-    void setTapLevel(float level)    { tap_level_ = level; }
-    void setTapFeedback(float fb)    { tap_feedback_ = fb; }
+    void setTapLevel(float level)    { tap_level_ = level;   hasTap_ = (tap_level_ > 0.f || tap_feedback_ > 0.f); }
+    void setTapFeedback(float fb)    { tap_feedback_ = fb;   hasTap_ = (tap_level_ > 0.f || tap_feedback_ > 0.f); }
     void setFreeze(bool freeze)      { frozen_ = freeze; }
 
     void fillWithSaw(float freqHz) {
@@ -298,6 +302,7 @@ private:
     float tap_out_     = 0.f;
     float out_        = 0.f;
     bool  frozen_     = false;
+    bool  hasTap_     = false;
     float sample_rate_= 48000.f;
 
     static constexpr size_t kMaxPeriod = 4096;
