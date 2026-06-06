@@ -800,15 +800,14 @@ void InterfaceRL::assembleInputs() {
 }
 
 void InterfaceRL::copyAndZero(const float* src, size_t n) {
-    // Pad the unused input tail with a mid-range constant instead of 0. A constant input
-    // only adds a fixed term (Σ_j W1[i,j]·c_j) to each hidden unit — i.e. a per-unit
-    // layer-1 bias shift. With c=0.5 and random W1 this spreads effective biases to mixed
-    // signs, so units switch both on and off across a single-input sweep (e.g. mod wheel),
-    // giving a more non-linear, direction-changing output mapping than an all-zero tail.
-    static constexpr float kUnusedInputDefault = 0.5f;
+    // Pad the unused input tail with a non-zero constant instead of 0. A constant input
+    // only adds a fixed term (Σ_j W1[i,j]·c) to each hidden unit — i.e. a per-unit layer-1
+    // bias shift — which spreads effective biases to mixed signs so units switch both on
+    // and off across a single-input sweep (more non-linear, direction-changing mapping).
+    // unusedInputDefault_ is recomputed only on input-mode change (see updateUnusedInputDefault).
     size_t i = 0;
     for (; i < n && i < kMaxNNInputs; ++i) controlInput[i] = src[i];
-    for (; i < kMaxNNInputs; ++i)           controlInput[i] = kUnusedInputDefault;
+    for (; i < kMaxNNInputs; ++i)           controlInput[i] = unusedInputDefault_;
 }
 
 void InterfaceRL::saveInputSource() {
@@ -819,6 +818,7 @@ void InterfaceRL::saveInputSource() {
 void InterfaceRL::loadInputSource() {
     FILE* f = fopen(kInputSourceFile, "rb");
     if (f) { fread(&input_source_, sizeof(input_source_), 1, f); fclose(f); }
+    updateUnusedInputDefault();
 }
 
 void InterfaceRL::addInputSourceView(bool includeCCSelect) {

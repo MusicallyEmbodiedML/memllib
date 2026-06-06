@@ -212,8 +212,19 @@ public:
         }
     }
     const std::vector<float>& getControlInput() const { return controlInput; }
+
+    // Recompute the unused-input pad value. Done only when the input mode changes (not per
+    // frame). Scales as 1.1/n_unused so the total constant injected into layer 1 stays
+    // bounded regardless of how many dims are unused — avoids over-driving the net.
+    void updateUnusedInputDefault() {
+        const size_t used   = getActiveInputCount();
+        const size_t unused = (used < kMaxNNInputs) ? (kMaxNNInputs - used) : 0;
+        unusedInputDefault_ = (unused > 0) ? (1.1f / static_cast<float>(unused)) : 0.f;
+    }
+
     void setInputSource(INPUT_SOURCE src) {
         input_source_ = src;
+        updateUnusedInputDefault();
         saveInputSource();
         if (nnInputsGraphView) nnInputsGraphView->setNumDisplayBars(getActiveInputCount());
     }
@@ -279,6 +290,8 @@ private:
     float raw_ml_[6]       = {};
     float raw_midi_[8]     = {};
     INPUT_SOURCE input_source_ = INPUT_SOURCE::JOYSTICK_3D;
+    // Constant used to pad the unused NN input dims; recomputed only on input-mode change.
+    float unusedInputDefault_ = 0.5f;
 
     bool hasMachineListening_ = false;
     static constexpr const char* kInputSourceFile = "/input_source.bin";
