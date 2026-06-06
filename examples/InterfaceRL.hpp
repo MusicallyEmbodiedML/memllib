@@ -83,6 +83,10 @@ public:
         newInput = true;
     }
 
+    // Force the next loop to regenerate + re-send the action, even if no input changed.
+    // Use when an output-stage parameter (e.g. a fade/home value) changes.
+    inline void markInputDirty() { newInput = true; }
+
     void readAnalysisParameters(std::vector<float> params) override;
 
     void generateAction(bool donthesitate=false);
