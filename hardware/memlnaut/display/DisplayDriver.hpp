@@ -15,12 +15,7 @@
 
 class DisplayDriver {
 public:
-    DisplayDriver() :        
-        leftButton(&tft_),
-        title(&tft_),
-        rightButton(&tft_)
-    {
-    }
+    DisplayDriver() {}
 
     void Setup();
     void Draw();
@@ -116,8 +111,7 @@ private:
     bool tft_initialized_{false};
     bool isTouchPressed_{false};
 
-    //top bar
-    TFT_eSprite leftButton, title, rightButton;
+    //top bar (drawn directly to the TFT — no sprite buffers, saves ~14 KB RAM)
     rect mainArea;
 
     int lastTouchX, lastTouchY;

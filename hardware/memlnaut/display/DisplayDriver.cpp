@@ -23,26 +23,8 @@ void DisplayDriver::Setup() {
     grid_.widthStep = screenWidth_ / grid_.widthElements;
     grid_.heightStep = screenHeight_ / grid_.heightElements;
 
-    leftButton.createSprite(30,topBarHeight);
-    title.createSprite(180,topBarHeight);
-    rightButton.createSprite(30,topBarHeight);
+    // Top bar is drawn directly in Draw() (no sprite buffers) to save RAM.
 
-    leftButton.setTextFont(4);
-    leftButton.setTextColor(TFT_BLUE, TFT_WHITE);
-    leftButton.setTextDatum(TL_DATUM);
-    leftButton.fillSprite(TFT_WHITE);
-    leftButton.drawString("<", 3,3);
-
-    rightButton.setTextFont(4);
-    rightButton.setTextColor(TFT_BLUE, TFT_WHITE);
-    rightButton.setTextDatum(TL_DATUM);
-    rightButton.fillSprite(TFT_WHITE);
-    rightButton.drawString(">", 3,3);
-
-    title.setTextFont(4);
-    title.setTextColor(TFT_BLUE, TFT_WHITE);
-    title.setTextDatum(TL_DATUM);
-        
     tft_.fillScreen(TFT_BLACK);
 
     mainArea = {0, topBarHeight + 5, screenWidth_, screenHeight_ - topBarHeight - 5};
@@ -80,28 +62,29 @@ void DisplayDriver::Draw() {
         // tft_.setFreeFont(&FreeSansBoldOblique24pt7b);
         // tft_.setTextFont(4);
 
-        title.fillSprite(TFT_WHITE);
+        // Top bar drawn directly onto the (already white-filled) bar — no sprites.
+        tft_.setTextFont(4);
+        tft_.setTextColor(TFT_BLUE, TFT_WHITE);
+        tft_.setTextDatum(TL_DATUM);
         if (dialogView_) {
             // Dialog active: no nav arrows, show dialog title
-            title.drawString(dialogView_->GetName().c_str(), 3, 3);
-            title.pushSprite(40, 0);
+            tft_.drawString(dialogView_->GetName().c_str(), 43, 3);
             dialogView_->redraw();
         } else {
-            // Draw back arrow in first column of first row if not on first view
+            // Back arrow if not on first view
             if (currentViewIndex_ > 0) {
-                leftButton.pushSprite(0, 0);
+                tft_.drawString("<", 3, 3);
             }
-            // Draw forward arrow in last column of first row if not on last view
+            // Forward arrow if not on last view
             if (currentViewIndex_ < views_.size() - 1) {
-                rightButton.pushSprite(tft_.width() - rightButton.width(), 0);
+                tft_.drawString(">", tft_.width() - 27, 3);
             }
-            // Draw title of current view between arrows
+            // Title of current view, between the arrows
             if (currentViewIndex_ < views_.size()) {
-                title.drawString(views_[currentViewIndex_]->GetName().c_str(), 3, 3);
+                tft_.drawString(views_[currentViewIndex_]->GetName().c_str(), 43, 3);
             } else {
-                title.drawString("No View", 3, 3);
+                tft_.drawString("No View", 43, 3);
             }
-            title.pushSprite(40, 0);
             views_[currentViewIndex_]->redraw();
         }
     }
@@ -181,7 +164,7 @@ void DisplayDriver::PollTouch() {
         if (pressed && !isTouchPressed_) {
             auto lastViewIndex = currentViewIndex_;
             // If within first row, handle navigation
-            if (y <= leftButton.height()) {
+            if (y <= topBarHeight) {
                 // if (x < leftButton.width() && currentViewIndex_ > 0) {
                 //     // Navigate to previous view
                 //     currentViewIndex_--;
@@ -195,10 +178,11 @@ void DisplayDriver::PollTouch() {
                 //     viewChange = true;
                 // }
                 if (!dialogView_) {
-                    if (x < leftButton.width()) {
+                    constexpr int kNavButtonWidth = 30;  // nav-arrow touch zone (was sprite width)
+                    if (x < kNavButtonWidth) {
                         ChangeView(-1);
                     }
-                    else if (x > tft_.width() - rightButton.width()) {
+                    else if (x > tft_.width() - kNavButtonWidth) {
                         ChangeView(1);
                     }
                 }

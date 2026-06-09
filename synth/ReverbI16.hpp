@@ -140,9 +140,12 @@ public:
 template<size_t COMB_SIZE = 4096>
 class ReverbI16Large {
     static_assert((COMB_SIZE & (COMB_SIZE - 1)) == 0, "COMB_SIZE must be a power of 2");
-    static constexpr size_t AP_SIZE   = COMB_SIZE / 4;  // 1024 (holds <=556)
-    static constexpr size_t PRE_SIZE  = COMB_SIZE / 2;  // 2048
-    static constexpr size_t DIFF_SIZE = 512;            // input diffusers (holds <=142)
+    // AP/PRE/DIFF are fixed (independent of COMB_SIZE) so the allpass/predelay/diffuser
+    // times always fit even when COMB_SIZE is small (e.g. 2048). Only the combs — which
+    // set the room size and dominate RAM — scale with COMB_SIZE.
+    static constexpr size_t AP_SIZE   = 1024;  // holds <=556
+    static constexpr size_t PRE_SIZE  = 2048;  // ~42ms predelay
+    static constexpr size_t DIFF_SIZE = 512;   // input diffusers (holds <=142)
 
     // 8 comb bases (Freeverb tunings ×2 for a bigger room), as fraction of sample rate.
     // Longest = 0.0733·48k·1.1 ≈ 3870 < COMB_SIZE, so they fit at max size.
@@ -182,6 +185,15 @@ class ReverbI16Large {
         return (xd * (27.f + x2) / (27.f + 9.f * x2)) / satDrive_;
     }
 
+    // Cheap cubic soft-clip (no divide): ~unity for |x|<1, smoothly reaches ±1 at ±1.5,
+    // hard-limits beyond. Applied to the reverb's recirculating writes so overload becomes
+    // gentle saturation instead of the int16 delay line's harsh ±1 hard-clamp.
+    static float __force_inline softLimit(float x) {
+        if (x >  1.5f) return  1.f;
+        if (x < -1.5f) return -1.f;
+        return x - x * x * x * 0.148148f;  // x - x³·(4/27)
+    }
+
 public:
     void setup(float sr) {
         sampleRate_ = sr;
@@ -190,7 +202,10 @@ public:
     }
 
     void setSize(float v) {
-        const float scale = 0.5f + v * 0.6f;
+        // Comb base tunings are sized for COMB_SIZE=4096; scale them by COMB_SIZE/4096 so
+        // they fit (and stay mutually distinct) at any buffer size — a smaller COMB_SIZE
+        // simply gives a smaller room.
+        const float scale = (0.5f + v * 0.6f) * (static_cast<float>(COMB_SIZE) / 4096.f);
         const float maxT  = static_cast<float>(COMB_SIZE - 2);
         for (int i = 0; i < 8; ++i)
             combTimes_[i] = fminf(kCombBases[i] * sampleRate_ * scale, maxT);
@@ -214,7 +229,7 @@ public:
         // Pre-delay
         if (preDelaySamples_ >= 1.f) {
             const float pd = preDelay_.read(preDelaySamples_);
-            preDelay_.write(sig);
+            preDelay_.write(softLimit(sig));
             sig = pd;
         }
 
@@ -222,7 +237,7 @@ public:
         for (int k = 0; k < 2; ++k) {
             const float d = inDiff_[k].read(kInDiffTimes[k]);
             const float v = sig - d * kInDiffGain;
-            inDiff_[k].write(v);
+            inDiff_[k].write(softLimit(v));
             sig = v * kInDiffGain + d;
         }
 
@@ -238,7 +253,7 @@ public:
             const float lfo = (i < 4) ? tri1 : tri2;
             const float y   = combs_[i].read(combTimes_[i] + lfo * modDepth_);
             dampState_[i]   = dampState_[i] * dampCoeff_ + y * (1.f - dampCoeff_);
-            combs_[i].write(sig + dampState_[i] * feedbackGain_);
+            combs_[i].write(softLimit(sig + dampState_[i] * feedbackGain_));
             if (i & 1) combR += dampState_[i]; else combL += dampState_[i];
         }
         combL *= 0.25f;  // 4 combs per channel
@@ -250,13 +265,13 @@ public:
         for (int k = 0; k < 2; ++k) {
             const float d = apsL_[k].read(kAPTimesL[k]);
             const float v = combL - d * apGain_;
-            apsL_[k].write(v);
+            apsL_[k].write(softLimit(v));
             combL = v * apGain_ + d;
         }
         for (int k = 0; k < 2; ++k) {
             const float d = apsR_[k].read(kAPTimesR[k]);
             const float v = combR - d * apGain_;
-            apsR_[k].write(v);
+            apsR_[k].write(softLimit(v));
             combR = v * apGain_ + d;
         }
 

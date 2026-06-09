@@ -36,6 +36,10 @@ public:
     // Use this to persist to flash — avoids slow per-edit flash writes.
     void setOnSaveCallback(OnSaveCallback cb) { saveCb_ = cb; }
 
+    // Clear the unsaved-changes flag (e.g. after programmatically applying a mapping, so
+    // it isn't treated as a user edit needing save-on-exit).
+    void resetDirty() { dirty_ = false; }
+
     // Opt-in: show + allow editing the per-CC home value column. Off by default so
     // modes that don't use home values render unchanged.
     void setShowHome(bool v) { showHome_ = v; }
