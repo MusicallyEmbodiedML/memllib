@@ -113,13 +113,6 @@ public:
     }
 
 
-    inline void joltNetworks()
-    {
-        synthMapping->PurturbWeights(500);
-        if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("jolt");
-        if (msgView) msgView->post("Jolting network");
-    }
-
     inline void setOptimiseDivisor(size_t newDiv) {
         optimiseDivisor = newDiv;
     }
@@ -161,7 +154,61 @@ public:
         for(auto& ou_noise: ou_noises) {
             ou_noise->setStationaryStd(amplitude);
         }
+        // Learning stays active during exploration on purpose: likes/dislikes given while
+        // the noise roams are what steer the network toward sounds the player wants.
         if (nnOutputsGraphView) nnOutputsGraphView->setNoiseActive(amplitude > 0.f);
+    }
+
+    // Jolt = permanent weight modulation (B2, held). At press, pick a random subset of
+    // weights scattered across the net and roll a bounded random target for each. While
+    // held, EMA-glide each toward its target (stepJolt, called per loop); release just
+    // freezes them, so the change persists. Bounded by construction (interpolation toward
+    // targets in the weight-init range can't run away) and smooth (no per-tick jitter).
+    // Runs on the main loop / under the mlpActive lock, so touching the MLP here is safe.
+    inline float randomJoltTarget() const {
+        return kJoltWeightMin + (static_cast<float>(rand()) / RAND_MAX) * (kJoltWeightMax - kJoltWeightMin);
+    }
+
+    inline void startJolt() {
+        joltActive_ = true;
+        joltWeightLoc_.clear();
+        joltTarget_.clear();
+        const size_t numLayers = synthMapping->GetNumLayers();
+        if (numLayers == 0) return;
+        for (size_t i = 0; i < kJoltNumWeights; i++) {
+            size_t L = rand() % numLayers;
+            auto flat = synthMapping->GetLayerRef(L).GetWeightsFlat();
+            if (flat.empty()) continue;
+            size_t idx = rand() % flat.size();
+            joltWeightLoc_.emplace_back(L, idx);
+            joltTarget_.push_back(randomJoltTarget());
+        }
+        if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("jolt");
+        if (msgView) msgView->post("Jolt: morphing weights");
+    }
+
+    inline void stepJolt() {
+        const size_t numLayers = synthMapping->GetNumLayers();
+        for (size_t i = 0; i < joltWeightLoc_.size(); i++) {
+            const size_t L = joltWeightLoc_[i].first;
+            if (L >= numLayers) continue;  // stale after a model load
+            auto flat = synthMapping->GetLayerRef(L).GetWeightsFlat();
+            const size_t idx = joltWeightLoc_[i].second;
+            if (idx >= flat.size()) continue;
+            float& w = flat[idx];
+            w += kJoltMorphRate * (joltTarget_[i] - w);
+            // Reached this target (EMA only asymptotes, so use a threshold) -> roll a new
+            // one, keeping the weight in motion for as long as the button is held.
+            float gap = joltTarget_[i] - w;
+            if (gap < 0.f) gap = -gap;
+            if (gap < kJoltTargetEpsilon) joltTarget_[i] = randomJoltTarget();
+        }
+        markInputDirty();  // weights changed -> regenerate + re-send the action
+    }
+
+    inline void stopJolt() {
+        joltActive_ = false;  // weights stay where they morphed to (permanent)
+        joltLRRamp_ = 0.f;    // resume learning from 0, ramping back to full over ~5s
     }
 
     void bind_RL_interface(INPUT_MODES input_mode = INPUT_MODES::JOYSTICK, bool joystick4D = false);
@@ -363,6 +410,24 @@ private:
 
     // OrnsteinUhlenbeckNoise ou_noise;
     std::vector<std::unique_ptr<OrnsteinUhlenbeckNoise>> ou_noises;
+
+    // Exploration-noise travel speed.
+    static constexpr float kNoiseDt = 0.004f;      // normal OU travel speed (set in setup)
+
+    // Jolt = permanent weight modulation while B2 is held (see startJolt/stepJolt).
+    static constexpr size_t kJoltNumWeights = 40;  // random weights perturbed per press
+    static constexpr float  kJoltMorphRate  = 0.017f;  // EMA per tick (~1s to target @200Hz)
+    static constexpr float  kJoltWeightMin  = -1.2f;  // target range == weight-init range
+    static constexpr float  kJoltWeightMax  = 0.9f;
+    static constexpr float  kJoltTargetEpsilon = 0.05f;  // re-roll target once within this
+    static constexpr float  kJoltLRRampStep = 0.001f;    // LR recovery rate: 1/(5s * 200Hz)
+    std::vector<std::pair<size_t,size_t>> joltWeightLoc_;  // (layer, flat weight index)
+    std::vector<float>                    joltTarget_;     // per-selected-weight target value
+    bool joltActive_ = false;
+    // After a jolt releases, learning resumes gently: effective LR *= joltLRRamp_, which
+    // climbs 0 -> 1 over ~5s so fresh training doesn't immediately drag the net off the
+    // jolted sound. 1.0 = normal (full LR).
+    float joltLRRamp_ = 1.0f;
 
     bool resetMinMaxFlag = false;
 

@@ -132,9 +132,12 @@ void InterfaceRL::bind_RL_interface(INPUT_MODES input_mode, bool joystick4D) {
             _perform_randomiseRL_action();
         }
     });
+    // B2 held = momentary fast exploration (was: perturb network weights). The button ISR
+    // only dispatches a callback on press, so start the jolt here and detect *release* by
+    // polling getMOMB2State() in the loop callback below.
     MEMLNaut::Instance()->setMomB2Callback([this]() {
         if (MEMLNaut::Instance()->getMOMB2State()) {
-            joltNetworks();
+            startJolt();
         }
     });
 
@@ -194,6 +197,10 @@ void InterfaceRL::bind_RL_interface(INPUT_MODES input_mode, bool joystick4D) {
         rvZ1Override ? rvZ1Override : RVCallback([this](float value) { setNoiseLevel(value); }));
     // Set up loop callback
     MEMLNaut::Instance()->setLoopCallback([this]() {
+        // Jolt release: the B2 ISR only fires on press, so poll the live pin to end it.
+        if (joltActive_ && !MEMLNaut::Instance()->getMOMB2State()) {
+            stopJolt();
+        }
         // Process deferred actions from ISR before touching replayMem in optimise
         if (pendingLike_) {
             pendingLike_ = false;
@@ -219,7 +226,14 @@ void InterfaceRL::bind_RL_interface(INPUT_MODES input_mode, bool joystick4D) {
             setInputSource(pendingInputSource_);
         }
         uint32_t save = spin_lock_blocking(mlpActive);
-        this->optimiseSometimes();
+        if (joltActive_) {
+            this->stepJolt();                  // B2 held: morph weights, learning paused
+        } else {
+            // Ramp learning rate back up after a jolt (0 -> full over ~5s) so training
+            // doesn't immediately drag the net off the jolted sound.
+            if (joltLRRamp_ < 1.f) joltLRRamp_ = std::min(1.f, joltLRRamp_ + kJoltLRRampStep);
+            this->optimiseSometimes();
+        }
         this->generateAction();
         spin_unlock(mlpActive, save);
     });
@@ -383,10 +397,13 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
         // kicks. sigma (amplitude) starts at 0 and is set by the intensity knob via
         // setNoiseLevel()/setStationaryStd() on boot-sync. To make sweeps faster/coarser
         // raise dt; slower/smoother, lower it.
-        ou_noises.push_back(std::make_unique<OrnsteinUhlenbeckNoise>(0.02f, 0.0f, 0.0f, 0.004f, 0.0f));
+        ou_noises.push_back(std::make_unique<OrnsteinUhlenbeckNoise>(0.02f, 0.0f, 0.0f, kNoiseDt, 0.0f));
     }
 
     itemsToRemove.reserve(replayMem.getMemoryLimit());
+
+    joltWeightLoc_.reserve(kJoltNumWeights);
+    joltTarget_.reserve(kJoltNumWeights);
 
     // GUI
     if (!nnOutputsGraphView) {
@@ -684,9 +701,12 @@ void InterfaceRL::optimise() {
         }
         float lossPositive{0.f};
         float lossNegative{0.f};
+        // Post-jolt recovery: scale the LR by the ramp (0 -> 1 over ~5s after a jolt) so
+        // training eases back in rather than yanking the net off the jolted sound.
+        const float effLR = learningRateScaled * joltLRRamp_;
         if (batchSizePos > 0){
             avgRewardPos /= static_cast<float>(batchSizePos);
-            float effectiveLR_pos = learningRateScaled * avgRewardPos;
+            float effectiveLR_pos = effLR * avgRewardPos;
             // Serial.printf("[DEBUG] Pos batch: counter=%d, actual_data_size=%d (inputs), %d (outputs), avgReward=%f, LR=%f, effectiveLR=%f\n",
                         //  batchSizePos, tsPositive.first.size(), tsPositive.second.size(),
                         //  avgRewardPos, learningRateScaled, effectiveLR_pos);
@@ -711,7 +731,7 @@ void InterfaceRL::optimise() {
             //     }
             // }
 
-            lossPositive = synthMapping->TrainBatch(tsPositive, learningRateScaled * avgRewardPos, 1, batchSize, 0.f, false);
+            lossPositive = synthMapping->TrainBatch(tsPositive, effLR * avgRewardPos, 1, batchSize, 0.f, false);
             // Serial.printf("[DEBUG] Loss after positive TrainBatch: %f (inf=%d, nan=%d)\n",
             //              lossPositive, std::isinf(lossPositive), std::isnan(lossPositive));
         }
@@ -754,10 +774,10 @@ void InterfaceRL::optimise() {
                 const float negFraction = static_cast<float>(batchSizeNeg)
                     / static_cast<float>(std::max(batchSizeNeg + totalPosCount, size_t{1}));
                 const float negLRRatio = 0.5f - 0.4f * negFraction;
-                lossNegative = synthMapping->TrainBatch(tsGeometric, learningRateScaled * negLRRatio, 1, batchSizeNeg, 0.f, false);
+                lossNegative = synthMapping->TrainBatch(tsGeometric, effLR * negLRRatio, 1, batchSizeNeg, 0.f, false);
             } else {
                 // Fallback: negative LR when replay memory has no positive items yet
-                lossNegative = synthMapping->TrainBatch(tsNegative, learningRateScaled * 0.1f * avgRewardNeg, 1, batchSizeNeg, 0.f, false);
+                lossNegative = synthMapping->TrainBatch(tsNegative, effLR * 0.1f * avgRewardNeg, 1, batchSizeNeg, 0.f, false);
             }
         }
 
