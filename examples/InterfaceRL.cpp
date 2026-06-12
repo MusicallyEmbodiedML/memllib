@@ -213,6 +213,11 @@ void InterfaceRL::bind_RL_interface(INPUT_MODES input_mode, bool joystick4D) {
                 nnOutputsGraphView->setMemoryCounts(pos, replayMem.size() - pos);
             }
         }
+        // Apply a deferred input-source change off the rotary ISR (heap/SPI/flash IO).
+        if (pendingInputSourceChange_) {
+            pendingInputSourceChange_ = false;
+            setInputSource(pendingInputSource_);
+        }
         uint32_t save = spin_lock_blocking(mlpActive);
         this->optimiseSometimes();
         this->generateAction();
@@ -372,7 +377,13 @@ void InterfaceRL::setup(size_t n_inputs, size_t n_outputs)
 
     ou_noises.reserve(n_outputs);
     for(size_t i=0; i < n_outputs; i++) {
-        ou_noises.push_back(std::make_unique<OrnsteinUhlenbeckNoise>(0.02f, 0.0f, 0.2f, 0.001f, 0.0f));
+        // OU(theta, mu, sigma, dt, x0). theta & dt set the *smoothness*: correlation
+        // time ~= 1/(theta*dt) calls = 1/(0.02*0.004) = 12500 calls ~= 62 s at the 200 Hz
+        // control rate, so the walk drifts in long smooth sweeps rather than per-frame
+        // kicks. sigma (amplitude) starts at 0 and is set by the intensity knob via
+        // setNoiseLevel()/setStationaryStd() on boot-sync. To make sweeps faster/coarser
+        // raise dt; slower/smoother, lower it.
+        ou_noises.push_back(std::make_unique<OrnsteinUhlenbeckNoise>(0.02f, 0.0f, 0.0f, 0.004f, 0.0f));
     }
 
     itemsToRemove.reserve(replayMem.getMemoryLimit());
@@ -846,7 +857,8 @@ void InterfaceRL::addInputSourceView(bool includeCCSelect) {
     view->setOptions(std::span<String>(opts.data(), opts.size()));
     view->setSelection(initialSel);
     view->setNewSelectionCallback([this, available](size_t idx) {
-        if (idx < available.size()) setInputSource(available[idx]);
+        // Runs in the rotary-encoder ISR — defer the actual switch to the main loop.
+        if (idx < available.size()) requestInputSource(available[idx]);
     });
     MEMLNaut::Instance()->disp->AddView(view);
 

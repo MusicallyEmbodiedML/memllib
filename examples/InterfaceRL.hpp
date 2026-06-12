@@ -143,17 +143,25 @@ public:
     void setRewardScaleInterf(float value);
 
     inline void setNoiseLevel(float level) {
-        level *= 0.5f;
-        if (level < 0.02f) {
-            level = 0.f;
+        // Knob [0,1] -> roaming amplitude (the OU walk's stationary std) in param space.
+        // theta/dt (set in setup) fix the smoothness; this only sets how far each param
+        // drifts from the mapping output. Low = gentle local wander; full = slow sweeps
+        // across the whole [0,1] range. kMaxAmplitude sets the "depth": higher reaches
+        // deeper into the param space (and interacts more with the [0,1] rails via the
+        // gentle reflection in generateAction), lower keeps it shallower/more local.
+        constexpr float kMaxAmplitude = 0.65f;
+        float amplitude = level * kMaxAmplitude;
+        if (amplitude < 0.01f) {
+            amplitude = 0.f;
             if (msgView) msgView->post("Noise off");
+        } else {
+            String msg = "Explore amount: " + String(amplitude, 3);
+            if (msgView) msgView->post(msg);
         }
-        String msg = "OU Sigma: " + String(level, 4);
-        if (msgView) msgView->post(msg);
         for(auto& ou_noise: ou_noises) {
-            ou_noise->setSigma(level);
+            ou_noise->setStationaryStd(amplitude);
         }
-        if (nnOutputsGraphView) nnOutputsGraphView->setNoiseActive(level > 0.f);
+        if (nnOutputsGraphView) nnOutputsGraphView->setNoiseActive(amplitude > 0.f);
     }
 
     void bind_RL_interface(INPUT_MODES input_mode = INPUT_MODES::JOYSTICK, bool joystick4D = false);
@@ -231,6 +239,15 @@ public:
         updateUnusedInputDefault();
         saveInputSource();
         if (nnInputsGraphView) nnInputsGraphView->setNumDisplayBars(getActiveInputCount());
+    }
+
+    // ISR-safe entry point (the rotary-encoder dispatch runs in interrupt context).
+    // setInputSource() does heap allocation (bar-graph resize), SPI (fillRect) and flash
+    // file IO — all unsafe in an ISR — so only record the request here and let the main
+    // loop apply it via the pendingInputSourceChange_ handler in bind_RL_interface().
+    void requestInputSource(INPUT_SOURCE src) {
+        pendingInputSource_ = src;
+        pendingInputSourceChange_ = true;
     }
     INPUT_SOURCE getInputSource() const   { return input_source_; }
     void setHasMachineListening(bool v)   { hasMachineListening_ = v; }
@@ -353,6 +370,8 @@ private:
     volatile bool pendingLike_{false};
     volatile bool pendingDislike_{false};
     volatile bool pendingDragStore_{false};   // drag-release: store savedAction
+    volatile bool pendingInputSourceChange_{false};  // input-source change: deferred from rotary ISR
+    INPUT_SOURCE pendingInputSource_{INPUT_SOURCE::JOYSTICK_3D};
 
     spin_lock_t *mlpActive;
 
