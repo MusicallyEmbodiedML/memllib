@@ -107,7 +107,7 @@ public:
 {
 
     }
-    void setup(size_t n_inputs, size_t n_outputs);
+    void setup(size_t n_inputs, size_t n_outputs, bool addMessageView = true);
 
     void optimise();
 

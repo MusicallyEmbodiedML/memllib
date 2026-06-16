@@ -135,13 +135,13 @@ void InterfaceRL<N_OUTPUTS>::bind_RL_interface(INPUT_MODES input_mode, bool joys
             savedAction = action;
             actionBeingDragged = true;
             if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("drag");
-            msgView->post("Where do you want it?");
+            if (msgView) msgView->post("Where do you want it?");
         } else {
             if (actionBeingDragged) {
                 actionBeingDragged = false;
                 pendingDragStore_ = true;
                 if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("drop");
-                msgView->post("Here!");
+                if (msgView) msgView->post("Here!");
             }
         }
     });
@@ -162,13 +162,13 @@ void InterfaceRL<N_OUTPUTS>::bind_RL_interface(INPUT_MODES input_mode, bool joys
             savedAction = action;
             actionBeingDragged = true;
             if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("drag");
-            msgView->post("Where do you want it?");
+            if (msgView) msgView->post("Where do you want it?");
         } else {
             if (actionBeingDragged) {
                 actionBeingDragged = false;
                 pendingDragStore_ = true;  // deferred: storeExperience in loopCallback
                 if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("drop");
-                msgView->post("Here!");
+                if (msgView) msgView->post("Here!");
             }
         }
     });
@@ -340,7 +340,7 @@ void InterfaceRL<N_OUTPUTS>::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf, bo
 }
 
 template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::setup(size_t n_inputs, size_t n_outputs)
+void InterfaceRL<N_OUTPUTS>::setup(size_t n_inputs, size_t n_outputs, bool addMessageView)
 {
 
     InterfaceBase::setup(n_inputs, n_outputs);
@@ -400,11 +400,16 @@ void InterfaceRL<N_OUTPUTS>::setup(size_t n_inputs, size_t n_outputs)
     //     memoryStoreMode = static_cast<MEMORY_STORE_MODES>(idx);
     // });
 
-    msgView = std::make_shared<MessageView>("Messages");
-    MEMLNaut::Instance()->disp->AddView(msgView);
+    if (addMessageView) {
+        msgView = std::make_shared<MessageView>("Messages");
+        MEMLNaut::Instance()->disp->AddView(msgView);
+    }
 
-    // 12 slots laid out 6 columns x 2 rows; narrow buttons so they spread across the 320px screen.
-    fileSaveView = std::make_shared<BlockSelectView>("Save Model", TFT_BLUE, kNumSlots, 42, 60);
+    // 12 slots laid out 6 columns x 2 rows. Size the buttons to fill the screen: width
+    // 10 + 6*43 + 5*10 gap = 318px (of 320); height 78 x 2 rows clears the message line.
+    // Smaller font (2) so slot names fit the narrower buttons.
+    fileSaveView = std::make_shared<BlockSelectView>("Save Model", TFT_BLUE, kNumSlots, 43, 78,
+        TFT_WHITE, std::vector<String>{}, TFT_BLUE, 2 /* fontNum */);
     fileSaveView->SetOnSelectCallback([this](size_t id) {
         pendingSaveSlot = static_cast<int>(id) - 1;
         nameInputView->reset(slotNames[pendingSaveSlot]);
@@ -412,7 +417,8 @@ void InterfaceRL<N_OUTPUTS>::setup(size_t n_inputs, size_t n_outputs)
     });
     MEMLNaut::Instance()->disp->AddView(fileSaveView);
 
-    fileLoadView = std::make_shared<BlockSelectView>("Load Model", TFT_PURPLE, kNumSlots, 42, 60);
+    fileLoadView = std::make_shared<BlockSelectView>("Load Model", TFT_PURPLE, kNumSlots, 43, 78,
+        TFT_WHITE, std::vector<String>{}, TFT_PURPLE, 2 /* fontNum */);
     fileLoadView->SetOnSelectCallback([this](size_t id) {
         int slotIdx = static_cast<int>(id) - 1;
         String filename = (slotNames[slotIdx].length() > 0) ? slotNames[slotIdx] : String(id);
