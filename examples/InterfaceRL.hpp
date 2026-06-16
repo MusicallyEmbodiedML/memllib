@@ -3,7 +3,7 @@
 
 #include "../interface/InterfaceBase.hpp"
 
-#include "../../memlp/MLP.h"
+#include "../../memlp/StaticMLP.h"
 #include "../../memlp/ReplayMemory.hpp"
 #include "../../memlp/OrnsteinUhlenbeckNoise.h"
 #include <memory>
@@ -34,11 +34,19 @@ struct trainStatelessRLItem {
     float reward;
 };
 
-class InterfaceRL : public InterfaceBase
+// Non-template base holding the nested types + constants that callers reference
+// without a template argument (e.g. InterfaceRLBase::INPUT_MODES in the modes
+// and the .ino). Because this (and InterfaceBase) are *non-dependent* bases of
+// InterfaceRL<N_OUTPUTS>, the template sees every inherited member by ordinary
+// lookup — no this->/using-declarations required.
+class InterfaceRLBase : public InterfaceBase
 {
 public:
-
     using OnMIDICtrlCallback = std::function<void(uint8_t)>;
+
+    // Training data type (independent of the network's output width).
+    using training_pair_t = std::pair<std::vector<std::vector<float>>,
+                                      std::vector<std::vector<float>>>;
 
     static constexpr size_t kMaxNNInputs = 10;
 
@@ -69,7 +77,32 @@ public:
         REWARD_DECAY_20_PERCENT
     };
 
-   InterfaceRL() : InterfaceBase()
+    // Input-source state is independent of the network's output width, so it
+    // lives in the base: this lets N-agnostic helpers (e.g. MachineListeningMixin)
+    // hold an InterfaceRLBase* and still query/configure the input source.
+    INPUT_SOURCE getInputSource() const   { return input_source_; }
+    void setHasMachineListening(bool v)   { hasMachineListening_ = v; }
+
+protected:
+    INPUT_SOURCE input_source_ = INPUT_SOURCE::JOYSTICK_3D;
+    bool hasMachineListening_ = false;
+};
+
+// The RL interface. N_OUTPUTS (the active mode's parameter count) is fixed at
+// compile time, so the synth-mapping network is a static-memory StaticMLP with
+// no heap allocation. The mode declares e.g. InterfaceRL<MyApp::kN_Params>.
+template<size_t N_OUTPUTS>
+class InterfaceRL : public InterfaceRLBase
+{
+public:
+
+    // Compile-time mapping network: kMaxNNInputs -> 16 -> 16 -> N_OUTPUTS.
+    using SynthMLP = smlp::StaticMLP<float,
+        smlp::Layout<kMaxNNInputs, 16, 16, N_OUTPUTS>,
+        smlp::Activations<RELU, RELU, HARDSIGMOID>,
+        loss::LOSS_FUNCTIONS::LOSS_MSE>;
+
+   InterfaceRL() : InterfaceRLBase()
 //    , ou_noise(0.02f, 0.0f, 0.2f, 0.001f, 0.0f)
 {
 
@@ -107,7 +140,7 @@ public:
 
     inline void randomiseTheNetwork()
     {
-        synthMapping->RandomiseWeightsAndBiasesLin(-0.9f,1.1f, -0.9f, 0.3f);
+        synthMapping.RandomiseWeightsAndBiasesLin(-0.9f,1.1f, -0.9f, 0.3f);
         newInput = true;
         resetMinMaxFlag = true;
     }
@@ -128,7 +161,7 @@ public:
     }
 
     inline void setLRScale(const float scale) {
-        learningRateScaled = learningRate * scale;
+        learningRateScaled = learningRate * scale;  // knob at 0 -> LR 0 -> training off (intended)
         String msg = "LR scale: " + String(scale);
         if (msgView) msgView->post(msg);
     }
@@ -173,14 +206,12 @@ public:
         joltActive_ = true;
         joltWeightLoc_.clear();
         joltTarget_.clear();
-        const size_t numLayers = synthMapping->GetNumLayers();
-        if (numLayers == 0) return;
+        // StaticMLP exposes a flat view over all weights (layer 0 first); pick
+        // random global indices to modulate.
+        const size_t total = SynthMLP::TotalWeights();
+        if (total == 0) return;
         for (size_t i = 0; i < kJoltNumWeights; i++) {
-            size_t L = rand() % numLayers;
-            auto flat = synthMapping->GetLayerRef(L).GetWeightsFlat();
-            if (flat.empty()) continue;
-            size_t idx = rand() % flat.size();
-            joltWeightLoc_.emplace_back(L, idx);
+            joltWeightLoc_.push_back(rand() % total);
             joltTarget_.push_back(randomJoltTarget());
         }
         if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("jolt");
@@ -188,14 +219,13 @@ public:
     }
 
     inline void stepJolt() {
-        const size_t numLayers = synthMapping->GetNumLayers();
+        const size_t total = SynthMLP::TotalWeights();
         for (size_t i = 0; i < joltWeightLoc_.size(); i++) {
-            const size_t L = joltWeightLoc_[i].first;
-            if (L >= numLayers) continue;  // stale after a model load
-            auto flat = synthMapping->GetLayerRef(L).GetWeightsFlat();
-            const size_t idx = joltWeightLoc_[i].second;
-            if (idx >= flat.size()) continue;
-            float& w = flat[idx];
+            const size_t idx = joltWeightLoc_[i];
+            if (idx >= total) continue;  // stale after a model load
+            float* wp = synthMapping.WeightPtrAt(idx);
+            if (!wp) continue;
+            float& w = *wp;
             w += kJoltMorphRate * (joltTarget_[i] - w);
             // Reached this target (EMA only asymptotes, so use a threshold) -> roll a new
             // one, keeping the weight in motion for as long as the button is held.
@@ -296,8 +326,6 @@ public:
         pendingInputSource_ = src;
         pendingInputSourceChange_ = true;
     }
-    INPUT_SOURCE getInputSource() const   { return input_source_; }
-    void setHasMachineListening(bool v)   { hasMachineListening_ = v; }
     void addInputSourceView(bool includeCCSelect = true);
 
     void SetMIDI5Callback(OnMIDICtrlCallback _cb_) {
@@ -330,7 +358,7 @@ protected:
     void _saveSlotNames();
     void _loadSlotNames();
 
-    static constexpr int kNumSlots = 8;
+    static constexpr int kNumSlots = 12;
     String slotNames[kNumSlots];
     int pendingSaveSlot = -1;
     
@@ -357,11 +385,9 @@ private:
     float raw_joystick_[4] = {};
     float raw_ml_[6]       = {};
     float raw_midi_[8]     = {};
-    INPUT_SOURCE input_source_ = INPUT_SOURCE::JOYSTICK_3D;
     // Constant used to pad the unused NN input dims; recomputed only on input-mode change.
     float unusedInputDefault_ = 0.5f;
 
-    bool hasMachineListening_ = false;
     static constexpr const char* kInputSourceFile = "/input_source.bin";
     void assembleInputs();
     void copyAndZero(const float* src, size_t n);
@@ -374,9 +400,14 @@ private:
 
     MEMORY_STORE_MODES memoryStoreMode = MEMORY_STORE_MODES::REPLACE_10_PERCENT;
     std::array<String, 6> memOptions = {"Add", "Replace 5%", "Replace 10%", "Replace 15%", "Reward Decay 10%", "Reward Decay 20%"};
-    static constexpr float kGeometricPushScale = 0.5f;
-    static constexpr size_t kMaxDislikeMultiplier = 16;
-    size_t dislikeMultiplier_{1};
+    // Dislike repulsion: how far a 'no' moves the disliked action's training target away
+    // from the liked region (untapered), and the negative-batch LR base. Bigger = a 'no'
+    // slides the sound clearly further away; >1 tends to push params to the [0,1] rails.
+    static constexpr float kGeometricPushScale = 1.0f;
+    static constexpr float kNegLRBase = 1.5f;  // negLRRatio = kNegLRBase - 0.4*negFraction
+    // A 'no' pushes at full strength for this long (wall-clock), then expires — no decay.
+    // The number of optimise cycles within the window depends on the mode's NN update rate.
+    static constexpr uint32_t kDislikeLifetimeMs = 2500;
     static constexpr size_t kCentroidK = 4;
     std::vector<bool> activeDims_;
     bool removeItemsAtDistance(std::vector<float> &experienceState, const float distThreshold, const float reward);
@@ -391,7 +422,7 @@ private:
     const bool use_constant_weight_init = false;
     const float constant_weight_init = 0;
 
-    std::shared_ptr<MLP<float> > synthMapping;
+    SynthMLP synthMapping;  // value member -> lives in the (static) mode object: zero heap
 
     float learningRate = 1e-3;
     float learningRateScaled = learningRate;
@@ -421,7 +452,7 @@ private:
     static constexpr float  kJoltWeightMax  = 0.9f;
     static constexpr float  kJoltTargetEpsilon = 0.05f;  // re-roll target once within this
     static constexpr float  kJoltLRRampStep = 0.001f;    // LR recovery rate: 1/(5s * 200Hz)
-    std::vector<std::pair<size_t,size_t>> joltWeightLoc_;  // (layer, flat weight index)
+    std::vector<size_t> joltWeightLoc_;  // global flat weight indices (StaticMLP::WeightPtrAt)
     std::vector<float>                    joltTarget_;     // per-selected-weight target value
     bool joltActive_ = false;
     // After a jolt releases, learning resumes gently: effective LR *= joltLRRamp_, which
@@ -446,5 +477,9 @@ private:
     ExtraLoadDataFn _extraLoadFn;
 
 };
+
+// Template method definitions (header-only so the per-mode instantiation is
+// available wherever InterfaceRL<N> is used).
+#include "InterfaceRL.tpp"
 
 #endif // INTERFACERL_HPP
