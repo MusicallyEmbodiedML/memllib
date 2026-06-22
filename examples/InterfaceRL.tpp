@@ -208,9 +208,16 @@ void InterfaceRL<N_OUTPUTS>::bind_RL_interface(INPUT_MODES input_mode, bool joys
             }
         }
         // Apply a deferred input-source change off the rotary ISR (heap/SPI/flash IO).
+        // Apply in-memory now for a responsive UI, but debounce the flash write: scrolling
+        // through sources would otherwise stall XIP per detent and blank the display.
         if (pendingInputSourceChange_) {
             pendingInputSourceChange_ = false;
-            setInputSource(pendingInputSource_);
+            setInputSource(pendingInputSource_, false);
+            inputSourceSaveDueMs_ = millis() + kInputSourceSaveDelayMs;
+        }
+        if (inputSourceSaveDueMs_ != 0 && millis() >= inputSourceSaveDueMs_) {
+            inputSourceSaveDueMs_ = 0;
+            saveInputSource();  // persist once the selection has settled
         }
         uint32_t save = spin_lock_blocking(mlpActive);
         if (joltActive_) {

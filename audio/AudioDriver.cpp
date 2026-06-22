@@ -111,12 +111,15 @@ static void AUDIO_FUNC(process_audio)(const int32_t* input, int32_t* output, siz
 
     if (audio_callback_block_ != nullptr) {
 
-        // Convert from interleaved int32_t to deinterleaved float
+        // Convert from interleaved int32_t to deinterleaved float.
+        // Channels are swapped here to correct a hardware layout issue: the physical
+        // L/R input sockets map to the opposite codec ADC channels. Swapping at this
+        // lowest level means every mode sees x.L/x.R matching the labelled sockets.
         for (size_t i = 0; i < num_frames; i++) {
             const size_t indexL = i << 1;
             const size_t indexR = indexL + 1;
-            input_buffer[0][i] = _scale_down(static_cast<float>(input[indexL]));
-            input_buffer[1][i] = _scale_down(static_cast<float>(input[indexR]));
+            input_buffer[0][i] = _scale_down(static_cast<float>(input[indexR]));
+            input_buffer[1][i] = _scale_down(static_cast<float>(input[indexL]));
         }
         // Serial.println(input_buffer[0][0]);
         // Serial.println(input[0]);

@@ -311,10 +311,13 @@ public:
         unusedInputDefault_ = (unused > 0) ? (1.1f / static_cast<float>(unused)) : 0.f;
     }
 
-    void setInputSource(INPUT_SOURCE src) {
+    // persist=false applies the change in memory + updates the bar graph without writing
+    // flash. A flash write stalls XIP execution on the RP2040 (blanking the display), so
+    // the rotary-driven path applies immediately but debounces the save (see loopCallback).
+    void setInputSource(INPUT_SOURCE src, bool persist = true) {
         input_source_ = src;
         updateUnusedInputDefault();
-        saveInputSource();
+        if (persist) saveInputSource();
         if (nnInputsGraphView) nnInputsGraphView->setNumDisplayBars(getActiveInputCount());
     }
 
@@ -468,6 +471,10 @@ private:
     volatile bool pendingDragStore_{false};   // drag-release: store savedAction
     volatile bool pendingInputSourceChange_{false};  // input-source change: deferred from rotary ISR
     INPUT_SOURCE pendingInputSource_{INPUT_SOURCE::JOYSTICK_3D};
+    // Debounced flash persistence: a save is scheduled this many ms after the last change,
+    // so scrolling through sources doesn't trigger a flash write (XIP stall) per detent.
+    static constexpr uint32_t kInputSourceSaveDelayMs = 600;
+    uint32_t inputSourceSaveDueMs_ = 0;  // 0 = no save pending
 
     spin_lock_t *mlpActive;
 
