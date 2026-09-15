@@ -16,8 +16,8 @@ inline float euclideanDistance(const std::vector<float>& a, const std::vector<fl
 
 
 // Protected helper method implementations
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::_perform_like_action() {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::_perform_like_action() {
     static std::vector<String> likemsgs = {
         "Wow, incredible", "Awesome", "That's amazing", "Unbelievable+",
         "I love it!!", "More of this", "Yes!!!!", "A-M-A-Z-I-N-G",
@@ -34,8 +34,8 @@ void InterfaceRL<N_OUTPUTS>::_perform_like_action() {
     if (msgView) msgView->post(msg);
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::_perform_dislike_action() {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::_perform_dislike_action() {
     static std::vector<String> dislikemsgs = {
         "oh no!", "Get rid of this sound", 
         "Why even bother?", "New sound please!", "No, please no!!!",
@@ -53,8 +53,8 @@ void InterfaceRL<N_OUTPUTS>::_perform_dislike_action() {
     if (msgView) msgView->post(msg);
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::_perform_randomiseRL_action() {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::_perform_randomiseRL_action() {
 
     this->randomiseTheNetwork();
     this->generateAction(true);
@@ -65,13 +65,13 @@ void InterfaceRL<N_OUTPUTS>::_perform_randomiseRL_action() {
 
 // Public trigger methods — called from ISR context, so only set a flag.
 // The actual action runs in the main-loop loopCallback before optimise().
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::trigger_like() {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::trigger_like() {
     pendingLike_ = true;
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::trigger_dislike() {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::trigger_dislike() {
     pendingDislike_ = true;
 }
 
@@ -80,8 +80,8 @@ void InterfaceRL<N_OUTPUTS>::trigger_dislike() {
 // }
 
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::setOptimiseDivisorInterf(float value)
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::setOptimiseDivisorInterf(float value)
 {
     size_t divisor = 1 + (value * 100);
     String msg;
@@ -97,8 +97,8 @@ void InterfaceRL<N_OUTPUTS>::setOptimiseDivisorInterf(float value)
 }
 
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::bind_RL_interface(INPUT_MODES input_mode, bool joystick4D) {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::bind_RL_interface(INPUT_MODES input_mode, bool joystick4D) {
 
     loadInputSource();
     if (nnInputsGraphView) nnInputsGraphView->setNumDisplayBars(getActiveInputCount());
@@ -234,8 +234,8 @@ void InterfaceRL<N_OUTPUTS>::bind_RL_interface(INPUT_MODES input_mode, bool joys
 }
 
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::setRewardScaleInterf(float value)
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::setRewardScaleInterf(float value)
 {
     this->setRewardScale(value);
     String msg = "Reward scale: " + String(value);
@@ -244,8 +244,8 @@ void InterfaceRL<N_OUTPUTS>::setRewardScaleInterf(float value)
 
 
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::_forget_replay_mem_interf()
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::_forget_replay_mem_interf()
 {
     this->forgetMemory();
     if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("forget");
@@ -259,8 +259,8 @@ void InterfaceRL<N_OUTPUTS>::_forget_replay_mem_interf()
 }
 
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf, bool enableFootcontroller)
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf, bool enableFootcontroller)
 {
     if (midi_interf) {
         midi_interf->SetCCCallback([this, enableFootcontroller] (uint8_t cc_number, uint8_t cc_value) {
@@ -346,8 +346,8 @@ void InterfaceRL<N_OUTPUTS>::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf, bo
     }
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::setup(size_t n_inputs, size_t n_outputs, bool addMessageView)
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::setup(size_t n_inputs, size_t n_outputs, bool addMessageView)
 {
 
     InterfaceBase::setup(n_inputs, n_outputs);
@@ -478,8 +478,8 @@ void InterfaceRL<N_OUTPUTS>::setup(size_t n_inputs, size_t n_outputs, bool addMe
 }
 
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::setModeInfo(const String& modeRoot, const String& modeTag) {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::setModeInfo(const String& modeRoot, const String& modeTag) {
     _modeRoot = modeRoot;
     _modeTag = modeTag;
     if (MEMLNaut::Instance()->startSD()) {
@@ -488,8 +488,8 @@ void InterfaceRL<N_OUTPUTS>::setModeInfo(const String& modeRoot, const String& m
     }
 }
 
-template<size_t N_OUTPUTS>
-bool InterfaceRL<N_OUTPUTS>::_save_RL_to_SD(String id) {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+bool InterfaceRL<N_OUTPUTS, N_INPUTS>::_save_RL_to_SD(String id) {
     String dir = "/" + _modeRoot;
     String path = dir + "/" + id + ".bin";
 
@@ -532,8 +532,8 @@ bool InterfaceRL<N_OUTPUTS>::_save_RL_to_SD(String id) {
     return success;
 }
 
-template<size_t N_OUTPUTS>
-bool InterfaceRL<N_OUTPUTS>::_load_RL_from_SD(String id) {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+bool InterfaceRL<N_OUTPUTS, N_INPUTS>::_load_RL_from_SD(String id) {
     String path = "/" + _modeRoot + "/" + id + ".bin";
 
     auto file = SD.open(path.c_str(), FILE_READ);
@@ -595,8 +595,8 @@ bool InterfaceRL<N_OUTPUTS>::_load_RL_from_SD(String id) {
     return success;
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::_saveSlotNames() {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::_saveSlotNames() {
     String dir = "/" + _modeRoot;
     if (!SD.exists(dir.c_str())) {
         SD.mkdir(dir.c_str());
@@ -611,8 +611,8 @@ void InterfaceRL<N_OUTPUTS>::_saveSlotNames() {
     file.close();
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::_loadSlotNames() {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::_loadSlotNames() {
     String path = "/" + _modeRoot + "/slots.txt";
     auto file = SD.open(path.c_str(), FILE_READ);
     if (!file) return;
@@ -629,8 +629,8 @@ void InterfaceRL<N_OUTPUTS>::_loadSlotNames() {
 }
 
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::optimise() {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::optimise() {
 
     float lossPositive{0.f};
     float lossNegative{0.f};
@@ -772,16 +772,16 @@ void InterfaceRL<N_OUTPUTS>::optimise() {
 
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::readAnalysisParameters(std::vector<float> params) {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::readAnalysisParameters(std::vector<float> params) {
     for (size_t i = 0; i < params.size() && i < 6; i++) {
         raw_ml_[i] = params[i];
     }
     generateAction(true);
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::assembleInputs() {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::assembleInputs() {
     switch (input_source_) {
         case INPUT_SOURCE::JOYSTICK_3D:       copyAndZero(raw_joystick_, 3); break;
         case INPUT_SOURCE::JOYSTICK_4D:       copyAndZero(raw_joystick_, 4); break;
@@ -797,33 +797,33 @@ void InterfaceRL<N_OUTPUTS>::assembleInputs() {
     }
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::copyAndZero(const float* src, size_t n) {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::copyAndZero(const float* src, size_t n) {
     // Pad the unused input tail with a non-zero constant instead of 0. A constant input
     // only adds a fixed term (Σ_j W1[i,j]·c) to each hidden unit — i.e. a per-unit layer-1
     // bias shift — which spreads effective biases to mixed signs so units switch both on
     // and off across a single-input sweep (more non-linear, direction-changing mapping).
     // unusedInputDefault_ is recomputed only on input-mode change (see updateUnusedInputDefault).
     size_t i = 0;
-    for (; i < n && i < kMaxNNInputs; ++i) controlInput[i] = src[i];
-    for (; i < kMaxNNInputs; ++i)           controlInput[i] = unusedInputDefault_;
+    for (; i < n && i < N_INPUTS; ++i) controlInput[i] = src[i];
+    for (; i < N_INPUTS; ++i)          controlInput[i] = unusedInputDefault_;
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::saveInputSource() {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::saveInputSource() {
     FILE* f = fopen(kInputSourceFile, "wb");
     if (f) { fwrite(&input_source_, sizeof(input_source_), 1, f); fclose(f); }
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::loadInputSource() {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::loadInputSource() {
     FILE* f = fopen(kInputSourceFile, "rb");
     if (f) { fread(&input_source_, sizeof(input_source_), 1, f); fclose(f); }
     updateUnusedInputDefault();
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::addInputSourceView(bool includeCCSelect) {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::addInputSourceView(bool includeCCSelect) {
     static const String srcNames[] = {
         "3D Joystick", "4D Joystick", "Machine Listen",
         "MIDI Mod Whl", "MIDI 3 CC", "MIDI 8 CC", "Combined"
@@ -865,8 +865,8 @@ void InterfaceRL<N_OUTPUTS>::addInputSourceView(bool includeCCSelect) {
     }
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::generateAction(bool donthesitate) {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::generateAction(bool donthesitate) {
     if (newInput || donthesitate) {
         newInput = false;
 
@@ -901,8 +901,8 @@ void InterfaceRL<N_OUTPUTS>::generateAction(bool donthesitate) {
 // }
 
 
-template<size_t N_OUTPUTS>
-bool InterfaceRL<N_OUTPUTS>::removeItemsAtDistance(std::vector<float> &experienceState, const float distThreshold, const float reward) {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+bool InterfaceRL<N_OUTPUTS, N_INPUTS>::removeItemsAtDistance(std::vector<float> &experienceState, const float distThreshold, const float reward) {
     std::vector<size_t> indicesToRemove;
     bool accumulated = false;
     for(size_t i=0; i < replayMem.size(); i++) {
@@ -928,8 +928,8 @@ bool InterfaceRL<N_OUTPUTS>::removeItemsAtDistance(std::vector<float> &experienc
     return accumulated;
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::decayItemsAtDistance(std::vector<float> &experienceState, const float distThreshold) {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::decayItemsAtDistance(std::vector<float> &experienceState, const float distThreshold) {
     std::vector<size_t> indicesToRemove;
     for(size_t i=0; i < replayMem.size(); i++) {
         trainStatelessRLItem& item = replayMem.getItem(i);   
@@ -947,8 +947,8 @@ void InterfaceRL<N_OUTPUTS>::decayItemsAtDistance(std::vector<float> &experience
     replayMem.removeItems(indicesToRemove);             
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::storeExperience(float reward, std::vector<float> &experienceState, std::vector<float> &experienceAction ) {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::storeExperience(float reward, std::vector<float> &experienceState, std::vector<float> &experienceAction ) {
     trainStatelessRLItem trainItem = {experienceState, experienceAction, reward * rewardScale}; // state is s_t, action is a_t, reward is r_t, nextState is s_t
     bool skip_add = false;
     switch(memoryStoreMode) {
@@ -979,8 +979,8 @@ void InterfaceRL<N_OUTPUTS>::storeExperience(float reward, std::vector<float> &e
     }
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::saveCCNumbers() {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::saveCCNumbers() {
     if (!ccSelectView) return;
     String path = "/" + _modeRoot + "_cc_numbers.bin";
     FILE* f = fopen(path.c_str(), "wb");
@@ -991,8 +991,8 @@ void InterfaceRL<N_OUTPUTS>::saveCCNumbers() {
     }
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::loadCCNumbers() {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::loadCCNumbers() {
     if (!ccSelectView) return;
     String path = "/" + _modeRoot + "_cc_numbers.bin";
     FILE* f = fopen(path.c_str(), "rb");

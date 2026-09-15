@@ -91,14 +91,18 @@ protected:
 // The RL interface. N_OUTPUTS (the active mode's parameter count) is fixed at
 // compile time, so the synth-mapping network is a static-memory StaticMLP with
 // no heap allocation. The mode declares e.g. InterfaceRL<MyApp::kN_Params>.
-template<size_t N_OUTPUTS>
+// N_INPUTS defaults to the shared kMaxNNInputs (10) so every existing mode is
+// unaffected; a mode that needs a wider input layer (e.g. more raw MIDI CC
+// inputs than the built-in INPUT_SOURCE options support) can opt into a wider
+// net explicitly, e.g. InterfaceRL<16, 16>.
+template<size_t N_OUTPUTS, size_t N_INPUTS = InterfaceRLBase::kMaxNNInputs>
 class InterfaceRL : public InterfaceRLBase
 {
 public:
 
-    // Compile-time mapping network: kMaxNNInputs -> 16 -> 16 -> N_OUTPUTS.
+    // Compile-time mapping network: N_INPUTS -> 16 -> 16 -> N_OUTPUTS.
     using SynthMLP = smlp::StaticMLP<float,
-        smlp::Layout<kMaxNNInputs, 16, 16, N_OUTPUTS>,
+        smlp::Layout<N_INPUTS, 16, 16, N_OUTPUTS>,
         smlp::Activations<RELU, RELU, HARDSIGMOID>,
         loss::LOSS_FUNCTIONS::LOSS_MSE>;
 
@@ -296,8 +300,8 @@ public:
             case INPUT_SOURCE::MIDI_1CC:          return 1;
             case INPUT_SOURCE::MIDI_3CC:          return 3;
             case INPUT_SOURCE::MIDI_8CC:          return 8;
-            case INPUT_SOURCE::COMBINED:          return kMaxNNInputs;
-            default:                              return kMaxNNInputs;
+            case INPUT_SOURCE::COMBINED:          return N_INPUTS;
+            default:                              return N_INPUTS;
         }
     }
     const std::vector<float>& getControlInput() const { return controlInput; }
@@ -307,7 +311,7 @@ public:
     // bounded regardless of how many dims are unused — avoids over-driving the net.
     void updateUnusedInputDefault() {
         const size_t used   = getActiveInputCount();
-        const size_t unused = (used < kMaxNNInputs) ? (kMaxNNInputs - used) : 0;
+        const size_t unused = (used < N_INPUTS) ? (N_INPUTS - used) : 0;
         unusedInputDefault_ = (unused > 0) ? (1.1f / static_cast<float>(unused)) : 0.f;
     }
 
