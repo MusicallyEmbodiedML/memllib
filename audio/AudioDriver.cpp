@@ -156,7 +156,7 @@ static void AUDIO_FUNC(process_audio)(const int32_t* input, int32_t* output, siz
     AUDIOLOOP_MEAN = PERF_GET_MEAN(AUDIOLOOP);
 }
 
-static void __isr dma_i2s_in_handler(void) {
+static void __isr AUDIO_FUNC(dma_i2s_in_handler)(void) {
     /* We're double buffering using chained TCBs. By checking which buffer the
      * DMA is currently reading from, we can identify which buffer it has just
      * finished reading (the completion of which has triggered this interrupt).

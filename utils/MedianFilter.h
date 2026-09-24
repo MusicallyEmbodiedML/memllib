@@ -22,6 +22,9 @@ public:
     void init(std::size_t fSize) {
         filterSize_ = fSize;
         circularBuffer_ = std::vector<T>(filterSize_, 0);
+        // Scratch for nth_element, allocated once here so process() never touches the heap
+        // (it runs in the audio path, where malloc's cross-core lock can stall the audio core).
+        sortBuffer_ = std::vector<T>(filterSize_, 0);
         centreIndex = static_cast<size_t>(fSize / 2);
         reset();
     }
@@ -42,12 +45,19 @@ public:
           currentIndex_ = 0;
         }
 
-        //copy
-        // auto tmpVector = std::copy(circularBuffer_.begin(), circularBuffer_.end());
-        auto tmpVector = circularBuffer_;
-        std::nth_element(tmpVector.begin(), tmpVector.begin()+centreIndex, tmpVector.end());
-        // Calculate and return the moving average
-        return tmpVector[centreIndex];
+        // Insertion-sort the window into the preallocated scratch (no allocation). Hand-written
+        // rather than std::copy/nth_element, which compile to out-of-line memmove calls (flash).
+        T* s = sortBuffer_.data();
+        for (std::size_t i = 0; i < filterSize_; ++i) {
+            const T v = circularBuffer_[i];
+            std::size_t j = i;
+            while (j > 0 && s[j - 1] > v) {
+                s[j] = s[j - 1];
+                --j;
+            }
+            s[j] = v;
+        }
+        return s[centreIndex];
     }
 
     float std() {
@@ -65,6 +75,7 @@ public:
 private:
     std::size_t filterSize_;
     std::vector<T> circularBuffer_;
+    std::vector<T> sortBuffer_;
     std::size_t currentIndex_ = 0;
     size_t centreIndex=0;
 };
