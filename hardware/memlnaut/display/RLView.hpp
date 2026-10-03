@@ -9,7 +9,8 @@
 // RL screen: the network's outputs as bars, over a status line of
 //   [loss trace] [yes/no memory split + counts] [last action, flashed on change]
 // Each status field repaints only when its value changes; the loss trace adds one
-// column per kLossColumnMs, oscilloscope style, so it never has to scroll.
+// column per kLossColumnMs, oscilloscope style, so it never has to scroll. The trace is
+// auto-scaled, so the latest value is also shown as a number to its left.
 class RLView : public ViewBase {
 public:
     static constexpr int kStatusBarHeight = 20;
@@ -60,8 +61,11 @@ public:
             lossCount_ = 0;
             lastLossColumnMs_ = now;
             lossCursor_ = (lossCursor_ + 1) % kLossTraceW;
-            lossLog_[lossCursor_] = log10f(mean);
+            lossLog_[lossCursor_] = (mean > 0.f) ? log10f(mean) : -INFINITY;
             if (rescaleLoss()) lossFullRepaint_ = true;  // trace re-plotted on the new scale
+            // The trace is auto-scaled, so show the absolute value as a number too.
+            const String text = formatLoss(mean);
+            if (text != lossText_) { lossText_ = text; lossTextDirty_ = true; }
             if (!lossFullRepaint_) {
                 drawLossColumn(barY, lossCursor_);
                 drawLossColumn(barY, lossHead());                       // blank write head
@@ -69,11 +73,17 @@ public:
             }
         }
         if (lossFullRepaint_) {
-            scr->setTextColor(TFT_DARKGREY, TFT_BLACK);
-            scr->drawString("L", area.x + 2, barY + 6);
+            lossTextDirty_ = true;
             scr->fillRect(area.x + kLossX, barY + 2, kLossTraceW, kLossTraceH, TFT_BLACK);
             for (size_t i = 0; i < kLossTraceW; i++) drawLossColumn(barY, i);
             lossFullRepaint_ = false;
+        }
+        if (lossTextDirty_) {
+            scr->setTextColor(kLossColour, TFT_BLACK);
+            scr->setTextPadding(kLossTextW);
+            scr->drawString(lossText_.length() ? lossText_.c_str() : "-", area.x + 2, barY + 6);
+            scr->setTextPadding(0);
+            lossTextDirty_ = false;
         }
         lossDirty_ = false;
 
@@ -120,9 +130,10 @@ public:
 
     // Safe to call from ISR — only updates state and sets dirty/redraw flags, no direct SPI.
     // Each setter marks only its own field so OnDraw repaints just that part of the bar.
-    // Zero means no training happened (no liked memories in the batch): not plotted.
+    // Call only when training ran. 0 is a real value (the net already reproduces every
+    // liked sound): shown as "0" and plotted on the bottom row, outside the log scale.
     void setLoss(float v) {
-        if (!(v > 0.f) || !std::isfinite(v)) return;
+        if (!(v >= 0.f) || !std::isfinite(v)) return;
         lossSum_ += v;
         lossCount_++;
         lossDirty_ = true;
@@ -162,8 +173,9 @@ protected:
 
 private:
     // Status line layout (x offsets from area.x)
-    static constexpr int kLossX = 10;
-    static constexpr size_t kLossTraceW = 88;
+    static constexpr int kLossTextW = 38;   // "1.2e-3": 6 chars of font 1
+    static constexpr int kLossX = 42;
+    static constexpr size_t kLossTraceW = 60;
     static constexpr int kLossTraceH = 16;
     static constexpr int kCountsX = 106;
     static constexpr int kCountsBarW = 50;
@@ -172,7 +184,7 @@ private:
     static constexpr uint16_t kEmptyColour = 0x4208;
     static constexpr uint16_t kLossColour = TFT_CYAN;
 
-    static constexpr uint32_t kLossColumnMs = 150;  // 88 columns ~ 13s of history
+    static constexpr uint32_t kLossColumnMs = 200;  // 60 columns = 12s of history
     static constexpr uint32_t kFlashMs = 700;
     // Loss is plotted on a log scale fitted to the samples on screen, snapped to
     // quarter decades (so it only changes, forcing a re-plot, when the range really moves)
@@ -184,7 +196,7 @@ private:
     bool rescaleLoss() {
         float lo = INFINITY, hi = -INFINITY;
         for (float v : lossLog_) {
-            if (std::isnan(v)) continue;
+            if (!std::isfinite(v)) continue;  // no sample, or a zero loss
             lo = std::min(lo, v);
             hi = std::max(hi, v);
         }
@@ -202,7 +214,17 @@ private:
         return true;
     }
 
+    // Compact scientific form that fits 6 chars: "3.2e-4", "1.0e0".
+    static String formatLoss(float v) {
+        if (v <= 0.f) return "0";
+        int e = static_cast<int>(floorf(log10f(v)));
+        float m = v / powf(10.f, static_cast<float>(e));
+        if (m >= 9.95f) { m /= 10.f; e++; }  // so rounding can't print "10.0e-4"
+        return String(m, 1) + "e" + String(e);
+    }
+
     int lossToY(float logLoss) const {
+        if (std::isinf(logLoss)) return kLossTraceH - 1;  // zero loss: bottom row
         float t = (logLoss - lossScaleLo_) / (lossScaleHi_ - lossScaleLo_);
         if (t < 0.f) t = 0.f;
         else if (t > 1.f) t = 1.f;
@@ -248,6 +270,8 @@ private:
     uint32_t lossCount_{0};
     uint32_t lastLossColumnMs_{0};
     bool lossFullRepaint_{true};
+    String lossText_;
+    bool lossTextDirty_{true};
 
     bool flashing_{false};
     uint32_t flashUntilMs_{0};
