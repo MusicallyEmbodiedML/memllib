@@ -74,6 +74,10 @@ public:
         OnTouchDown(x,y);
     }
 
+    // Finger still down and (possibly) moved since the press. Not routed to subviews.
+    virtual void OnTouchDrag(size_t x, size_t y) {}
+    void HandleTouchDrag(size_t x, size_t y) { OnTouchDrag(x, y); }
+
     void HandleTouchRelease(size_t x, size_t y) {
         Serial.print("HandleTouchRelease at: ");
         Serial.print(x);

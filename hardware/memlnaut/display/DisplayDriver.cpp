@@ -176,8 +176,12 @@ void DisplayDriver::PollTouch() {
             //     views_[currentViewIndex_]->OnDisplay();  // Call OnDisplay for the new view
             // }
             isTouchPressed_ = true;
-        } else if (isTouchPressed_) {
-            //drag event
+        } else if (pressed && isTouchPressed_) {
+            // Drag: finger still down (below the header). Sent each poll while held.
+            if (y > topBarHeight) {
+                auto& activeView = dialogView_ ? dialogView_ : views_[currentViewIndex_];
+                activeView->HandleTouchDrag(lastTouchX, lastTouchY);
+            }
         } 
         if (!pressed && isTouchPressed_) {
             // If touch was released, handle release
