@@ -406,6 +406,15 @@ protected:
     void _loadSlotNames();
 
     static constexpr int kNumSlots = 12;
+    static constexpr uint16_t kSaveAccent = TFT_ORANGE;
+    static constexpr uint16_t kLoadAccent = 0x929F;  // violet
+    // Highlight the slot of the model now in use, on both the save and load screens.
+    void markCurrentSlot(int slot) {
+        for (int i = 0; i < kNumSlots; i++) {
+            if (fileSaveView) fileSaveView->setAltState(i, i == slot);
+            if (fileLoadView) fileLoadView->setAltState(i, i == slot);
+        }
+    }
     String slotNames[kNumSlots];
     int pendingSaveSlot = -1;
     

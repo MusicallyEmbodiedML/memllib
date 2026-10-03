@@ -455,20 +455,24 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::setup(size_t n_inputs, size_t n_outputs, 
         MEMLNaut::Instance()->disp->AddView(msgView);
     }
 
-    // 12 slots laid out 6 columns x 2 rows. Size the buttons to fill the screen: width
-    // 10 + 6*43 + 5*10 gap = 318px (of 320); height 78 x 2 rows clears the message line.
-    // Smaller font (2) so slot names fit the narrower buttons.
-    fileSaveView = std::make_shared<BlockSelectView>("Save Model", TFT_BLUE, kNumSlots, 43, 78,
-        TFT_WHITE, std::vector<String>{}, TFT_BLUE, 2 /* fontNum */);
+    // 12 slots, 6 x 2. Slot style: numbered corners, empty slots dimmed; the slot of the
+    // model currently in use is filled with the accent colour on both screens.
+    const std::vector<String> emptySlots(kNumSlots, String(""));
+    fileSaveView = std::make_shared<BlockSelectView>("Save Model", kSaveAccent, kNumSlots, 43, 78,
+        TFT_WHITE, emptySlots, kSaveAccent);
+    fileSaveView->setSlotStyle(true);
     fileSaveView->SetOnSelectCallback([this](size_t id) {
         pendingSaveSlot = static_cast<int>(id) - 1;
-        nameInputView->reset(slotNames[pendingSaveSlot]);
+        // Unnamed saves are recorded under their number: don't offer that as a name.
+        const String& cur = slotNames[pendingSaveSlot];
+        nameInputView->reset(cur == String(pendingSaveSlot + 1) ? String("") : cur);
         MEMLNaut::Instance()->disp->ShowDialog(nameInputView);
     });
     MEMLNaut::Instance()->disp->AddView(fileSaveView);
 
-    fileLoadView = std::make_shared<BlockSelectView>("Load Model", TFT_PURPLE, kNumSlots, 43, 78,
-        TFT_WHITE, std::vector<String>{}, TFT_PURPLE, 2 /* fontNum */);
+    fileLoadView = std::make_shared<BlockSelectView>("Load Model", kLoadAccent, kNumSlots, 43, 78,
+        TFT_WHITE, emptySlots, kLoadAccent);
+    fileLoadView->setSlotStyle(true);
     fileLoadView->SetOnSelectCallback([this](size_t id) {
         int slotIdx = static_cast<int>(id) - 1;
         String filename = (slotNames[slotIdx].length() > 0) ? slotNames[slotIdx] : String(id);
@@ -477,6 +481,7 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::setup(size_t n_inputs, size_t n_outputs, 
         if (MEMLNaut::Instance()->startSD()) {
             if (this->_load_RL_from_SD(filename)) {
                 fileLoadView->SetMessage("Loaded " + filename);
+                markCurrentSlot(slotIdx);
             } else {
                 fileLoadView->SetMessage("Failed to load model");
             }
@@ -493,7 +498,9 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::setup(size_t n_inputs, size_t n_outputs, 
         [this](const String& name) {
             if (pendingSaveSlot >= 0 && pendingSaveSlot < kNumSlots) {
                 String displayName = (name.length() > 0) ? name : String(pendingSaveSlot + 1);
-                slotNames[pendingSaveSlot] = name;
+                // Record unnamed saves under their number too, so the slot shows as used
+                // (the file is named the same way, so loading is unchanged).
+                slotNames[pendingSaveSlot] = displayName;
                 fileSaveView->updateButtonName(static_cast<size_t>(pendingSaveSlot), displayName);
                 fileLoadView->updateButtonName(static_cast<size_t>(pendingSaveSlot), displayName);
                 fileSaveView->SetMessage("Saving as " + displayName);
@@ -502,6 +509,7 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::setup(size_t n_inputs, size_t n_outputs, 
                     _saveSlotNames();
                     if (this->_save_RL_to_SD(displayName)) {
                         fileSaveView->SetMessage("Saved as " + displayName);
+                        markCurrentSlot(pendingSaveSlot);
                     } else {
                         fileSaveView->SetMessage("Failed to save model");
                     }
