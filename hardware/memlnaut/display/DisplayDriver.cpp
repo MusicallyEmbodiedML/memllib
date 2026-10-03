@@ -27,7 +27,7 @@ void DisplayDriver::Setup() {
 
     tft_.fillScreen(TFT_BLACK);
 
-    mainArea = {0, topBarHeight + 5, screenWidth_, screenHeight_ - topBarHeight - 5};
+    mainArea = {0, kMainTop, screenWidth_, screenHeight_ - kMainTop};
 
     // Set up views
     currentViewIndex_ = 0;
@@ -52,42 +52,20 @@ void DisplayDriver::Draw() {
 
         // Clear screen
         tft_.fillScreen(TFT_BLACK);
-        // tft_.setTextColor(TFT_WHITE);
-        tft_.fillRect(0, 0, tft_.width(), 30, TFT_WHITE);
 
         // Clear the redraw flag now that screen is cleared
         // This allows rapid view changes while ensuring old content is removed
         redraw_internal_ = false;
 
-        // tft_.setFreeFont(&FreeSansBoldOblique24pt7b);
-        // tft_.setTextFont(4);
-
-        // Top bar drawn directly onto the (already white-filled) bar — no sprites.
-        tft_.setTextFont(4);
-        tft_.setTextColor(TFT_BLUE, TFT_WHITE);
-        tft_.setTextDatum(TL_DATUM);
+        drawHeader();
         if (dialogView_) {
-            // Dialog active: no nav arrows, show dialog title
-            tft_.drawString(dialogView_->GetName().c_str(), 43, 3);
             dialogView_->invalidate();
-        } else {
-            // Back arrow if not on first view
-            if (currentViewIndex_ > 0) {
-                tft_.drawString("<", 3, 3);
-            }
-            // Forward arrow if not on last view
-            if (currentViewIndex_ < views_.size() - 1) {
-                tft_.drawString(">", tft_.width() - 27, 3);
-            }
-            // Title of current view, between the arrows
-            if (currentViewIndex_ < views_.size()) {
-                tft_.drawString(views_[currentViewIndex_]->GetName().c_str(), 43, 3);
-            } else {
-                tft_.drawString("No View", 43, 3);
-            }
+        } else if (currentViewIndex_ < views_.size()) {
             views_[currentViewIndex_]->invalidate();
         }
     }
+    // Encoder focus can change without a view change: repaint just the accent line.
+    if (currentFocused() != accentFocused_) drawAccent();
     if (dialogView_) {
         dialogView_->Draw();
     } else if (currentViewIndex_ < views_.size()) {
@@ -216,4 +194,78 @@ void DisplayDriver::PollTouch() {
         }
     }
 
+}
+
+
+// ─── Header ─────────────────────────────────────────────────────────────────────────
+// Dark bar: nav arrows (dimmed at the ends), centred title, a dot per screen with the
+// current one lit, and an accent line underneath that turns yellow while the current
+// view holds the encoder focus. Drawn only on a screen change (plus the accent line on a
+// focus change), so it costs nothing per frame.
+
+bool DisplayDriver::currentFocused() const {
+    if (dialogView_ || currentViewIndex_ >= views_.size()) return false;
+    return views_[currentViewIndex_]->isFocused();
+}
+
+void DisplayDriver::drawAccent() {
+    accentFocused_ = currentFocused();
+    tft_.fillRect(0, kHeaderH, screenWidth_, kAccentH,
+                  accentFocused_ ? kAccentFocusColour : kAccentColour);
+}
+
+void DisplayDriver::drawHeader() {
+    const int w = screenWidth_;
+
+    // Rendered into a 4-bit sprite and pushed in one go: text drawn straight to the panel
+    // came out corrupted. Palette indices below; ~4 KB, freed again after the push.
+    enum : uint8_t { kBg = 0, kWhite, kArrow, kArrowDim, kDot, kDotCurrent };
+    uint16_t palette[16] = {kHeaderBg, TFT_WHITE, kArrowColour, kArrowDimColour, kDotColour,
+                            kDotCurrentColour};
+    TFT_eSprite spr(&tft_);
+    spr.setColorDepth(4);
+    if (!spr.createSprite(w, kHeaderH)) {  // out of RAM: just clear the bar
+        tft_.fillRect(0, 0, w, kHeaderH, kHeaderBg);
+        drawAccent();
+        return;
+    }
+    spr.createPalette(palette, 16);
+    spr.fillSprite(kBg);
+
+    String title;
+    if (dialogView_) {
+        title = dialogView_->GetName();
+    } else {
+        title = currentViewIndex_ < views_.size() ? views_[currentViewIndex_]->GetName() : String("No View");
+
+        // Nav arrows: filled triangles, dimmed when there is nowhere to go.
+        const int cy = kTitleY;
+        const uint8_t backCol = currentViewIndex_ > 0 ? kArrow : kArrowDim;
+        const uint8_t fwdCol = currentViewIndex_ + 1 < views_.size() ? kArrow : kArrowDim;
+        spr.fillTriangle(6, cy, 15, cy - 7, 15, cy + 7, backCol);
+        spr.fillTriangle(w - 7, cy, w - 16, cy - 7, w - 16, cy + 7, fwdCol);
+
+        // Position dots, centred under the title.
+        const int n = static_cast<int>(views_.size());
+        const int x0 = w / 2 - ((n - 1) * kDotPitch) / 2;
+        for (int i = 0; i < n; i++) {
+            const bool cur = i == static_cast<int>(currentViewIndex_);
+            spr.fillRect(x0 + i * kDotPitch - 1, kDotY - 1, 3, 3, cur ? kDotCurrent : kDot);
+        }
+    }
+
+    // Orbitron, in capitals (no descenders to run into the dots), on a fixed baseline.
+    // It is wide, so a title that won't fit between the arrows falls back to mixed case.
+    spr.setFreeFont(&Orbitron_Light_24);
+    spr.setTextColor(kWhite);
+    spr.setTextDatum(C_BASELINE);
+    String caps = title;
+    caps.toUpperCase();
+    spr.drawString((spr.textWidth(caps) <= w - 2 * kTitleMargin ? caps : title).c_str(),
+                   w / 2, kTitleBaseline);
+
+    spr.pushSprite(0, 0);
+    spr.deleteSprite();
+
+    drawAccent();
 }
