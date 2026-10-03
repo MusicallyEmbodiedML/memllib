@@ -69,7 +69,7 @@ void DisplayDriver::Draw() {
         if (dialogView_) {
             // Dialog active: no nav arrows, show dialog title
             tft_.drawString(dialogView_->GetName().c_str(), 43, 3);
-            dialogView_->redraw();
+            dialogView_->invalidate();
         } else {
             // Back arrow if not on first view
             if (currentViewIndex_ > 0) {
@@ -85,7 +85,7 @@ void DisplayDriver::Draw() {
             } else {
                 tft_.drawString("No View", 43, 3);
             }
-            views_[currentViewIndex_]->redraw();
+            views_[currentViewIndex_]->invalidate();
         }
     }
     if (dialogView_) {

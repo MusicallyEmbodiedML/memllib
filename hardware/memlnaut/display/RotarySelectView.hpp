@@ -24,6 +24,13 @@ public:
         newSelCB = cb;
     }
 
+    // Called whenever the view gives up focus: encoder switch pressed, or navigated away
+    // from (focused or not). Use it to commit a selection, e.g. persist it to flash, once
+    // the user has finished scrolling. Runs in the rotary/touch handler context.
+    void setFocusLostCallback(std::function<void()> cb) {
+        focusLostCB = cb;
+    }
+
 
     void OnSetup() override {
         if (options.empty()) {
@@ -115,7 +122,8 @@ public:
 
     void removeFocus() override{
         ViewBase::removeFocus();
-        redraw();   
+        redraw();
+        if (focusLostCB) focusLostCB();
     }
 
     void HandleRotaryEncSwitch() override {
@@ -146,6 +154,7 @@ private:
     std::vector<String> options;
     size_t selectedIndex = 0;
     NewSelectionCallback newSelCB;
+    std::function<void()> focusLostCB;
     
 };
 

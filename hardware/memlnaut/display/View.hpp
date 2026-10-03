@@ -43,6 +43,17 @@ public:
         }
     }
 
+    // The display driver cleared the screen under this view: everything it drew is gone.
+    // Views that only repaint what changed override OnScreenCleared() to repaint in full.
+    inline void invalidate() {
+        needRedraw_ = true;
+        OnScreenCleared();
+        for(auto& subview: subviews) {
+            subview->invalidate();
+        }
+    }
+    virtual void OnScreenCleared() {}
+
     void Draw() {
         if (NeedRedraw()) {
             OnDraw();
