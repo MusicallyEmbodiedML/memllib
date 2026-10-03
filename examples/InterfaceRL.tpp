@@ -29,6 +29,8 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::_perform_like_action() {
     };
     String msg = likemsgs[rand() % likemsgs.size()];
     this->storeExperience(1.f, controlInput, action);
+    escalateStage_ = 0;
+    lastDislikeInput_.clear();  // a like ends any run of 'no's
     if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("yes");
     DEBUG_PRINTLN(msg);
     if (msgView) msgView->post(msg);
@@ -46,6 +48,11 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::_perform_dislike_action() {
         "Learning from this.", "I'll adjust, promise.", "Noted", "Rearranging",
         "Let's move on!"
     };
+    if (dislikeMode_ != DISLIKE_MODES::CURRENT) {
+        handleDislike();  // posts its own message
+        if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("no");
+        return;
+    }
     String msg = dislikemsgs[rand() % dislikemsgs.size()];
     this->storeExperience(-1.f, controlInput, action);
     if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("no");
@@ -102,6 +109,7 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::bind_RL_interface(INPUT_MODES input_mode,
 
     loadInputSource();
     if (nnInputsGraphView) nnInputsGraphView->setNumDisplayBars(getActiveInputCount());
+    loadDislikeMode();
 
     // Set up momentary switch callbacks
     MEMLNaut::Instance()->setMomA1Callback([this]() {
@@ -200,6 +208,8 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::bind_RL_interface(INPUT_MODES input_mode,
         if (pendingDragStore_) {
             pendingDragStore_ = false;
             this->storeExperience(1.f, controlInput, savedAction);
+            escalateStage_ = 0;
+            lastDislikeInput_.clear();  // a like ends any run of 'no's
             if (nnOutputsGraphView) {
                 size_t pos = 0;
                 for (size_t i = 0; i < replayMem.size(); i++)
@@ -208,16 +218,23 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::bind_RL_interface(INPUT_MODES input_mode,
             }
         }
         // Apply a deferred input-source change off the rotary ISR (heap/SPI/flash IO).
-        // Apply in-memory now for a responsive UI, but debounce the flash write: scrolling
-        // through sources would otherwise stall XIP per detent and blank the display.
+        // Apply in-memory now for a responsive UI; the flash write waits for the commit
+        // below, since scrolling through sources would otherwise blank the display.
         if (pendingInputSourceChange_) {
             pendingInputSourceChange_ = false;
             setInputSource(pendingInputSource_, false);
-            inputSourceSaveDueMs_ = millis() + kInputSourceSaveDelayMs;
         }
-        if (inputSourceSaveDueMs_ != 0 && millis() >= inputSourceSaveDueMs_) {
-            inputSourceSaveDueMs_ = 0;
-            saveInputSource();  // persist once the selection has settled
+        // Dislike-mode change from the rotary ISR: same apply-now, save-on-commit pattern.
+        if (pendingDislikeModeChange_) {
+            pendingDislikeModeChange_ = false;
+            setDislikeMode(pendingDislikeMode_, false);
+        }
+        // A selector lost focus: persist whatever changed (the save* calls skip no-ops).
+        // Any pending change above was applied first, so the latest value is saved.
+        if (pendingSettingsCommit_) {
+            pendingSettingsCommit_ = false;
+            saveInputSource();
+            saveDislikeMode();
         }
         uint32_t save = spin_lock_blocking(mlpActive);
         if (joltActive_) {
@@ -399,6 +416,26 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::setup(size_t n_inputs, size_t n_outputs, 
     MEMLNaut::Instance()->disp->AddView(nnOutputsGraphView);
     nnInputsGraphView = std::make_shared<BarGraphView>("NN Inputs", n_inputs, 10, TFT_YELLOW, 0.f, 1.f);
     MEMLNaut::Instance()->disp->AddView(nnInputsGraphView);
+
+    {
+        static String dislikeModeNames[] = {
+            "Current (push away)", "Nudge + blame", "Re-roll", "Nudge>Back>Re-roll",
+            "Borrow from likes"
+        };
+        dislikeModeView = std::make_shared<RotarySelectView>("Dislike Mode");
+        dislikeModeView->setOptions(std::span<String>(dislikeModeNames,
+            static_cast<size_t>(DISLIKE_MODES::COUNT)));
+        dislikeModeView->setSelection(static_cast<size_t>(dislikeMode_));
+        dislikeModeView->setNewSelectionCallback([this](size_t idx) {
+            // Runs in the rotary-encoder ISR — defer to the main loop.
+            if (idx < static_cast<size_t>(DISLIKE_MODES::COUNT)) {
+                pendingDislikeMode_ = static_cast<DISLIKE_MODES>(idx);
+                pendingDislikeModeChange_ = true;
+            }
+        });
+        dislikeModeView->setFocusLostCallback([this]() { pendingSettingsCommit_ = true; });
+        MEMLNaut::Instance()->disp->AddView(dislikeModeView);
+    }
 
     // memoryStoreModeView = std::make_shared<SingleSelectView>("Mem Mode");
     // MEMLNaut::Instance()->disp->AddView(memoryStoreModeView);
@@ -765,9 +802,13 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::optimise() {
     replayMem.removeItems(itemsToRemove);
     itemsToRemove.clear();
 
+    // Non-CURRENT dislike modes: bounded, self-retiring targets (none in CURRENT mode).
+    trainDislikeTargets(effLR * kDislikeLR);
+
     if (nnOutputsGraphView) {
         nnOutputsGraphView->setLoss(lossPositive);
-        nnOutputsGraphView->setMemoryCounts(totalPosCount, replayMem.size() - totalPosCount);
+        nnOutputsGraphView->setMemoryCounts(totalPosCount,
+            replayMem.size() - totalPosCount + dislikeTargets_.size());
     }
 
 }
@@ -811,14 +852,23 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::copyAndZero(const float* src, size_t n) {
 
 template<size_t N_OUTPUTS, size_t N_INPUTS>
 void InterfaceRL<N_OUTPUTS, N_INPUTS>::saveInputSource() {
+    if (input_source_ == savedInputSource_) return;  // unchanged: skip the flash write
     FILE* f = fopen(kInputSourceFile, "wb");
-    if (f) { fwrite(&input_source_, sizeof(input_source_), 1, f); fclose(f); }
+    if (f) {
+        fwrite(&input_source_, sizeof(input_source_), 1, f);
+        fclose(f);
+        savedInputSource_ = input_source_;
+    }
 }
 
 template<size_t N_OUTPUTS, size_t N_INPUTS>
 void InterfaceRL<N_OUTPUTS, N_INPUTS>::loadInputSource() {
     FILE* f = fopen(kInputSourceFile, "rb");
-    if (f) { fread(&input_source_, sizeof(input_source_), 1, f); fclose(f); }
+    if (f) {
+        if (fread(&input_source_, sizeof(input_source_), 1, f) == 1)
+            savedInputSource_ = input_source_;
+        fclose(f);
+    }
     updateUnusedInputDefault();
 }
 
@@ -851,6 +901,7 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::addInputSourceView(bool includeCCSelect) 
         // Runs in the rotary-encoder ISR — defer the actual switch to the main loop.
         if (idx < available.size()) requestInputSource(available[idx]);
     });
+    view->setFocusLostCallback([this]() { pendingSettingsCommit_ = true; });
     MEMLNaut::Instance()->disp->AddView(view);
 
     if (includeCCSelect) {
@@ -1011,4 +1062,353 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::loadCCNumbers() {
     std::vector<uint8_t> defaults(nDefault);
     for (size_t i = 0; i < nDefault; i++) defaults[i] = static_cast<uint8_t>(i + 1);
     ccSelectView->setSelectedCCs(defaults);
+}
+
+
+// ─── Dislike modes ──────────────────────────────────────────────────────────────────
+
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::setDislikeMode(DISLIKE_MODES m, bool persist) {
+    static const char* names[] = { "push away", "nudge + blame", "re-roll", "nudge>back>re-roll",
+                                   "borrow from likes" };
+    dislikeMode_ = m;
+    dislikeTargets_.clear();  // targets from the previous mode would keep training
+    escalateStage_ = 0;
+    lastDislikeInput_.clear();
+    if (dislikeModeView) dislikeModeView->setSelection(static_cast<size_t>(m));
+    if (msgView) msgView->post(String("Dislike: ") + names[static_cast<size_t>(m)]);
+    if (persist) saveDislikeMode();
+}
+
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::saveDislikeMode() {
+    if (dislikeMode_ == savedDislikeMode_) return;  // unchanged: skip the flash write
+    FILE* f = fopen(kDislikeModeFile, "wb");
+    if (f) {
+        fwrite(&dislikeMode_, sizeof(dislikeMode_), 1, f);
+        fclose(f);
+        savedDislikeMode_ = dislikeMode_;
+    }
+}
+
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::loadDislikeMode() {
+    FILE* f = fopen(kDislikeModeFile, "rb");
+    if (!f) return;
+    uint8_t v = 0;
+    if (fread(&v, 1, 1, f) == 1 && v < static_cast<uint8_t>(DISLIKE_MODES::COUNT)) {
+        dislikeMode_ = static_cast<DISLIKE_MODES>(v);
+        savedDislikeMode_ = dislikeMode_;
+        if (dislikeModeView) dislikeModeView->setSelection(v);
+    }
+    fclose(f);
+}
+
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+float InterfaceRL<N_OUTPUTS, N_INPUTS>::rmsDistActive(const std::vector<float>& a, const std::vector<float>& b) const {
+    const size_t n = std::min(a.size(), b.size());
+    float sum = 0.f;
+    size_t count = 0;
+    for (size_t j = 0; j < n; j++) {
+        if (!isActiveDim(j)) continue;
+        const float d = a[j] - b[j];
+        sum += d * d;
+        count++;
+    }
+    return count ? sqrtf(sum / static_cast<float>(count)) : 0.f;
+}
+
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+int InterfaceRL<N_OUTPUTS, N_INPUTS>::nearestLikeIndex(const std::vector<float>& input) const {
+    int best = -1;
+    float bestDist = 0.f;
+    for (size_t i = 0; i < replayMem.size(); i++) {
+        const auto& item = replayMem.getItem(i);
+        if (item.reward <= 0.f) continue;
+        const float d = euclideanDistance(item.input, input);
+        if (best < 0 || d < bestDist) { best = static_cast<int>(i); bestDist = d; }
+    }
+    return best;
+}
+
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+std::vector<float> InterfaceRL<N_OUTPUTS, N_INPUTS>::randomUnitDir(size_t n) const {
+    std::vector<float> dir(n, 0.f);
+    for (size_t j = 0; j < n; j++)
+        if (isActiveDim(j)) dir[j] = static_cast<float>(rand()) / RAND_MAX * 2.f - 1.f;
+    return dir;  // normalised by stepTarget
+}
+
+// origin + dir scaled to an RMS displacement of rmsStep over the active dims. A component
+// that would leave [kTargetLo, kTargetHi] is reflected back inside rather than clipped, so a
+// sound already at an edge moves inward instead of piling up against it.
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+std::vector<float> InterfaceRL<N_OUTPUTS, N_INPUTS>::stepTarget(const std::vector<float>& origin,
+                                                                std::vector<float> dir, float rmsStep) const {
+    float len = 0.f;
+    size_t count = 0;
+    for (size_t j = 0; j < dir.size(); j++) {
+        if (!isActiveDim(j)) { dir[j] = 0.f; continue; }
+        len += dir[j] * dir[j];
+        count++;
+    }
+    len = sqrtf(len);
+    if (len < 1e-6f || count == 0) return origin;
+    const float scale = rmsStep * sqrtf(static_cast<float>(count)) / len;
+    std::vector<float> target(origin);
+    for (size_t j = 0; j < target.size() && j < dir.size(); j++) {
+        if (!isActiveDim(j)) continue;
+        float v = origin[j] + dir[j] * scale;
+        if (v > kTargetHi) v = kTargetHi - (v - kTargetHi);
+        if (v < kTargetLo) v = kTargetLo + (kTargetLo - v);
+        target[j] = std::clamp(v, kTargetLo, kTargetHi);
+    }
+    return target;
+}
+
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::addDislikeTarget(DislikeTarget&& t) {
+    // A new 'no' here supersedes older ones here, so successive presses don't fight.
+    for (size_t i = dislikeTargets_.size(); i-- > 0;) {
+        if (euclideanDistance(dislikeTargets_[i].input, t.input) < kDislikeInputRadius)
+            dislikeTargets_.erase(dislikeTargets_.begin() + i);
+    }
+    if (dislikeTargets_.size() >= kMaxDislikeTargets) dislikeTargets_.erase(dislikeTargets_.begin());
+    dislikeTargets_.push_back(std::move(t));
+}
+
+// Likes at this input whose sound is (nearly) the one just disliked: the player has
+// changed their mind about them, so they go. Likes of a different sound here are kept —
+// they're what the nudge/retreat steers towards.
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::removeEndorsingLikes() {
+    std::vector<size_t> idx;
+    for (size_t i = 0; i < replayMem.size(); i++) {
+        const auto& item = replayMem.getItem(i);
+        if (item.reward > 0.f
+            && euclideanDistance(item.input, controlInput) < kDislikeInputRadius
+            && rmsDistActive(item.action, action) < kRepelMargin)
+            idx.push_back(i);
+    }
+    if (!idx.empty()) {
+        replayMem.removeItems(idx);
+        if (msgView) msgView->post("Removing nearby like");
+    }
+}
+
+// A: move a bounded distance away. With blame (E), the direction reverts the params that
+// differ most from the nearest like (weighted by the squared difference); without it, the
+// direction is away from the centroid of the nearest likes. No likes -> a random direction,
+// fixed for this press.
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::dislikeNudge(bool blame) {
+    removeEndorsingLikes();
+    const size_t n = action.size();
+    std::vector<float> dir(n, 0.f);
+    bool haveDir = false;
+    String msg = "No: nudging away";
+
+    if (blame) {
+        const int li = nearestLikeIndex(controlInput);
+        if (li >= 0) {
+            const auto& ref = replayMem.getItem(static_cast<size_t>(li)).action;
+            for (size_t j = 0; j < n && j < ref.size(); j++) {
+                const float diff = ref[j] - action[j];
+                dir[j] = diff * fabsf(diff);
+            }
+            haveDir = true;
+            msg = "No: reverting what changed";
+        }
+    } else {
+        struct Cand { float dist; size_t idx; };
+        std::vector<Cand> cands;
+        for (size_t i = 0; i < replayMem.size(); i++) {
+            const auto& item = replayMem.getItem(i);
+            if (item.reward > 0.f) cands.push_back({euclideanDistance(item.input, controlInput), i});
+        }
+        std::sort(cands.begin(), cands.end(), [](const Cand& a, const Cand& b) { return a.dist < b.dist; });
+        const size_t k = std::min(cands.size(), kCentroidK);
+        if (k > 0) {
+            std::vector<float> centroid(n, 0.f);
+            for (size_t c = 0; c < k; c++) {
+                const auto& a = replayMem.getItem(cands[c].idx).action;
+                for (size_t j = 0; j < n && j < a.size(); j++) centroid[j] += a[j];
+            }
+            for (size_t j = 0; j < n; j++) dir[j] = action[j] - centroid[j] / static_cast<float>(k);
+            haveDir = true;
+        }
+    }
+
+    float len = 0.f;
+    for (size_t j = 0; j < n; j++) if (isActiveDim(j)) len += dir[j] * dir[j];
+    if (!haveDir || len < 1e-8f) dir = randomUnitDir(n);
+
+    addDislikeTarget({controlInput, action, stepTarget(action, std::move(dir), kRepelStep),
+                      millis(), DislikeTarget::Kind::REPEL});
+    if (msgView) msgView->post(msg);
+}
+
+// B: go back to the nearest liked sound (slightly jittered so it isn't an exact replay).
+// Falls through to a re-roll if there's nothing to go back to.
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::dislikeRetreat() {
+    removeEndorsingLikes();
+    const int li = nearestLikeIndex(controlInput);
+    if (li < 0) { dislikeReroll(); return; }
+    const auto& ref = replayMem.getItem(static_cast<size_t>(li)).action;
+    std::vector<float> target(action);
+    for (size_t j = 0; j < target.size() && j < ref.size(); j++) {
+        if (!isActiveDim(j)) continue;
+        const float jitter = (static_cast<float>(rand()) / RAND_MAX * 2.f - 1.f) * kRetreatJitter;
+        target[j] = std::clamp(ref[j] + jitter, kTargetLo, kTargetHi);
+    }
+    if (rmsDistActive(target, action) < kRepelMargin) { dislikeReroll(); return; }  // already there
+    addDislikeTarget({controlInput, action, std::move(target), millis(), DislikeTarget::Kind::SEEK});
+    if (msgView) msgView->post("No again: going back");
+}
+
+// C: a fresh sound for this input — half the time near a random liked sound, otherwise
+// anywhere in the middle of the range — kept at least kRerollMinDist from the disliked one.
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::dislikeReroll() {
+    removeEndorsingLikes();
+    std::vector<size_t> likes;
+    for (size_t i = 0; i < replayMem.size(); i++)
+        if (replayMem.getItem(i).reward > 0.f) likes.push_back(i);
+    auto uni = []() { return static_cast<float>(rand()) / RAND_MAX; };
+
+    std::vector<float> best;
+    float bestDist = -1.f;
+    for (int attempt = 0; attempt < 8 && bestDist < kRerollMinDist; attempt++) {
+        std::vector<float> cand(action);
+        const bool nearLike = !likes.empty() && (rand() & 1);
+        const std::vector<float>* base = nearLike
+            ? &replayMem.getItem(likes[rand() % likes.size()]).action : nullptr;
+        for (size_t j = 0; j < cand.size(); j++) {
+            if (!isActiveDim(j)) continue;
+            float v;
+            if (base && j < base->size()) {
+                const float g = (uni() + uni() + uni() - 1.5f) * 2.f;  // ~N(0,1)
+                v = (*base)[j] + g * kRerollSpread;
+            } else {
+                v = 0.15f + 0.7f * uni();
+            }
+            cand[j] = std::clamp(v, kTargetLo, kTargetHi);
+        }
+        const float d = rmsDistActive(cand, action);
+        if (d > bestDist) { bestDist = d; best = std::move(cand); }
+    }
+    addDislikeTarget({controlInput, action, std::move(best), millis(), DislikeTarget::Kind::SEEK});
+    if (msgView) msgView->post("No: trying something new");
+}
+
+// BORROW: the sound here moves towards the liked sounds nearby. Each active param either
+// keeps its current value (a random kBorrowKeepFraction of them, so the sound retains some
+// arbitrary character of its own) or is copied from one nearby like, chosen per param with
+// probability weighted by how close that like's input is. Copying per param from different
+// likes recombines their qualities rather than averaging them into a blur. Every target
+// value already exists in a liked sound or the current one, so it can't run to the edges,
+// and each press draws a fresh mix. No likes -> re-roll.
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::dislikeBorrow() {
+    removeEndorsingLikes();
+    std::vector<size_t> likes;
+    std::vector<float> w;
+    float minD2 = 0.f;
+    for (size_t i = 0; i < replayMem.size(); i++) {
+        const auto& item = replayMem.getItem(i);
+        if (item.reward <= 0.f) continue;
+        const float d = euclideanDistance(item.input, controlInput);
+        const float d2 = d * d;
+        if (likes.empty() || d2 < minD2) minD2 = d2;
+        likes.push_back(i);
+        w.push_back(d2);
+    }
+    if (likes.empty()) { dislikeReroll(); return; }
+    // Gaussian kernel on input distance, relative to the nearest like so it can't underflow
+    // when every like is far away (then the nearest ones still dominate).
+    const float inv2s2 = 1.f / (kBorrowInputSigma * kBorrowInputSigma);
+    float wSum = 0.f;
+    for (auto& x : w) { x = expf(-(x - minD2) * inv2s2); wSum += x; }
+    auto uni = []() { return static_cast<float>(rand()) / RAND_MAX; };
+    auto pickLike = [&]() -> const std::vector<float>& {
+        float r = uni() * wSum;
+        for (size_t k = 0; k < likes.size(); k++) {
+            r -= w[k];
+            if (r <= 0.f) return replayMem.getItem(likes[k]).action;
+        }
+        return replayMem.getItem(likes.back()).action;
+    };
+
+    // Keep fewer of the sound's own params on each retry until it has moved far enough.
+    std::vector<float> best;
+    float bestDist = -1.f;
+    for (float keep = kBorrowKeepFraction; keep >= -0.01f && bestDist < kRepelMargin; keep -= 0.1f) {
+        std::vector<float> cand(action);
+        for (size_t j = 0; j < cand.size(); j++) {
+            if (!isActiveDim(j) || uni() < keep) continue;
+            const auto& donor = pickLike();
+            if (j >= donor.size()) continue;
+            const float jitter = (uni() * 2.f - 1.f) * kBorrowJitter;
+            cand[j] = std::clamp(donor[j] + jitter, kTargetLo, kTargetHi);
+        }
+        const float d = rmsDistActive(cand, action);
+        if (d > bestDist) { bestDist = d; best = std::move(cand); }
+    }
+    // The nearby likes all sound like this one: borrowing can't move it, so try something new.
+    if (bestDist < kRepelMargin) { dislikeReroll(); return; }
+    addDislikeTarget({controlInput, action, std::move(best), millis(), DislikeTarget::Kind::SEEK});
+    if (msgView) msgView->post("No: borrowing from likes");
+}
+
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::handleDislike() {
+    switch (dislikeMode_) {
+        case DISLIKE_MODES::BOUNDED_BLAME: dislikeNudge(true); break;
+        case DISLIKE_MODES::REROLL:        dislikeReroll();    break;
+        case DISLIKE_MODES::BORROW:        dislikeBorrow();    break;
+        case DISLIKE_MODES::ESCALATE: {
+            const uint32_t now = millis();
+            const bool continuing = lastDislikeInput_.size() == controlInput.size()
+                && (now - lastDislikeMs_) < kEscalateWindowMs
+                && euclideanDistance(lastDislikeInput_, controlInput) < kEscalateInputRadius;
+            escalateStage_ = continuing ? std::min<size_t>(escalateStage_ + 1, 2) : 0;
+            lastDislikeMs_ = now;
+            lastDislikeInput_ = controlInput;
+            if (escalateStage_ == 0)      dislikeNudge(false);
+            else if (escalateStage_ == 1) dislikeRetreat();
+            else                          dislikeReroll();
+            break;
+        }
+        default: break;
+    }
+}
+
+// Train every live target toward its goal, retiring the ones that have got there (or
+// outlived kDislikeTargetLifetimeMs). Checks the network's own (noise-free) output at
+// the target's input.
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::trainDislikeTargets(float lr) {
+    if (dislikeTargets_.empty()) return;
+    const uint32_t now = millis();
+    training_pair_t batch;
+    std::vector<float> y;
+    for (size_t i = dislikeTargets_.size(); i-- > 0;) {
+        const auto& t = dislikeTargets_[i];
+        bool done = (now - t.t0) >= kDislikeTargetLifetimeMs;
+        if (!done) {
+            synthMapping.GetOutput(t.input, &y);
+            const float toTarget = rmsDistActive(y, t.target);
+            done = toTarget < kSeekEpsilon
+                || (t.kind == DislikeTarget::Kind::REPEL && rmsDistActive(y, t.origin) >= kRepelMargin);
+        }
+        if (done) {
+            dislikeTargets_.erase(dislikeTargets_.begin() + i);
+            continue;
+        }
+        batch.first.push_back(t.input);
+        batch.second.push_back(t.target);
+    }
+    if (!batch.first.empty())
+        synthMapping.TrainBatch(batch, lr, 1, batch.first.size(), 0.f, false);
 }

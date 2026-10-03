@@ -77,6 +77,24 @@ public:
         REWARD_DECAY_20_PERCENT
     };
 
+    // What a 'no' means. Selected on the "Dislike Mode" screen, persisted to flash.
+    //  CURRENT        original behaviour: an unbounded push away from the liked centroid
+    //  BOUNDED_BLAME  move a bounded distance away, mostly reverting the params that differ
+    //                 most from the nearest like ("what you just changed is wrong")
+    //  REROLL         jump to a fresh sound here ("try something else")
+    //  ESCALATE       repeated 'no's in one place: bounded nudge, then retreat to the
+    //                 nearest like, then re-roll
+    //  BORROW         rebuild the sound here from qualities of nearby liked sounds, keeping
+    //                 a random subset of its own params so each 'no' gives a new variation
+    enum class DISLIKE_MODES : uint8_t {
+        CURRENT = 0,
+        BOUNDED_BLAME,
+        REROLL,
+        ESCALATE,
+        BORROW,
+        COUNT
+    };
+
     // Input-source state is independent of the network's output width, so it
     // lives in the base: this lets N-agnostic helpers (e.g. MachineListeningMixin)
     // hold an InterfaceRLBase* and still query/configure the input source.
@@ -158,7 +176,13 @@ public:
 
     inline void forgetMemory() {
         replayMem.clear();
+        dislikeTargets_.clear();
+        escalateStage_ = 0;
+        lastDislikeInput_.clear();
     }
+
+    DISLIKE_MODES getDislikeMode() const { return dislikeMode_; }
+    void setDislikeMode(DISLIKE_MODES m, bool persist = true);
 
     inline void setRewardScale(float scale) {
         rewardScale = scale;
@@ -317,7 +341,8 @@ public:
 
     // persist=false applies the change in memory + updates the bar graph without writing
     // flash. A flash write stalls XIP execution on the RP2040 (blanking the display), so
-    // the rotary-driven path applies immediately but debounces the save (see loopCallback).
+    // the rotary-driven path applies immediately and saves only once the selector loses
+    // focus (see loopCallback).
     void setInputSource(INPUT_SOURCE src, bool persist = true) {
         input_source_ = src;
         updateUnusedInputDefault();
@@ -351,6 +376,7 @@ public:
     std::shared_ptr<RLView> nnOutputsGraphView;
     std::shared_ptr<SingleSelectView> memoryStoreModeView;
     std::shared_ptr<CCSelectView> ccSelectView;
+    std::shared_ptr<RotarySelectView> dislikeModeView;
 
     const std::vector<float>& getLastAction() const { return action; }
 
@@ -400,6 +426,8 @@ private:
     void copyAndZero(const float* src, size_t n);
     void saveInputSource();
     void loadInputSource();
+    // Value currently on flash, so a commit that changes nothing skips the write.
+    INPUT_SOURCE savedInputSource_ = INPUT_SOURCE::COUNT;
     void saveCCNumbers();
     void loadCCNumbers();
 
@@ -419,6 +447,70 @@ private:
     std::vector<bool> activeDims_;
     bool removeItemsAtDistance(std::vector<float> &experienceState, const float distThreshold, const float reward);
     void decayItemsAtDistance(std::vector<float> &experienceState, const float distThreshold);
+
+    // --- Dislike modes other than CURRENT ---------------------------------------------
+    // These never store a negative in replayMem. A 'no' becomes a short-lived training
+    // target for the input where it was given, fixed at press time (not re-rolled per
+    // cycle), kept inside [kTargetLo, kTargetHi] so the hard-sigmoid output never lands in
+    // its flat, zero-gradient region. Each target retires once its goal is met, or after
+    // kDislikeTargetLifetimeMs, so a 'no' always has an end condition.
+    // Distances in output space are RMS over the active dims, so they mean the same thing
+    // regardless of the mode's param count.
+    struct DislikeTarget {
+        enum class Kind : uint8_t { REPEL, SEEK };
+        std::vector<float> input;
+        std::vector<float> origin;  // the disliked output
+        std::vector<float> target;
+        uint32_t t0;
+        Kind kind;  // REPEL: done once the output is kRepelMargin from origin
+                    // SEEK:  done once the output is within kSeekEpsilon of target
+    };
+    std::vector<DislikeTarget> dislikeTargets_;
+    DISLIKE_MODES dislikeMode_ = DISLIKE_MODES::CURRENT;
+    volatile bool pendingDislikeModeChange_{false};
+    DISLIKE_MODES pendingDislikeMode_{DISLIKE_MODES::CURRENT};
+    static constexpr const char* kDislikeModeFile = "/dislike_mode.bin";
+    // ESCALATE: stage of the current run of 'no's (0 nudge, 1 retreat, 2+ re-roll)
+    size_t escalateStage_ = 0;
+    uint32_t lastDislikeMs_ = 0;
+    std::vector<float> lastDislikeInput_;
+
+    static constexpr float kTargetLo = 0.05f;
+    static constexpr float kTargetHi = 0.95f;
+    static constexpr float kRepelMargin = 0.12f;     // RMS: how far a nudge must move the sound
+    static constexpr float kRepelStep = 0.16f;       // RMS: nudge target distance (> margin)
+    static constexpr float kSeekEpsilon = 0.03f;     // RMS: a retreat/re-roll has arrived
+    static constexpr float kRetreatJitter = 0.03f;   // per-dim jitter on a retreat target
+    static constexpr float kRerollMinDist = 0.25f;   // RMS: a re-roll must be at least this new
+    static constexpr float kRerollSpread = 0.2f;     // per-dim spread around a liked sound
+    static constexpr float kBorrowKeepFraction = 0.4f;  // share of params the 'no'd sound keeps
+    static constexpr float kBorrowInputSigma = 0.3f;    // input-space reach of "nearby" likes
+    static constexpr float kBorrowJitter = 0.02f;       // per-dim jitter on borrowed values
+    static constexpr float kDislikeLR = 1.5f;        // x the base LR, like kNegLRBase
+    static constexpr uint32_t kDislikeTargetLifetimeMs = 4000;
+    static constexpr size_t kMaxDislikeTargets = 8;
+    static constexpr float kDislikeInputRadius = 0.10f;  // a new 'no' replaces targets this close
+    static constexpr uint32_t kEscalateWindowMs = 6000;  // a 'no' within this, nearby, escalates
+    static constexpr float kEscalateInputRadius = 0.15f;
+
+    bool isActiveDim(size_t j) const {
+        return activeDims_.empty() || (j < activeDims_.size() && activeDims_[j]);
+    }
+    float rmsDistActive(const std::vector<float>& a, const std::vector<float>& b) const;
+    int nearestLikeIndex(const std::vector<float>& input) const;  // -1 if none
+    std::vector<float> stepTarget(const std::vector<float>& origin, std::vector<float> dir, float rmsStep) const;
+    std::vector<float> randomUnitDir(size_t n) const;
+    void addDislikeTarget(DislikeTarget&& t);
+    void removeEndorsingLikes();
+    void dislikeNudge(bool blame);
+    void dislikeRetreat();
+    void dislikeReroll();
+    void dislikeBorrow();
+    void handleDislike();
+    void trainDislikeTargets(float lr);
+    void loadDislikeMode();
+    void saveDislikeMode();
+    DISLIKE_MODES savedDislikeMode_ = DISLIKE_MODES::COUNT;  // value on flash
 
 
 
@@ -475,10 +567,11 @@ private:
     volatile bool pendingDragStore_{false};   // drag-release: store savedAction
     volatile bool pendingInputSourceChange_{false};  // input-source change: deferred from rotary ISR
     INPUT_SOURCE pendingInputSource_{INPUT_SOURCE::JOYSTICK_3D};
-    // Debounced flash persistence: a save is scheduled this many ms after the last change,
-    // so scrolling through sources doesn't trigger a flash write (XIP stall) per detent.
-    static constexpr uint32_t kInputSourceSaveDelayMs = 600;
-    uint32_t inputSourceSaveDueMs_ = 0;  // 0 = no save pending
+    // Flash persistence is deferred until the selector view loses focus (encoder switch
+    // pressed or navigated away), not done on a timer: a flash write disables interrupts
+    // and pauses the other core long enough to blank the display, so it must not happen
+    // while the user is still scrolling. Set from the rotary ISR, consumed in loopCallback.
+    volatile bool pendingSettingsCommit_{false};
 
     spin_lock_t *mlpActive;
 
