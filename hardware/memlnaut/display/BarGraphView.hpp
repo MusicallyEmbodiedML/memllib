@@ -46,6 +46,15 @@ public:
         redraw();
     }
 
+    // BARS: cap the bar width (0 = none). With only a few bars they are packed together
+    // and centred rather than spread across the whole width.
+    void setMaxBarWidth(int w) {
+        maxBarW_ = w;
+        layout();
+        clearArea_ = true;
+        redraw();
+    }
+
     // Dark gridlines at 0, 0.25, 0.5, 0.75 and 1 of the range.
     void setGridEnabled(bool on) {
         grid_on_ = on;
@@ -191,9 +200,13 @@ private:
         const bool labels = !groupLabels_.empty();
         const int nGaps = static_cast<int>(numGapsBefore(n));
         const int usable = area.w - 2 * offsetX - nGaps * kGroupGap;
-        const int pitch = std::max(1, usable / static_cast<int>(n));
+        int pitch = std::max(1, usable / static_cast<int>(n));
         barW_ = (style_ == Style::BARS) ? std::max(1, pitch - std::max(1, pitch / 3))
                                         : std::min(barwidth, pitch);
+        if (style_ == Style::BARS && maxBarW_ > 0 && barW_ > maxBarW_) {
+            barW_ = maxBarW_;
+            pitch = barW_ + std::max(2, barW_ / 2);
+        }
         const int used = pitch * static_cast<int>(n) + nGaps * kGroupGap - (pitch - barW_);
         const int x0 = area.x + std::max(offsetX, (area.w - used) / 2);
         barX_.resize(n);
@@ -285,6 +298,7 @@ private:
 
     Style style_{Style::DOTS};
     bool grid_on_{false};
+    int maxBarW_{0};
     std::vector<size_t> groupStarts_;
     std::vector<String> groupLabels_;
 

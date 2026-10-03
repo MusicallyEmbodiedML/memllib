@@ -108,7 +108,7 @@ template<size_t N_OUTPUTS, size_t N_INPUTS>
 void InterfaceRL<N_OUTPUTS, N_INPUTS>::bind_RL_interface(INPUT_MODES input_mode, bool joystick4D) {
 
     loadInputSource();
-    if (nnInputsGraphView) nnInputsGraphView->setNumDisplayBars(getActiveInputCount());
+    configureInputsView();
     loadDislikeMode();
 
     // Set up momentary switch callbacks
@@ -235,6 +235,12 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::bind_RL_interface(INPUT_MODES input_mode,
             pendingSettingsCommit_ = false;
             saveInputSource();
             saveDislikeMode();
+        }
+        // Joystick map on the NN Inputs screen: refresh the memory dots a few times a
+        // second, and only while that screen is showing.
+        if (millis() - lastMemPointsMs_ >= 300) {
+            lastMemPointsMs_ = millis();
+            pushMemoryPointsToInputsView();
         }
         uint32_t save = spin_lock_blocking(mlpActive);
         if (joltActive_) {
@@ -414,7 +420,7 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::setup(size_t n_inputs, size_t n_outputs, 
         nnOutputsGraphView = std::make_shared<RLView>("RL", n_outputs, 4, TFT_GREEN, 0.f, 1.f);
     }
     MEMLNaut::Instance()->disp->AddView(nnOutputsGraphView);
-    nnInputsGraphView = std::make_shared<BarGraphView>("NN Inputs", n_inputs, 10, TFT_YELLOW, 0.f, 1.f);
+    nnInputsGraphView = std::make_shared<InputsView>("NN Inputs", n_inputs);
     MEMLNaut::Instance()->disp->AddView(nnInputsGraphView);
 
     {
@@ -670,6 +676,7 @@ template<size_t N_OUTPUTS, size_t N_INPUTS>
 void InterfaceRL<N_OUTPUTS, N_INPUTS>::optimise() {
 
     float lossPositive{0.f};
+    bool trainedPositive = false;
     float lossNegative{0.f};
     size_t batchSizeNeg=0;
     const float effLR = learningRateScaled * joltLRRamp_;
@@ -702,6 +709,7 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::optimise() {
         if (batchSizePos > 0){
             avgRewardPos /= static_cast<float>(batchSizePos);
             lossPositive = synthMapping.TrainBatch(tsPositive, effLR * avgRewardPos, 1, batchSize, 0.f, false);
+            trainedPositive = true;
             // Serial.printf("[DEBUG] Loss after positive TrainBatch: %f (inf=%d, nan=%d)\n",
             //              lossPositive, std::isinf(lossPositive), std::isnan(lossPositive));
         }
@@ -806,7 +814,9 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::optimise() {
     trainDislikeTargets(effLR * kDislikeLR);
 
     if (nnOutputsGraphView) {
-        nnOutputsGraphView->setLoss(lossPositive);
+        // Only when a positive batch actually trained: lossPositive is 0 both for "no
+        // likes to train on" and for a net that already reproduces every liked sound.
+        if (trainedPositive) nnOutputsGraphView->setLoss(lossPositive);
         nnOutputsGraphView->setMemoryCounts(totalPosCount,
             replayMem.size() - totalPosCount + dislikeTargets_.size());
     }
@@ -874,10 +884,8 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::loadInputSource() {
 
 template<size_t N_OUTPUTS, size_t N_INPUTS>
 void InterfaceRL<N_OUTPUTS, N_INPUTS>::addInputSourceView(bool includeCCSelect) {
-    static const String srcNames[] = {
-        "3D Joystick", "4D Joystick", "Machine Listen",
-        "MIDI Mod Whl", "MIDI 3 CC", "MIDI 8 CC", "Combined"
-    };
+    configureInputsView();  // ML labels may have been set since bind (by the audio setup)
+
     std::vector<INPUT_SOURCE> available = {
         INPUT_SOURCE::JOYSTICK_3D, INPUT_SOURCE::JOYSTICK_4D,
         INPUT_SOURCE::MIDI_1CC, INPUT_SOURCE::MIDI_3CC, INPUT_SOURCE::MIDI_8CC
@@ -888,7 +896,7 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::addInputSourceView(bool includeCCSelect) 
     }
 
     std::vector<String> opts;
-    for (auto src : available) opts.push_back(srcNames[static_cast<size_t>(src)]);
+    for (auto src : available) opts.push_back(inputSourceName(src));
 
     size_t initialSel = 0;
     auto it = std::find(available.begin(), available.end(), input_source_);
@@ -941,7 +949,7 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::generateAction(bool donthesitate) {
         action = mappingOutput;
         nnOutputsGraphView->UpdateValues(mappingOutput, resetMinMaxFlag);
         resetMinMaxFlag = false;
-        nnInputsGraphView->UpdateValues(controlInput, false);
+        nnInputsGraphView->UpdateValues(controlInput);
     }
 }
 
@@ -1411,4 +1419,51 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::trainDislikeTargets(float lr) {
     }
     if (!batch.first.empty())
         synthMapping.TrainBatch(batch, lr, 1, batch.first.size(), 0.f, false);
+}
+
+
+// ─── NN Inputs screen ───────────────────────────────────────────────────────────────
+
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::configureInputsView() {
+    if (!nnInputsGraphView) return;
+    static const char* joy[] = {"X", "Y", "Z", "W"};
+    std::vector<String> labels;
+    auto addJoy  = [&](size_t n) { for (size_t i = 0; i < n; i++) labels.push_back(joy[i]); };
+    auto addMidi = [&](size_t n) { for (size_t i = 0; i < n; i++) labels.push_back("CC" + String(i + 1)); };
+    auto addML   = [&]() { for (size_t i = 0; i < 6; i++) labels.push_back(i < mlLabels_.size() ? mlLabels_[i] : String("")); };
+    bool map = false;
+    switch (input_source_) {
+        case INPUT_SOURCE::JOYSTICK_3D:       addJoy(3); map = true; break;
+        case INPUT_SOURCE::JOYSTICK_4D:       addJoy(4); map = true; break;
+        case INPUT_SOURCE::MACHINE_LISTENING: addML(); break;
+        case INPUT_SOURCE::MIDI_1CC:          addMidi(1); break;
+        case INPUT_SOURCE::MIDI_3CC:          addMidi(3); break;
+        case INPUT_SOURCE::MIDI_8CC:          addMidi(8); break;
+        case INPUT_SOURCE::COMBINED:          addJoy(4); addML(); break;
+        default: break;
+    }
+    labels.resize(std::min(labels.size(), getActiveInputCount()));
+    nnInputsGraphView->setSource(inputSourceName(input_source_), labels, map);
+}
+
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::pushMemoryPointsToInputsView() {
+    if (!nnInputsGraphView || !nnInputsGraphView->IsVisible() || !nnInputsGraphView->isMapMode())
+        return;
+    auto q = [](float v) {
+        v = v < 0.f ? 0.f : (v > 1.f ? 1.f : v);
+        return static_cast<uint8_t>(v * 255.f + 0.5f);
+    };
+    std::vector<InputsView::MemPoint> pts;
+    pts.reserve(replayMem.size());
+    for (size_t i = 0; i < replayMem.size(); i++) {
+        const auto& item = replayMem.getItem(i);
+        if (item.input.size() < 2) continue;
+        const bool has4 = item.input.size() >= 4;
+        pts.push_back({q(item.input[0]), q(item.input[1]),
+                       has4 ? q(item.input[2]) : uint8_t(0), has4 ? q(item.input[3]) : uint8_t(0),
+                       item.reward > 0.f});
+    }
+    nnInputsGraphView->setMemoryPoints(pts);
 }

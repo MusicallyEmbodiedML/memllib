@@ -18,6 +18,7 @@
 
 #include "../hardware/memlnaut/display/MessageView.hpp"
 #include "../hardware/memlnaut/display/BarGraphView.hpp"
+#include "../hardware/memlnaut/display/InputsView.hpp"
 #include "../hardware/memlnaut/display/RLView.hpp"
 #include "../hardware/memlnaut/display/BlockSelectView.hpp"
 #include "../hardware/memlnaut/display/SingleSelectView.hpp"
@@ -101,9 +102,22 @@ public:
     INPUT_SOURCE getInputSource() const   { return input_source_; }
     void setHasMachineListening(bool v)   { hasMachineListening_ = v; }
 
+    static const char* inputSourceName(INPUT_SOURCE s) {
+        static const char* names[] = {
+            "3D Joystick", "4D Joystick", "Machine Listen",
+            "MIDI Mod Whl", "MIDI 3 CC", "MIDI 8 CC", "Combined"
+        };
+        const size_t i = static_cast<size_t>(s);
+        return i < sizeof(names) / sizeof(names[0]) ? names[i] : "?";
+    }
+    // Short (<= 4 char) labels for the machine-listening inputs, shown on the NN Inputs
+    // screen. Set by whoever owns the analysis (e.g. MachineListeningMixin).
+    void setMLInputLabels(const std::vector<String>& labels) { mlLabels_ = labels; }
+
 protected:
     INPUT_SOURCE input_source_ = INPUT_SOURCE::JOYSTICK_3D;
     bool hasMachineListening_ = false;
+    std::vector<String> mlLabels_{"ML1", "ML2", "ML3", "ML4", "ML5", "ML6"};
 };
 
 // The RL interface. N_OUTPUTS (the active mode's parameter count) is fixed at
@@ -347,7 +361,7 @@ public:
         input_source_ = src;
         updateUnusedInputDefault();
         if (persist) saveInputSource();
-        if (nnInputsGraphView) nnInputsGraphView->setNumDisplayBars(getActiveInputCount());
+        configureInputsView();
     }
 
     // ISR-safe entry point (the rotary-encoder dispatch runs in interrupt context).
@@ -372,7 +386,7 @@ public:
     std::shared_ptr<BlockSelectView> fileSaveView;
     std::shared_ptr<BlockSelectView> fileLoadView;
     std::shared_ptr<NameInputView> nameInputView;
-    std::shared_ptr<BarGraphView> nnInputsGraphView;
+    std::shared_ptr<InputsView> nnInputsGraphView;
     std::shared_ptr<RLView> nnOutputsGraphView;
     std::shared_ptr<SingleSelectView> memoryStoreModeView;
     std::shared_ptr<CCSelectView> ccSelectView;
@@ -425,6 +439,9 @@ private:
     void assembleInputs();
     void copyAndZero(const float* src, size_t n);
     void saveInputSource();
+    void configureInputsView();  // labels/mode of the NN Inputs screen for input_source_
+    void pushMemoryPointsToInputsView();
+    uint32_t lastMemPointsMs_ = 0;
     void loadInputSource();
     // Value currently on flash, so a commit that changes nothing skips the write.
     INPUT_SOURCE savedInputSource_ = INPUT_SOURCE::COUNT;
