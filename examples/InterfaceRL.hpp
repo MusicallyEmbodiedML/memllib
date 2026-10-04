@@ -231,15 +231,13 @@ public:
         // gentle reflection in generateAction), lower keeps it shallower/more local.
         constexpr float kMaxAmplitude = 0.65f;
         float amplitude = level * kMaxAmplitude;
+        noiseAmp_ = amplitude < 0.01f ? 0.f : amplitude;  // depth of the weight noise
         if (amplitude < 0.01f) {
             amplitude = 0.f;
             if (msgView) msgView->post("Noise off");
         } else {
             String msg = "Explore amount: " + String(amplitude, 3);
             if (msgView) msgView->post(msg);
-        }
-        for(auto& ou_noise: ou_noises) {
-            ou_noise->setStationaryStd(amplitude);
         }
         // Learning stays active during exploration on purpose: likes/dislikes given while
         // the noise roams are what steer the network toward sounds the player wants.
@@ -500,6 +498,22 @@ private:
     void loadDislikeMode();
     void saveDislikeMode();
 
+    // --- Exploration noise (Z knob): weight-space noise -----------------------------
+    // Playback uses the net with its last layer perturbed along kWeightDirs fixed random
+    // directions, each scaled by its own slow drift: the whole mapping morphs smoothly and
+    // consistently across inputs, while training and the stored weights stay clean. The
+    // depth shrinks near liked inputs (explore the gaps, keep the likes).
+    static constexpr size_t kHidden = 16;          // hidden layer width (see SynthMLP)
+    static constexpr size_t kWeightDirs = 6;
+    static constexpr float kNearFloor = 0.2f;      // noise scale right on a liked input
+    static constexpr float kNearRadius = 0.25f;    // full noise beyond this (per sqrt dim)
+    float noiseAmp_ = 0.f;
+    std::vector<OrnsteinUhlenbeckNoise> exploreOU_;            // unit-std drift per direction
+    int8_t weightDirs_[kWeightDirs][N_OUTPUTS][kHidden] = {};  // +-1, fixed at setup
+    void initExploreNoise();
+    float noiseLocality(const std::vector<float>& x) const;
+    void noisyForward(std::vector<float>& out);
+
     // --- Jolt (B2): synthetic pseudo-likes ------------------------------------------
     // A jolt plants kSynthPoints synthetic training points spread through the playable
     // input range but clear of the liked inputs, with target sounds well away from what
@@ -560,8 +574,6 @@ private:
 
     float rewardScale = 1.0f;
 
-    // OrnsteinUhlenbeckNoise ou_noise;
-    std::vector<std::unique_ptr<OrnsteinUhlenbeckNoise>> ou_noises;
 
     // Exploration-noise travel speed.
     static constexpr float kNoiseDt = 0.004f;      // normal OU travel speed (set in setup)

@@ -453,17 +453,6 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::setup(size_t n_inputs, size_t n_outputs, 
     // Memory limit
     replayMem.setMemoryLimit(memoryLimit);
 
-    ou_noises.reserve(n_outputs);
-    for(size_t i=0; i < n_outputs; i++) {
-        // OU(theta, mu, sigma, dt, x0). theta & dt set the *smoothness*: correlation
-        // time ~= 1/(theta*dt) calls = 1/(0.02*0.004) = 12500 calls ~= 62 s at the 200 Hz
-        // control rate, so the walk drifts in long smooth sweeps rather than per-frame
-        // kicks. sigma (amplitude) starts at 0 and is set by the intensity knob via
-        // setNoiseLevel()/setStationaryStd() on boot-sync. To make sweeps faster/coarser
-        // raise dt; slower/smoother, lower it.
-        ou_noises.push_back(std::make_unique<OrnsteinUhlenbeckNoise>(0.02f, 0.0f, 0.0f, kNoiseDt, 0.0f));
-    }
-
     itemsToRemove.reserve(replayMem.getMemoryLimit());
 
 
@@ -503,6 +492,7 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::setup(size_t n_inputs, size_t n_outputs, 
         dislikeModeView->setFocusLostCallback([this]() { pendingSettingsCommit_ = true; });
         MEMLNaut::Instance()->disp->AddView(dislikeModeView);
     }
+    initExploreNoise();
     // memoryStoreModeView = std::make_shared<SingleSelectView>("Mem Mode");
     // MEMLNaut::Instance()->disp->AddView(memoryStoreModeView);
     // memoryStoreModeView->setOptions(memOptions);
@@ -1029,23 +1019,17 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::addInputSourceView(bool includeCCSelect) 
 
 template<size_t N_OUTPUTS, size_t N_INPUTS>
 void InterfaceRL<N_OUTPUTS, N_INPUTS>::generateAction(bool donthesitate) {
-    if (newInput || donthesitate) {
+    // While noise is on, regenerate every cycle so it keeps moving even when the input is
+    // still and training has settled (nothing else sets newInput then).
+    if (newInput || donthesitate || noiseAmp_ > 0.f) {
         newInput = false;
 
         assembleInputs();
         if (inputInjectionHook) inputInjectionHook(controlInput);
 
         if (!actionBeingDragged) {
-            synthMapping.GetOutput(controlInput, &mappingOutput);
-            for(size_t i=0; i < mappingOutput.size(); i++) {
-                const float noise = ou_noises[i]->sample();
-                mappingOutput[i] += noise;
-                if (mappingOutput[i] < 0.f) {
-                    mappingOutput[i] = fmod(-mappingOutput[i],1.f); // reflect
-                } else if (mappingOutput[i] > 1.f) {
-                    mappingOutput[i] = 1.f - fmod(mappingOutput[i], 1.f); // reflect at 1.0
-                }
-            }
+            if (noiseAmp_ > 0.f) noisyForward(mappingOutput);  // exploration: weight noise
+            else synthMapping.GetOutput(controlInput, &mappingOutput);
         }
         if (paramTransformHook) paramTransformHook(mappingOutput);
         SendParamsToQueue(mappingOutput);
@@ -1671,4 +1655,86 @@ float InterfaceRL<N_OUTPUTS, N_INPUTS>::synthError() {
         sum += se / sp.target.size();
     }
     return synth_.empty() ? 0.f : sum / synth_.size();
+}
+
+
+// ─── Exploration noise (weight-space) ───────────────────────────────────────────────
+
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::initExploreNoise() {
+    exploreOU_.clear();
+    exploreOU_.reserve(kWeightDirs);
+    for (size_t i = 0; i < kWeightDirs; i++) {
+        // OU(theta, mu, sigma, dt, x0): correlation time ~1/(theta*dt) calls (~60s at
+        // 200Hz), so the mapping morphs in long smooth sweeps. Unit std, scaled where used.
+        exploreOU_.emplace_back(0.02f, 0.0f, 0.0f, kNoiseDt, 0.0f);
+        exploreOU_.back().setStationaryStd(1.f);
+    }
+    // Fixed random +-1 weight directions (a simple LCG, so they're the same every boot).
+    uint32_t r = 0x12345678u;
+    for (size_t k = 0; k < kWeightDirs; k++)
+        for (size_t o = 0; o < N_OUTPUTS; o++)
+            for (size_t h = 0; h < kHidden; h++) {
+                r = r * 1664525u + 1013904223u;
+                weightDirs_[k][o][h] = (r >> 31) ? 1 : -1;
+            }
+}
+
+// Noise scale at input x: kNearFloor right on a liked input, rising to 1 at kNearRadius.
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+float InterfaceRL<N_OUTPUTS, N_INPUTS>::noiseLocality(const std::vector<float>& x) const {
+    const size_t nAct = std::max<size_t>(1, getActiveInputCount());
+    const float radius = kNearRadius * sqrtf(static_cast<float>(nAct));
+    float d = 1e9f;
+    for (size_t i = 0; i < replayMem.size(); i++) {
+        const auto& item = replayMem.getItem(i);
+        if (item.reward > 0.f) d = std::min(d, euclideanDistance(item.input, x));
+    }
+    if (d >= radius) return 1.f;
+    return kNearFloor + (1.f - kNearFloor) * (d / radius);
+}
+
+// The net's forward pass done by hand (same maths as StaticMLP: ReLU, ReLU, hard
+// sigmoid) with the last layer's weights perturbed: dW = sum_k c_k D_k, so the output
+// pre-activation shifts by dz_o = sum_k c_k (D_k[o] . h2). Normalised by |h2| and sqrt(K)
+// to ~unit std per output, then x6 (the hard sigmoid's slope is 1/6) so each output moves
+// by ~noiseAmp_ (scaled down near the likes).
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::noisyForward(std::vector<float>& out) {
+    const float amp = noiseAmp_ * noiseLocality(controlInput);
+    const auto& L0 = synthMapping.template layer<0>();
+    const auto& L1 = synthMapping.template layer<1>();
+    const auto& L2 = synthMapping.template layer<2>();
+
+    float h1[kHidden], h2[kHidden];
+    for (size_t j = 0; j < kHidden; j++) {
+        float z = L0.bias(j);
+        for (size_t i = 0; i < N_INPUTS && i < controlInput.size(); i++) z += L0.weight(j, i) * controlInput[i];
+        h1[j] = z > 0.f ? z : 0.f;
+    }
+    float hn = 0.f;
+    for (size_t j = 0; j < kHidden; j++) {
+        float z = L1.bias(j);
+        for (size_t i = 0; i < kHidden; i++) z += L1.weight(j, i) * h1[i];
+        h2[j] = z > 0.f ? z : 0.f;
+        hn += h2[j] * h2[j];
+    }
+    hn = sqrtf(hn);
+    const float wScale = hn > 1e-6f ? 6.f * amp / (hn * sqrtf(static_cast<float>(kWeightDirs))) : 0.f;
+    float c[kWeightDirs];
+    for (size_t k = 0; k < kWeightDirs; k++) c[k] = exploreOU_[k].sample();
+
+    out.resize(N_OUTPUTS);
+    for (size_t o = 0; o < N_OUTPUTS; o++) {
+        float z = L2.bias(o);
+        for (size_t i = 0; i < kHidden; i++) z += L2.weight(o, i) * h2[i];
+        float dz = 0.f;
+        for (size_t k = 0; k < kWeightDirs; k++) {
+            float dot = 0.f;
+            for (size_t j = 0; j < kHidden; j++) dot += weightDirs_[k][o][j] * h2[j];
+            dz += c[k] * dot;
+        }
+        z += dz * wScale;
+        out[o] = z <= -3.f ? 0.f : (z >= 3.f ? 1.f : (z + 3.f) / 6.f);
+    }
 }
