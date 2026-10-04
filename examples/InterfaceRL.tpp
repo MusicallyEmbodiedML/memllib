@@ -554,6 +554,7 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::setup(size_t n_inputs, size_t n_outputs, 
         if (MEMLNaut::Instance()->startSD()) {
             if (this->_load_RL_from_SD(filename)) {
                 synth_.clear();
+                locDirty_ = true;
                 wakeTraining();  // new weights and memories
                 fileLoadView->SetMessage("Loaded " + filename);
                 markCurrentSlot(slotIdx);
@@ -653,9 +654,55 @@ bool InterfaceRL<N_OUTPUTS, N_INPUTS>::_save_RL_to_SD(String id) {
         }
     }
 
-    bool success = synthMapping.SaveMLPNetworkToFile(file);
+    bool success = synthMapping.SaveMLPNetworkToFile(file) && writeLikes(file);
     file.close();
     return success;
+}
+
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+bool InterfaceRL<N_OUTPUTS, N_INPUTS>::writeLikes(File& file) {
+    MEMLLikesHeader h;
+    memcpy(h.magic, "LIKE", 4);
+    h.input_size = static_cast<uint16_t>(controlInput.size());
+    h.action_size = static_cast<uint16_t>(n_outputs_);
+    uint16_t count = 0;
+    for (size_t i = 0; i < replayMem.size(); i++)
+        if (replayMem.getItem(i).reward > 0.f) count++;
+    h.count = count;
+    if (file.write((const uint8_t*)&h, sizeof(h)) != sizeof(h)) return false;
+    std::vector<float> in(h.input_size), act(h.action_size);
+    for (size_t i = 0; i < replayMem.size(); i++) {
+        const auto& item = replayMem.getItem(i);
+        if (item.reward <= 0.f) continue;
+        for (size_t j = 0; j < in.size(); j++) in[j] = j < item.input.size() ? item.input[j] : 0.f;
+        for (size_t j = 0; j < act.size(); j++) act[j] = j < item.action.size() ? item.action[j] : 0.f;
+        const float r = item.reward;
+        if (file.write((const uint8_t*)&r, sizeof(r)) != sizeof(r)) return false;
+        const size_t inBytes = in.size() * sizeof(float), actBytes = act.size() * sizeof(float);
+        if (file.write((const uint8_t*)in.data(), inBytes) != inBytes) return false;
+        if (file.write((const uint8_t*)act.data(), actBytes) != actBytes) return false;
+    }
+    return true;
+}
+
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+bool InterfaceRL<N_OUTPUTS, N_INPUTS>::readLikes(File& file) {
+    MEMLLikesHeader h;
+    if (file.read((uint8_t*)&h, sizeof(h)) != sizeof(h)) return false;
+    if (memcmp(h.magic, "LIKE", 4) != 0) return false;
+    if (h.input_size != controlInput.size() || h.action_size != n_outputs_) return false;
+    replayMem.clear();
+    for (uint16_t n = 0; n < h.count; n++) {
+        float r;
+        std::vector<float> in(h.input_size), act(h.action_size);
+        const size_t inBytes = in.size() * sizeof(float), actBytes = act.size() * sizeof(float);
+        if (file.read((uint8_t*)&r, sizeof(r)) != sizeof(r)) return false;
+        if (file.read((uint8_t*)in.data(), inBytes) != inBytes) return false;
+        if (file.read((uint8_t*)act.data(), actBytes) != actBytes) return false;
+        trainStatelessRLItem item = {in, act, r};
+        replayMem.add(item, millis());
+    }
+    return true;
 }
 
 template<size_t N_OUTPUTS, size_t N_INPUTS>
@@ -706,6 +753,12 @@ bool InterfaceRL<N_OUTPUTS, N_INPUTS>::_load_RL_from_SD(String id) {
     }
 
     bool success = synthMapping.LoadMLPNetworkFromFile(file);
+    if (success) {
+        // The likes the model was trained on (v2+). Without them (v1 files) clear the
+        // memory: otherwise training would pull the loaded net towards unrelated likes.
+        if (header.format_version < 2 || !readLikes(file)) replayMem.clear();
+        dislikeTargets_.clear();
+    }
     file.close();
 
     // With a StaticMLP the architecture is fixed at compile time and
@@ -1119,6 +1172,7 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::decayItemsAtDistance(std::vector<float> &
 template<size_t N_OUTPUTS, size_t N_INPUTS>
 void InterfaceRL<N_OUTPUTS, N_INPUTS>::storeExperience(float reward, std::vector<float> &experienceState, std::vector<float> &experienceAction ) {
     wakeTraining();  // new data
+    locDirty_ = true;
     trainStatelessRLItem trainItem = {experienceState, experienceAction, reward * rewardScale}; // state is s_t, action is a_t, reward is r_t, nextState is s_t
     bool skip_add = false;
     switch(memoryStoreMode) {
@@ -1754,8 +1808,13 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::initExploreNoise() {
 
 // Noise scale at input x: kNearFloor right on a liked input, rising to 1 at kNearRadius.
 template<size_t N_OUTPUTS, size_t N_INPUTS>
-float InterfaceRL<N_OUTPUTS, N_INPUTS>::noiseLocality(const std::vector<float>& x) const {
+float InterfaceRL<N_OUTPUTS, N_INPUTS>::noiseLocality(const std::vector<float>& x) {
     if (focusActive()) return 1.f;  // focus protects the rest: explore right here
+    if (!locDirty_ && locMemSize_ == replayMem.size() && locInput_ == x) return locValue_;
+    locDirty_ = false;
+    locMemSize_ = replayMem.size();
+    locInput_ = x;
+    locValue_ = 1.f;
     const size_t nAct = std::max<size_t>(1, getActiveInputCount());
     const float radius = kNearRadius * sqrtf(static_cast<float>(nAct));
     float d = 1e9f;
@@ -1763,8 +1822,30 @@ float InterfaceRL<N_OUTPUTS, N_INPUTS>::noiseLocality(const std::vector<float>& 
         const auto& item = replayMem.getItem(i);
         if (item.reward > 0.f) d = std::min(d, euclideanDistance(item.input, x));
     }
-    if (d >= radius) return 1.f;
-    return kNearFloor + (1.f - kNearFloor) * (d / radius);
+    if (d < radius) locValue_ = kNearFloor + (1.f - kNearFloor) * (d / radius);
+    return locValue_;
+}
+
+// dW = sum_k c_k D_k, with each drift stepped once per control cycle since the last
+// rebuild (so the morphing speed doesn't depend on the rebuild rate).
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::rebuildNoiseW() {
+    const uint32_t t = millis();
+    uint32_t steps = noiseWValid_ ? (t - noiseWMs_) / kControlPeriodMs : 1;
+    steps = std::min<uint32_t>(std::max<uint32_t>(steps, 1), 100);
+    noiseWMs_ = t;
+    noiseWValid_ = true;
+    float c[kWeightDirs];
+    for (size_t k = 0; k < kWeightDirs; k++) {
+        for (uint32_t i = 1; i < steps; i++) exploreOU_[k].sample();
+        c[k] = exploreOU_[k].sample();
+    }
+    for (size_t o = 0; o < N_OUTPUTS; o++)
+        for (size_t j = 0; j < kHidden; j++) {
+            float w = 0.f;
+            for (size_t k = 0; k < kWeightDirs; k++) w += c[k] * weightDirs_[k][o][j];
+            noiseW_[o][j] = w;
+        }
 }
 
 // The net's forward pass done by hand (same maths as StaticMLP: ReLU, ReLU, hard
@@ -1794,18 +1875,16 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::noisyForward(std::vector<float>& out) {
     }
     hn = sqrtf(hn);
     const float wScale = hn > 1e-6f ? 6.f * amp / (hn * sqrtf(static_cast<float>(kWeightDirs))) : 0.f;
-    float c[kWeightDirs];
-    for (size_t k = 0; k < kWeightDirs; k++) c[k] = exploreOU_[k].sample();
+    if (!noiseWValid_ || millis() - noiseWMs_ >= kNoiseRebuildMs) rebuildNoiseW();
 
     out.resize(N_OUTPUTS);
     for (size_t o = 0; o < N_OUTPUTS; o++) {
         float z = L2.bias(o);
-        for (size_t i = 0; i < kHidden; i++) z += L2.weight(o, i) * h2[i];
         float dz = 0.f;
-        for (size_t k = 0; k < kWeightDirs; k++) {
-            float dot = 0.f;
-            for (size_t j = 0; j < kHidden; j++) dot += weightDirs_[k][o][j] * h2[j];
-            dz += c[k] * dot;
+        const float* nw = noiseW_[o];
+        for (size_t i = 0; i < kHidden; i++) {
+            z += L2.weight(o, i) * h2[i];
+            dz += nw[i] * h2[i];
         }
         z += dz * wScale;
         out[o] = z <= -3.f ? 0.f : (z >= 3.f ? 1.f : (z + 3.f) / 6.f);

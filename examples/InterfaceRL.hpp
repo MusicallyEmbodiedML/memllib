@@ -201,6 +201,7 @@ public:
     inline void forgetMemory() {
         replayMem.clear();
         synth_.clear();
+        locDirty_ = true;
         wakeTraining();  // refresh counts; with nothing to learn it settles again at once
         dislikeTargets_.clear();
         escalateStage_ = 0;
@@ -362,6 +363,8 @@ protected:
     void _perform_randomiseRL_action();
     bool _save_RL_to_SD(String id);
     bool _load_RL_from_SD(String id);
+    bool writeLikes(File& file);
+    bool readLikes(File& file);  // replaces the replay memory with the saved likes
     void _forget_replay_mem_interf();
     void _saveSlotNames();
     void _loadSlotNames();
@@ -533,8 +536,22 @@ private:
     float noiseAmp_ = 0.f;
     std::vector<OrnsteinUhlenbeckNoise> exploreOU_;            // unit-std drift per direction
     int8_t weightDirs_[kWeightDirs][N_OUTPUTS][kHidden] = {};  // +-1, fixed at setup
+    // The drifts move slowly, so the combined offset dW = sum_k c_k D_k is rebuilt only
+    // every kNoiseRebuildMs (stepping the drifts once per elapsed control cycle, so their
+    // speed is unchanged); each inference is then one N_OUTPUTS x kHidden product.
+    static constexpr uint32_t kNoiseRebuildMs = 50;
+    static constexpr uint32_t kControlPeriodMs = 5;
+    float noiseW_[N_OUTPUTS][kHidden] = {};
+    uint32_t noiseWMs_ = 0;
+    bool noiseWValid_ = false;
+    void rebuildNoiseW();
+    // noiseLocality() cache: recomputed when the input or the likes change.
+    std::vector<float> locInput_;
+    size_t locMemSize_ = SIZE_MAX;
+    float locValue_ = 1.f;
+    bool locDirty_ = true;
     void initExploreNoise();
-    float noiseLocality(const std::vector<float>& x) const;
+    float noiseLocality(const std::vector<float>& x);
     void noisyForward(std::vector<float>& out);
 
     // --- Jolt (B2): synthetic pseudo-likes ------------------------------------------
