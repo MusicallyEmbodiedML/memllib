@@ -258,6 +258,59 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::bind_RL_interface(INPUT_MODES input_mode,
 
 
 template<size_t N_OUTPUTS, size_t N_INPUTS>
+float InterfaceRL<N_OUTPUTS, N_INPUTS>::likedError() {
+    float sum = 0.f;
+    size_t n = 0;
+    evalOut_.resize(N_OUTPUTS);
+    for (size_t i = 0; i < replayMem.size(); i++) {
+        const auto& item = replayMem.getItem(i);
+        if (item.reward <= 0.f) continue;
+        synthMapping.GetOutput(item.input, &evalOut_);
+        const size_t m = std::min(evalOut_.size(), item.action.size());
+        float se = 0.f;
+        for (size_t j = 0; j < m; j++) {
+            const float d = item.action[j] - evalOut_[j];
+            se += d * d;
+        }
+        sum += m ? se / static_cast<float>(m) : 0.f;  // same scale as TrainBatch's MSE
+        n++;
+    }
+    return n ? sum / static_cast<float>(n) : 0.f;
+}
+
+// Called after each training step: settle once the error has stayed low (checked on
+// all likes, not just the noisy batch loss) and nothing time-limited is pending.
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::updateTrainState(bool trainedPositive, float lossPositive, bool pending) {
+    (void)trainedPositive; (void)lossPositive;
+    const uint32_t t = millis();
+    if (pending) {  // something time-limited still working: restart the settle tests
+        settleGoodChecks_ = 0;
+        plateauRefError_ = 1e9f;
+        plateauRefMs_ = t;
+        return;
+    }
+    if (t - lastErrorEvalMs_ < kSettleEvalMs) return;
+    lastErrorEvalMs_ = t;
+    const float e = likedError();
+
+    // Low: settle after kSettleChecks consecutive low checks.
+    settleGoodChecks_ = (e < kSettleError) ? settleGoodChecks_ + 1 : 0;
+    bool settle = settleGoodChecks_ >= kSettleChecks;
+
+    // Plateau: once per window, compare with the error a window ago.
+    if (!settle && t - plateauRefMs_ >= kPlateauWindowMs) {
+        settle = e > plateauRefError_ * (1.f - kPlateauGain);
+        plateauRefError_ = e;
+        plateauRefMs_ = t;
+    }
+    if (!settle) return;
+    trainSettled_ = true;
+    settledError_ = e;
+    if (nnOutputsGraphView) nnOutputsGraphView->setTrainingIdle(true);
+}
+
+template<size_t N_OUTPUTS, size_t N_INPUTS>
 void InterfaceRL<N_OUTPUTS, N_INPUTS>::setRewardScaleInterf(float value)
 {
     this->setRewardScale(value);
@@ -480,6 +533,7 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::setup(size_t n_inputs, size_t n_outputs, 
         uint32_t save = spin_lock_blocking(mlpActive);
         if (MEMLNaut::Instance()->startSD()) {
             if (this->_load_RL_from_SD(filename)) {
+                wakeTraining();  // new weights and memories
                 fileLoadView->SetMessage("Loaded " + filename);
                 markCurrentSlot(slotIdx);
             } else {
@@ -683,6 +737,16 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::_loadSlotNames() {
 template<size_t N_OUTPUTS, size_t N_INPUTS>
 void InterfaceRL<N_OUTPUTS, N_INPUTS>::optimise() {
 
+    // Train on demand: settled -> no training; just an occasional watchdog check.
+    if (trainOnDemand_ && trainSettled_) {
+        const uint32_t t = millis();
+        if (t - lastErrorEvalMs_ < kWatchdogMs) return;
+        lastErrorEvalMs_ = t;
+        const float e = likedError();
+        if (e <= settledError_ * kWakeRatio + kWakeMargin) return;
+        wakeTraining();
+    }
+
     float lossPositive{0.f};
     bool trainedPositive = false;
     float lossNegative{0.f};
@@ -820,6 +884,12 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::optimise() {
 
     // Non-CURRENT dislike modes: bounded, self-retiring targets (none in CURRENT mode).
     trainDislikeTargets(effLR * kDislikeLR);
+
+    if (trainOnDemand_) {
+        // Anything time-limited still working keeps training on.
+        const bool pending = batchSizeNeg > 0 || !dislikeTargets_.empty() || joltActive_ || joltLRRamp_ < 1.f;
+        updateTrainState(trainedPositive, lossPositive, pending);
+    }
 
     if (nnOutputsGraphView) {
         // Only when a positive batch actually trained: lossPositive is 0 both for "no
@@ -1016,6 +1086,7 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::decayItemsAtDistance(std::vector<float> &
 
 template<size_t N_OUTPUTS, size_t N_INPUTS>
 void InterfaceRL<N_OUTPUTS, N_INPUTS>::storeExperience(float reward, std::vector<float> &experienceState, std::vector<float> &experienceAction ) {
+    wakeTraining();  // new data
     trainStatelessRLItem trainItem = {experienceState, experienceAction, reward * rewardScale}; // state is s_t, action is a_t, reward is r_t, nextState is s_t
     bool skip_add = false;
     switch(memoryStoreMode) {
@@ -1184,6 +1255,7 @@ std::vector<float> InterfaceRL<N_OUTPUTS, N_INPUTS>::stepTarget(const std::vecto
 
 template<size_t N_OUTPUTS, size_t N_INPUTS>
 void InterfaceRL<N_OUTPUTS, N_INPUTS>::addDislikeTarget(DislikeTarget&& t) {
+    wakeTraining();
     // A new 'no' here supersedes older ones here, so successive presses don't fight.
     for (size_t i = dislikeTargets_.size(); i-- > 0;) {
         if (euclideanDistance(dislikeTargets_[i].input, t.input) < kDislikeInputRadius)

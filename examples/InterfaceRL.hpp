@@ -147,6 +147,14 @@ public:
 
     void optimise();
 
+    // Train on demand: instead of training every cycle, settle (no training) once the
+    // error on the liked memories is low or has stopped improving, and wake again when it
+    // rises clearly above where it settled or the data/weights change (like, dislike,
+    // drag, scramble, jolt release, model load). A settled net holds still, so noise roams over a fixed mapping
+    // instead of being pulled back, and core 0 is freed. Off by default (per mode opt-in).
+    void setTrainOnDemand(bool on) { trainOnDemand_ = on; wakeTraining(); }
+    bool isTrainingSettled() const { return trainOnDemand_ && trainSettled_; }
+
     inline void setState(const size_t index, float value) {
         controlInput[index] = value;
         newInput = true;
@@ -177,6 +185,7 @@ public:
     inline void randomiseTheNetwork()
     {
         synthMapping.RandomiseWeightsAndBiasesLin(-0.9f,1.1f, -0.9f, 0.3f);
+        wakeTraining();
         newInput = true;
         resetMinMaxFlag = true;
     }
@@ -190,6 +199,7 @@ public:
 
     inline void forgetMemory() {
         replayMem.clear();
+        wakeTraining();  // refresh counts; with nothing to learn it settles again at once
         dislikeTargets_.clear();
         escalateStage_ = 0;
         lastDislikeInput_.clear();
@@ -280,6 +290,7 @@ public:
 
     inline void stopJolt() {
         joltActive_ = false;  // weights stay where they morphed to (permanent)
+        wakeTraining();       // relearn the likes
         joltLRRamp_ = 0.f;    // resume learning from 0, ramping back to full over ~5s
     }
 
@@ -600,6 +611,38 @@ private:
     volatile bool pendingSettingsCommit_{false};
 
     spin_lock_t *mlpActive;
+
+    // --- Train on demand (see setTrainOnDemand) --------------------------------------
+    // Settle when the error on the likes is low, or has stopped improving (a small net
+    // with conflicting/noisy likes has an error floor it can't train below). Wake when it
+    // rises clearly above where it settled.
+    static constexpr float kSettleError = 1e-3f;       // settle below this (MSE) outright,
+    static constexpr int kSettleChecks = 3;            //   for this many checks in a row
+    static constexpr float kPlateauGain = 0.01f;       // or: <1% better over...
+    static constexpr uint32_t kPlateauWindowMs = 1000; // ...this long (training is slow, so
+                                                       //  a short window misreads a plateau)
+    static constexpr uint32_t kSettleEvalMs = 100;     // full-error check while training
+    static constexpr float kWakeRatio = 1.5f;          // wake above settled error * this
+    static constexpr float kWakeMargin = 5e-4f;        //   + this
+    static constexpr uint32_t kWatchdogMs = 1000;      // full-error check while settled
+    bool trainOnDemand_ = false;
+    bool trainSettled_ = false;
+    int settleGoodChecks_ = 0;
+    float plateauRefError_ = 1e9f;  // error at the start of the plateau window
+    uint32_t plateauRefMs_ = 0;
+    float settledError_ = 0.f;      // error when it settled (wake reference)
+    uint32_t lastErrorEvalMs_ = 0;
+    std::vector<float> evalOut_;
+    // Only sets state (safe from the button/ISR paths that reach it).
+    void wakeTraining() {
+        trainSettled_ = false;
+        settleGoodChecks_ = 0;
+        plateauRefError_ = 1e9f;
+        plateauRefMs_ = millis();
+        if (nnOutputsGraphView) nnOutputsGraphView->setTrainingIdle(false);
+    }
+    float likedError();          // mean MSE of the net over all liked memories (no update)
+    void updateTrainState(bool trainedPositive, float lossPositive, bool pending);
 
     String _modeRoot{"mlp_rl"};
     String _modeTag{"Unknown"};

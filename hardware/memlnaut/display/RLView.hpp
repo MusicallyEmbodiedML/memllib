@@ -79,9 +79,10 @@ public:
             lossFullRepaint_ = false;
         }
         if (lossTextDirty_) {
-            scr->setTextColor(kLossColour, TFT_BLACK);
+            scr->setTextColor(trainingIdle_ ? TFT_DARKGREY : kLossColour, TFT_BLACK);
             scr->setTextPadding(kLossTextW);
-            scr->drawString(lossText_.length() ? lossText_.c_str() : "-", area.x + 2, barY + 6);
+            scr->drawString(trainingIdle_ ? "idle" : (lossText_.length() ? lossText_.c_str() : "-"),
+                            area.x + 2, barY + 6);
             scr->setTextPadding(0);
             lossTextDirty_ = false;
         }
@@ -138,6 +139,11 @@ public:
         lossCount_++;
         lossDirty_ = true;
         needRedraw_ = true;
+    }
+    // Train on demand: idle = the net has settled and isn't training. The loss readout
+    // shows "idle" in grey (and the trace stops, as no losses arrive).
+    void setTrainingIdle(bool idle) {
+        if (idle != trainingIdle_) { trainingIdle_ = idle; lossTextDirty_ = true; needRedraw_ = true; }
     }
     void setMemoryCounts(size_t pos, size_t neg) {
         if (pos != posCount_ || neg != negCount_) {
@@ -270,6 +276,7 @@ private:
     uint32_t lossCount_{0};
     uint32_t lastLossColumnMs_{0};
     bool lossFullRepaint_{true};
+    bool trainingIdle_{false};
     String lossText_;
     bool lossTextDirty_{true};
 
