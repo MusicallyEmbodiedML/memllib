@@ -150,7 +150,7 @@ public:
     // Train on demand: instead of training every cycle, settle (no training) once the
     // error on the liked memories is low or has stopped improving, and wake again when it
     // rises clearly above where it settled or the data/weights change (like, dislike,
-    // drag, scramble, jolt release, model load). A settled net holds still, so noise roams over a fixed mapping
+    // drag, jolt, scramble, model load). A settled net holds still, so noise roams over a fixed mapping
     // instead of being pulled back, and core 0 is freed. Off by default (per mode opt-in).
     void setTrainOnDemand(bool on) { trainOnDemand_ = on; wakeTraining(); }
     bool isTrainingSettled() const { return trainOnDemand_ && trainSettled_; }
@@ -185,6 +185,7 @@ public:
     inline void randomiseTheNetwork()
     {
         synthMapping.RandomiseWeightsAndBiasesLin(-0.9f,1.1f, -0.9f, 0.3f);
+        synth_.clear();
         wakeTraining();
         newInput = true;
         resetMinMaxFlag = true;
@@ -199,6 +200,7 @@ public:
 
     inline void forgetMemory() {
         replayMem.clear();
+        synth_.clear();
         wakeTraining();  // refresh counts; with nothing to learn it settles again at once
         dislikeTargets_.clear();
         escalateStage_ = 0;
@@ -242,56 +244,6 @@ public:
         // Learning stays active during exploration on purpose: likes/dislikes given while
         // the noise roams are what steer the network toward sounds the player wants.
         if (nnOutputsGraphView) nnOutputsGraphView->setNoiseActive(amplitude > 0.f);
-    }
-
-    // Jolt = permanent weight modulation (B2, held). At press, pick a random subset of
-    // weights scattered across the net and roll a bounded random target for each. While
-    // held, EMA-glide each toward its target (stepJolt, called per loop); release just
-    // freezes them, so the change persists. Bounded by construction (interpolation toward
-    // targets in the weight-init range can't run away) and smooth (no per-tick jitter).
-    // Runs on the main loop / under the mlpActive lock, so touching the MLP here is safe.
-    inline float randomJoltTarget() const {
-        return kJoltWeightMin + (static_cast<float>(rand()) / RAND_MAX) * (kJoltWeightMax - kJoltWeightMin);
-    }
-
-    inline void startJolt() {
-        joltActive_ = true;
-        joltWeightLoc_.clear();
-        joltTarget_.clear();
-        // StaticMLP exposes a flat view over all weights (layer 0 first); pick
-        // random global indices to modulate.
-        const size_t total = SynthMLP::TotalWeights();
-        if (total == 0) return;
-        for (size_t i = 0; i < kJoltNumWeights; i++) {
-            joltWeightLoc_.push_back(rand() % total);
-            joltTarget_.push_back(randomJoltTarget());
-        }
-        if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("jolt");
-        if (msgView) msgView->post("Jolt: morphing weights");
-    }
-
-    inline void stepJolt() {
-        const size_t total = SynthMLP::TotalWeights();
-        for (size_t i = 0; i < joltWeightLoc_.size(); i++) {
-            const size_t idx = joltWeightLoc_[i];
-            if (idx >= total) continue;  // stale after a model load
-            float* wp = synthMapping.WeightPtrAt(idx);
-            if (!wp) continue;
-            float& w = *wp;
-            w += kJoltMorphRate * (joltTarget_[i] - w);
-            // Reached this target (EMA only asymptotes, so use a threshold) -> roll a new
-            // one, keeping the weight in motion for as long as the button is held.
-            float gap = joltTarget_[i] - w;
-            if (gap < 0.f) gap = -gap;
-            if (gap < kJoltTargetEpsilon) joltTarget_[i] = randomJoltTarget();
-        }
-        markInputDirty();  // weights changed -> regenerate + re-send the action
-    }
-
-    inline void stopJolt() {
-        joltActive_ = false;  // weights stay where they morphed to (permanent)
-        wakeTraining();       // relearn the likes
-        joltLRRamp_ = 0.f;    // resume learning from 0, ramping back to full over ~5s
     }
 
     void bind_RL_interface(INPUT_MODES input_mode = INPUT_MODES::JOYSTICK, bool joystick4D = false);
@@ -547,6 +499,29 @@ private:
     void trainDislikeTargets(float lr);
     void loadDislikeMode();
     void saveDislikeMode();
+
+    // --- Jolt (B2): synthetic pseudo-likes ------------------------------------------
+    // A jolt plants kSynthPoints synthetic training points at inputs as far as possible
+    // from the liked inputs, with random target sounds, and trains towards them (a burst
+    // at a high LR, then as anchors at normal weight) until the next jolt replaces them.
+    // New sounds appear in the untaught regions while the likes keep training at their own
+    // inputs, so preferences are preserved. Liking a jolted sound keeps it for good.
+    struct SynthPoint {
+        std::vector<float> input;
+        std::vector<float> target;
+    };
+    static constexpr int kSynthPoints = 8;
+    static constexpr int kSynthCandidates = 24;      // best-of, for distance from the likes
+    static constexpr float kSynthTargetLo = 0.05f;   // keep targets off the flat ends
+    static constexpr float kSynthTargetHi = 0.95f;
+    static constexpr uint32_t kSynthBurstMs = 3000;  // high-LR burst after a jolt...
+    static constexpr float kSynthBurstLR = 6.f;      // ...at this x the base LR
+    static constexpr float kSynthHoldLR = 1.f;       // then as anchors at this x
+    std::vector<SynthPoint> synth_;
+    uint32_t synthSeedMs_ = 0;
+    volatile bool pendingSeed_ = false;  // set from the B2 callback (ISR-safe)
+    void seedJolt();
+    bool trainSynth(float lr);  // returns true during the post-jolt burst
     DISLIKE_MODES savedDislikeMode_ = DISLIKE_MODES::COUNT;  // value on flash
 
 
@@ -580,21 +555,6 @@ private:
 
     // Exploration-noise travel speed.
     static constexpr float kNoiseDt = 0.004f;      // normal OU travel speed (set in setup)
-
-    // Jolt = permanent weight modulation while B2 is held (see startJolt/stepJolt).
-    static constexpr size_t kJoltNumWeights = 40;  // random weights perturbed per press
-    static constexpr float  kJoltMorphRate  = 0.017f;  // EMA per tick (~1s to target @200Hz)
-    static constexpr float  kJoltWeightMin  = -1.2f;  // target range == weight-init range
-    static constexpr float  kJoltWeightMax  = 0.9f;
-    static constexpr float  kJoltTargetEpsilon = 0.05f;  // re-roll target once within this
-    static constexpr float  kJoltLRRampStep = 0.001f;    // LR recovery rate: 1/(5s * 200Hz)
-    std::vector<size_t> joltWeightLoc_;  // global flat weight indices (StaticMLP::WeightPtrAt)
-    std::vector<float>                    joltTarget_;     // per-selected-weight target value
-    bool joltActive_ = false;
-    // After a jolt releases, learning resumes gently: effective LR *= joltLRRamp_, which
-    // climbs 0 -> 1 over ~5s so fresh training doesn't immediately drag the net off the
-    // jolted sound. 1.0 = normal (full LR).
-    float joltLRRamp_ = 1.0f;
 
     bool resetMinMaxFlag = false;
 

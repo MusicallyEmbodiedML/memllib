@@ -127,13 +127,10 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::bind_RL_interface(INPUT_MODES input_mode,
             _perform_randomiseRL_action();
         }
     });
-    // B2 held = momentary fast exploration (was: perturb network weights). The button ISR
-    // only dispatches a callback on press, so start the jolt here and detect *release* by
-    // polling getMOMB2State() in the loop callback below.
+    // B2 = jolt: plant new synthetic points (see seedJolt). The callback may run in
+    // the button ISR, so just flag it for the loop callback.
     MEMLNaut::Instance()->setMomB2Callback([this]() {
-        if (MEMLNaut::Instance()->getMOMB2State()) {
-            startJolt();
-        }
+        if (MEMLNaut::Instance()->getMOMB2State()) pendingSeed_ = true;
     });
 
     // Always register joystick callbacks — they write to raw_joystick_
@@ -192,9 +189,9 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::bind_RL_interface(INPUT_MODES input_mode,
         rvZ1Override ? rvZ1Override : RVCallback([this](float value) { setNoiseLevel(value); }));
     // Set up loop callback
     MEMLNaut::Instance()->setLoopCallback([this]() {
-        // Jolt release: the B2 ISR only fires on press, so poll the live pin to end it.
-        if (joltActive_ && !MEMLNaut::Instance()->getMOMB2State()) {
-            stopJolt();
+        if (pendingSeed_) {  // jolt (B2)
+            pendingSeed_ = false;
+            seedJolt();
         }
         // Process deferred actions from ISR before touching replayMem in optimise
         if (pendingLike_) {
@@ -243,14 +240,7 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::bind_RL_interface(INPUT_MODES input_mode,
             pushMemoryPointsToInputsView();
         }
         uint32_t save = spin_lock_blocking(mlpActive);
-        if (joltActive_) {
-            this->stepJolt();                  // B2 held: morph weights, learning paused
-        } else {
-            // Ramp learning rate back up after a jolt (0 -> full over ~5s) so training
-            // doesn't immediately drag the net off the jolted sound.
-            if (joltLRRamp_ < 1.f) joltLRRamp_ = std::min(1.f, joltLRRamp_ + kJoltLRRampStep);
-            this->optimiseSometimes();
-        }
+        this->optimiseSometimes();
         this->generateAction();
         spin_unlock(mlpActive, save);
     });
@@ -273,6 +263,17 @@ float InterfaceRL<N_OUTPUTS, N_INPUTS>::likedError() {
             se += d * d;
         }
         sum += m ? se / static_cast<float>(m) : 0.f;  // same scale as TrainBatch's MSE
+        n++;
+    }
+    for (const auto& sp : synth_) {  // seed-jolt points count as likes here
+        synthMapping.GetOutput(sp.input, &evalOut_);
+        const size_t m = std::min(evalOut_.size(), sp.target.size());
+        float se = 0.f;
+        for (size_t j = 0; j < m; j++) {
+            const float d = sp.target[j] - evalOut_[j];
+            se += d * d;
+        }
+        sum += m ? se / static_cast<float>(m) : 0.f;
         n++;
     }
     return n ? sum / static_cast<float>(n) : 0.f;
@@ -465,8 +466,6 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::setup(size_t n_inputs, size_t n_outputs, 
 
     itemsToRemove.reserve(replayMem.getMemoryLimit());
 
-    joltWeightLoc_.reserve(kJoltNumWeights);
-    joltTarget_.reserve(kJoltNumWeights);
 
     // GUI
     if (!nnOutputsGraphView) {
@@ -495,7 +494,6 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::setup(size_t n_inputs, size_t n_outputs, 
         dislikeModeView->setFocusLostCallback([this]() { pendingSettingsCommit_ = true; });
         MEMLNaut::Instance()->disp->AddView(dislikeModeView);
     }
-
     // memoryStoreModeView = std::make_shared<SingleSelectView>("Mem Mode");
     // MEMLNaut::Instance()->disp->AddView(memoryStoreModeView);
     // memoryStoreModeView->setOptions(memOptions);
@@ -533,6 +531,7 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::setup(size_t n_inputs, size_t n_outputs, 
         uint32_t save = spin_lock_blocking(mlpActive);
         if (MEMLNaut::Instance()->startSD()) {
             if (this->_load_RL_from_SD(filename)) {
+                synth_.clear();
                 wakeTraining();  // new weights and memories
                 fileLoadView->SetMessage("Loaded " + filename);
                 markCurrentSlot(slotIdx);
@@ -751,7 +750,7 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::optimise() {
     bool trainedPositive = false;
     float lossNegative{0.f};
     size_t batchSizeNeg=0;
-    const float effLR = learningRateScaled * joltLRRamp_;
+    const float effLR = learningRateScaled;
 
     //positive batch
     std::vector<size_t> sample = replayMem.sampleIndices(batchSize);
@@ -776,8 +775,6 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::optimise() {
             }
         }
 
-        // Post-jolt recovery: scale the LR by the ramp (0 -> 1 over ~5s after a jolt) so
-        // training eases back in rather than yanking the net off the jolted sound.
         if (batchSizePos > 0){
             avgRewardPos /= static_cast<float>(batchSizePos);
             lossPositive = synthMapping.TrainBatch(tsPositive, effLR * avgRewardPos, 1, batchSize, 0.f, false);
@@ -885,9 +882,12 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::optimise() {
     // Non-CURRENT dislike modes: bounded, self-retiring targets (none in CURRENT mode).
     trainDislikeTargets(effLR * kDislikeLR);
 
+    // Jolt: train towards the synthetic points (strongly just after a jolt).
+    const bool synthPending = trainSynth(effLR);
+
     if (trainOnDemand_) {
         // Anything time-limited still working keeps training on.
-        const bool pending = batchSizeNeg > 0 || !dislikeTargets_.empty() || joltActive_ || joltLRRamp_ < 1.f;
+        const bool pending = batchSizeNeg > 0 || !dislikeTargets_.empty() || synthPending;
         updateTrainState(trainedPositive, lossPositive, pending);
     }
 
@@ -1545,5 +1545,70 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::pushMemoryPointsToInputsView() {
                        has4 ? q(item.input[2]) : uint8_t(0), has4 ? q(item.input[3]) : uint8_t(0),
                        item.reward > 0.f});
     }
+    for (const auto& sp : synth_) {
+        if (sp.input.size() < 4) continue;
+        InputsView::MemPoint mp{q(sp.input[0]), q(sp.input[1]), q(sp.input[2]), q(sp.input[3]), true};
+        mp.synth = true;
+        pts.push_back(mp);
+    }
     nnInputsGraphView->setMemoryPoints(pts);
+}
+
+
+// ─── Jolt ──────────────────────────────────────────────────────────────────────────
+
+// Plant a fresh set of kSynthPoints synthetic points (replacing the last): inputs as far
+// as possible from the liked inputs (best of kSynthCandidates random candidates, also kept
+// apart from each other), random targets. Only the focused output dims are changed; the
+// rest keep the net's current output there.
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::seedJolt() {
+    synth_.clear();
+    auto rnd = []() { return static_cast<float>(rand()) / static_cast<float>(RAND_MAX); };
+    const size_t nAct = std::min(getActiveInputCount(), controlInput.size());
+    std::vector<float> cand(controlInput.size(), unusedInputDefault_);
+    std::vector<float> best;
+    for (int p = 0; p < kSynthPoints; p++) {
+        float bestDist = -1.f;
+        for (int c = 0; c < kSynthCandidates; c++) {
+            for (size_t i = 0; i < nAct; i++) cand[i] = rnd();
+            float d = 1e9f;  // distance to the nearest like or other synthetic point
+            for (size_t i = 0; i < replayMem.size(); i++) {
+                const auto& item = replayMem.getItem(i);
+                if (item.reward > 0.f) d = std::min(d, euclideanDistance(item.input, cand));
+            }
+            for (const auto& sp : synth_) d = std::min(d, euclideanDistance(sp.input, cand));
+            if (d > bestDist) { bestDist = d; best = cand; }
+        }
+        SynthPoint sp;
+        sp.input = best;
+        evalOut_.resize(N_OUTPUTS);
+        synthMapping.GetOutput(sp.input, &evalOut_);
+        sp.target = evalOut_;
+        for (size_t j = 0; j < sp.target.size(); j++) {
+            if (!isActiveDim(j)) continue;
+            sp.target[j] = kSynthTargetLo + rnd() * (kSynthTargetHi - kSynthTargetLo);
+        }
+        synth_.push_back(std::move(sp));
+    }
+    synthSeedMs_ = millis();
+    wakeTraining();
+    if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("jolt");
+}
+
+// One training step towards the synthetic points: a burst at kSynthBurstLR after a
+// jolt, then kSynthHoldLR as anchors. Returns true during the burst.
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+bool InterfaceRL<N_OUTPUTS, N_INPUTS>::trainSynth(float lr) {
+    if (synth_.empty()) return false;
+    const bool burst = millis() - synthSeedMs_ < kSynthBurstMs;
+    training_pair_t ts;
+    ts.first.reserve(synth_.size());
+    ts.second.reserve(synth_.size());
+    for (const auto& sp : synth_) {
+        ts.first.push_back(sp.input);
+        ts.second.push_back(sp.target);
+    }
+    synthMapping.TrainBatch(ts, lr * (burst ? kSynthBurstLR : kSynthHoldLR), 1, synth_.size(), 0.f, false);
+    return burst;
 }

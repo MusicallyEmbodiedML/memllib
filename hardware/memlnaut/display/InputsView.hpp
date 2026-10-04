@@ -19,8 +19,9 @@ public:
     struct MemPoint {
         uint8_t x, y, z, w;  // input position, 0..255 (w: 4D joystick only)
         bool liked;
+        bool synth = false;  // a seed-jolt pseudo-like (drawn grey, never the target)
         bool operator==(const MemPoint& o) const {
-            return x == o.x && y == o.y && z == o.z && w == o.w && liked == o.liked;
+            return x == o.x && y == o.y && z == o.z && w == o.w && liked == o.liked && synth == o.synth;
         }
     };
 
@@ -147,6 +148,7 @@ private:
     static constexpr uint16_t kFrameColour = 0x4208;
     static constexpr uint16_t kLikedColour = TFT_GREEN;
     static constexpr uint16_t kDislikedColour = TFT_RED;
+    static constexpr uint16_t kSynthColour = 0x8410;  // grey: seed-jolt points
     static constexpr uint16_t kStick2Colour = TFT_CYAN;
     static constexpr uint16_t kGhostColour = 0x0340;  // dim green: nearest liked memory
 
@@ -226,7 +228,7 @@ private:
         int bestD = 0;
         for (size_t i = 0; i < mem_.size(); i++) {
             const auto& p = mem_[i];
-            if (!p.liked) continue;
+            if (!p.liked || p.synth) continue;
             const int dx = p.x - x, dy = p.y - y, dz = p.z - z, dw = has4_ ? p.w - w : 0;
             const int d = dx * dx + dy * dy + dz * dz + dw * dw;
             if (best < 0 || d < bestD) { best = static_cast<int>(i); bestD = d; }
@@ -292,7 +294,7 @@ private:
     }
 
     void drawMemPoint(const MemPoint& p) {
-        const uint16_t c = p.liked ? kLikedColour : kDislikedColour;
+        const uint16_t c = p.synth ? kSynthColour : (p.liked ? kLikedColour : kDislikedColour);
         const Marker m = memMarker(p);
         for (int i = 0; i < 3; i++)
             plotLine(m.vx[i], m.vy[i], m.vx[(i + 1) % 3], m.vy[(i + 1) % 3], c);
