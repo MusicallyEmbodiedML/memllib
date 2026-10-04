@@ -483,6 +483,29 @@ private:
     bool isActiveDim(size_t j) const {
         return activeDims_.empty() || (j < activeDims_.size() && activeDims_[j]);
     }
+
+    // --- Focus as a local edit ----------------------------------------------------------
+    // With some parameter groups focused (others frozen by the mode's FocusManager), the
+    // player is editing just those parameters, here. So while focus is on:
+    //  - exploration noise isn't suppressed near likes (focus already protects the rest)
+    //  - a jolt also seeds points at/around the current input (focused dims re-rolled)
+    //  - likes near the current input stop asserting their focused dims (their target
+    //    there is whatever the net plays now), so an edit isn't pulled back to the old
+    //    value; they keep holding everything else. Re-liking replaces the old like.
+    //  - a dislike never deletes a nearby like, only moves the focused dims
+    // Releasing focus restores the normal behaviour.
+    static constexpr float kFocusEditRadius = 0.15f;  // "near the current input" (per sqrt dim)
+    static constexpr int kFocusLocalSeeds = 3;        // jolt points at/around the input
+    static constexpr float kFocusSeedJitter = 0.08f;  // spread of those points
+    bool focusActive() const {
+        for (bool a : activeDims_) if (!a) return true;
+        return false;
+    }
+    bool nearCurrentInput(const std::vector<float>& x) const;
+    // Training target for liked memory item: its action, except (under focus) a like near
+    // the current input releases its focused dims to the net's current output there.
+    const std::vector<float>& likeTarget(size_t i);
+    std::vector<float> likeTargetBuf_;
     float rmsDistActive(const std::vector<float>& a, const std::vector<float>& b) const;
     int nearestLikeIndex(const std::vector<float>& input) const;  // -1 if none
     std::vector<float> stepTarget(const std::vector<float>& origin, std::vector<float> dir, float rmsStep) const;

@@ -248,6 +248,22 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::bind_RL_interface(INPUT_MODES input_mode,
 
 
 template<size_t N_OUTPUTS, size_t N_INPUTS>
+bool InterfaceRL<N_OUTPUTS, N_INPUTS>::nearCurrentInput(const std::vector<float>& x) const {
+    const float r = kFocusEditRadius * sqrtf(static_cast<float>(std::max<size_t>(1, getActiveInputCount())));
+    return euclideanDistance(x, controlInput) < r;
+}
+
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+const std::vector<float>& InterfaceRL<N_OUTPUTS, N_INPUTS>::likeTarget(size_t i) {
+    const auto& item = replayMem.getItem(i);
+    if (!focusActive() || !nearCurrentInput(item.input)) return item.action;
+    synthMapping.GetOutput(item.input, &likeTargetBuf_);
+    for (size_t j = 0; j < likeTargetBuf_.size() && j < item.action.size(); j++)
+        if (!isActiveDim(j)) likeTargetBuf_[j] = item.action[j];  // frozen dims: still held
+    return likeTargetBuf_;
+}
+
+template<size_t N_OUTPUTS, size_t N_INPUTS>
 float InterfaceRL<N_OUTPUTS, N_INPUTS>::likedError() {
     float sum = 0.f;
     size_t n = 0;
@@ -255,11 +271,12 @@ float InterfaceRL<N_OUTPUTS, N_INPUTS>::likedError() {
     for (size_t i = 0; i < replayMem.size(); i++) {
         const auto& item = replayMem.getItem(i);
         if (item.reward <= 0.f) continue;
+        const std::vector<float> target = likeTarget(i);  // focus-released dims count as 0 error
         synthMapping.GetOutput(item.input, &evalOut_);
-        const size_t m = std::min(evalOut_.size(), item.action.size());
+        const size_t m = std::min(evalOut_.size(), target.size());
         float se = 0.f;
         for (size_t j = 0; j < m; j++) {
-            const float d = item.action[j] - evalOut_[j];
+            const float d = target[j] - evalOut_[j];
             se += d * d;
         }
         sum += m ? se / static_cast<float>(m) : 0.f;  // same scale as TrainBatch's MSE
@@ -768,7 +785,7 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::optimise() {
         for (auto &i : sample) {
             if (replayMem.getItem(i).reward > 0) {
                 tsPositive.first.push_back(replayMem.getItem(i).input);
-                tsPositive.second.push_back(replayMem.getItem(i).action);
+                tsPositive.second.push_back(likeTarget(i));
                 batchSizePos++;
                 avgRewardPos += replayMem.getItem(i).reward;
             }
@@ -1279,6 +1296,7 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::addDislikeTarget(DislikeTarget&& t) {
 // they're what the nudge/retreat steers towards.
 template<size_t N_OUTPUTS, size_t N_INPUTS>
 void InterfaceRL<N_OUTPUTS, N_INPUTS>::removeEndorsingLikes() {
+    if (focusActive()) return;  // a focused 'no' edits just those dims; keep the like
     std::vector<size_t> idx;
     for (size_t i = 0; i < replayMem.size(); i++) {
         const auto& item = replayMem.getItem(i);
@@ -1578,10 +1596,19 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::seedJolt() {
     const size_t nAct = std::min(getActiveInputCount(), controlInput.size());
     const float clearance = kSynthClearance * sqrtf(static_cast<float>(std::max<size_t>(nAct, 1)));
     std::vector<float> cand(controlInput.size(), unusedInputDefault_);
+    // Under focus, the first few points sit at/around the current input (re-roll the
+    // focused params here); the rest spread out as usual.
+    const int localSeeds = focusActive() ? kFocusLocalSeeds : 0;
     for (int p = 0; p < kSynthPoints; p++) {
         std::vector<float> best;
         float bestDist = -1.f;
-        bool found = false;
+        bool found = p < localSeeds;
+        if (found) {
+            best = controlInput;
+            if (p > 0)
+                for (size_t i = 0; i < nAct; i++)
+                    best[i] = std::clamp(best[i] + (rnd() * 2.f - 1.f) * kFocusSeedJitter, 0.f, 1.f);
+        }
         for (int c = 0; c < kSynthCandidates && !found; c++) {
             for (size_t i = 0; i < nAct; i++) cand[i] = kSynthInputLo + rnd() * (kSynthInputHi - kSynthInputLo);
             float dLike = 1e9f, dSynth = 1e9f;
@@ -1683,6 +1710,7 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::initExploreNoise() {
 // Noise scale at input x: kNearFloor right on a liked input, rising to 1 at kNearRadius.
 template<size_t N_OUTPUTS, size_t N_INPUTS>
 float InterfaceRL<N_OUTPUTS, N_INPUTS>::noiseLocality(const std::vector<float>& x) const {
+    if (focusActive()) return 1.f;  // focus protects the rest: explore right here
     const size_t nAct = std::max<size_t>(1, getActiveInputCount());
     const float radius = kNearRadius * sqrtf(static_cast<float>(nAct));
     float d = 1e9f;
