@@ -567,6 +567,15 @@ private:
     uint32_t synthSeedMs_ = 0;
     volatile bool pendingSeed_ = false;  // set from the B2 callback (ISR-safe)
     void seedJolt();
+    void rollSynthTarget(SynthPoint& sp);  // big-change target for the focused dims
+    // Dislikes vs exploration: a dislike near a jolt point re-rolls that point's sound
+    // (and replaces the normal dislike, which would fight it); a dislike while noise is
+    // on also jumps the noise to the other side of the mapping (it, not the net, took
+    // you there).
+    static constexpr float kSynthDislikeRadius = 0.2f;  // per sqrt input dim
+    static constexpr float kNoiseDislikeJump = 0.5f;    // min jump of each coefficient
+    bool rerollNearbySynth();
+    void jumpNoise();
     bool trainSynth(float lr);  // returns true during the post-jolt burst
     float synthError();  // mean MSE to the synthetic targets (no update)
     DISLIKE_MODES savedDislikeMode_ = DISLIKE_MODES::COUNT;  // value on flash

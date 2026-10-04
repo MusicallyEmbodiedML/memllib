@@ -48,6 +48,12 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::_perform_dislike_action() {
         "Learning from this.", "I'll adjust, promise.", "Noted", "Rearranging",
         "Let's move on!"
     };
+    if (noiseAmp_ > 0.f) jumpNoise();  // the noise took us here: move it away too
+    if (rerollNearbySynth()) {         // a disliked jolt sound: try another there
+        if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("no");
+        if (msgView) msgView->post("No: new jolt sound here");
+        return;
+    }
     if (dislikeMode_ != DISLIKE_MODES::CURRENT) {
         handleDislike();  // posts its own message
         if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("no");
@@ -1623,15 +1629,7 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::seedJolt() {
         }
         SynthPoint sp;
         sp.input = best;
-        evalOut_.resize(N_OUTPUTS);
-        synthMapping.GetOutput(sp.input, &evalOut_);
-        sp.target = evalOut_;
-        const float mid = 0.5f * (kSynthTargetLo + kSynthTargetHi);
-        for (size_t j = 0; j < sp.target.size(); j++) {
-            if (!isActiveDim(j)) continue;
-            sp.target[j] = (sp.target[j] < mid) ? mid + 0.05f + rnd() * (kSynthTargetHi - mid - 0.05f)
-                                                : kSynthTargetLo + rnd() * (mid - 0.05f - kSynthTargetLo);
-        }
+        rollSynthTarget(sp);
         synth_.push_back(std::move(sp));
     }
     synthSeedMs_ = millis();
@@ -1639,6 +1637,53 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::seedJolt() {
     synthBurst_ = true;
     wakeTraining();
     if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("jolt");
+}
+
+// Each focused output dim goes to the opposite half of its range from what the net plays
+// at sp.input now (a big change); unfocused dims keep the current output.
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::rollSynthTarget(SynthPoint& sp) {
+    auto rnd = []() { return static_cast<float>(rand()) / static_cast<float>(RAND_MAX); };
+    evalOut_.resize(N_OUTPUTS);
+    synthMapping.GetOutput(sp.input, &evalOut_);
+    sp.target = evalOut_;
+    const float mid = 0.5f * (kSynthTargetLo + kSynthTargetHi);
+    for (size_t j = 0; j < sp.target.size(); j++) {
+        if (!isActiveDim(j)) continue;
+        sp.target[j] = (sp.target[j] < mid) ? mid + 0.05f + rnd() * (kSynthTargetHi - mid - 0.05f)
+                                            : kSynthTargetLo + rnd() * (mid - 0.05f - kSynthTargetLo);
+    }
+}
+
+// Dislike near a jolt point: give that point a new sound and restart the burst so it
+// lands. Returns false if no jolt point is near.
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+bool InterfaceRL<N_OUTPUTS, N_INPUTS>::rerollNearbySynth() {
+    if (synth_.empty()) return false;
+    const float r = kSynthDislikeRadius * sqrtf(static_cast<float>(std::max<size_t>(1, getActiveInputCount())));
+    int nearest = -1;
+    float best = r;
+    for (size_t i = 0; i < synth_.size(); i++) {
+        const float d = euclideanDistance(synth_[i].input, controlInput);
+        if (d < best) { best = d; nearest = static_cast<int>(i); }
+    }
+    if (nearest < 0) return false;
+    rollSynthTarget(synth_[nearest]);
+    synthSeedMs_ = millis();
+    synthSeedError_ = synthError();
+    synthBurst_ = true;
+    wakeTraining();
+    return true;
+}
+
+// Dislike while exploring: each noise coefficient jumps to the other side of zero, at
+// least kNoiseDislikeJump away, so the mapping moves somewhere audibly different.
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::jumpNoise() {
+    for (auto& ou : exploreOU_) {
+        const float x = ou.get();
+        ou.set((x >= 0.f ? -1.f : 1.f) * (fabsf(x) + kNoiseDislikeJump));
+    }
 }
 
 // One training step towards the synthetic points: a burst at kSynthBurstLR after a
