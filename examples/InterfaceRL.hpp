@@ -501,9 +501,10 @@ private:
     void saveDislikeMode();
 
     // --- Jolt (B2): synthetic pseudo-likes ------------------------------------------
-    // A jolt plants kSynthPoints synthetic training points at inputs as far as possible
-    // from the liked inputs, with random target sounds, and trains towards them (a burst
-    // at a high LR, then as anchors at normal weight) until the next jolt replaces them.
+    // A jolt plants kSynthPoints synthetic training points spread through the playable
+    // input range but clear of the liked inputs, with target sounds well away from what
+    // the net plays there now, and trains towards them (a burst at a high LR until they
+    // are mostly reached, then as anchors at normal weight) until the next jolt.
     // New sounds appear in the untaught regions while the likes keep training at their own
     // inputs, so preferences are preserved. Liking a jolted sound keeps it for good.
     struct SynthPoint {
@@ -511,17 +512,26 @@ private:
         std::vector<float> target;
     };
     static constexpr int kSynthPoints = 8;
-    static constexpr int kSynthCandidates = 24;      // best-of, for distance from the likes
+    static constexpr int kSynthCandidates = 32;
+    // Inputs from the playable range (sticks rarely reach their ends; the furthest-from-
+    // likes corners are where nobody plays, so jolts there sounded subtle).
+    static constexpr float kSynthInputLo = 0.1f;
+    static constexpr float kSynthInputHi = 0.9f;
+    static constexpr float kSynthClearance = 0.2f;   // min distance from likes (per sqrt dim)
     static constexpr float kSynthTargetLo = 0.05f;   // keep targets off the flat ends
     static constexpr float kSynthTargetHi = 0.95f;
-    static constexpr uint32_t kSynthBurstMs = 3000;  // high-LR burst after a jolt...
-    static constexpr float kSynthBurstLR = 6.f;      // ...at this x the base LR
+    static constexpr float kSynthBurstLR = 10.f;     // burst at this x the base LR...
+    static constexpr float kSynthBurstDone = 0.25f;  // ...until the error is this x where it began
+    static constexpr uint32_t kSynthBurstMaxMs = 8000;  // (or this long)
     static constexpr float kSynthHoldLR = 1.f;       // then as anchors at this x
+    float synthSeedError_ = 0.f;
+    bool synthBurst_ = false;
     std::vector<SynthPoint> synth_;
     uint32_t synthSeedMs_ = 0;
     volatile bool pendingSeed_ = false;  // set from the B2 callback (ISR-safe)
     void seedJolt();
     bool trainSynth(float lr);  // returns true during the post-jolt burst
+    float synthError();  // mean MSE to the synthetic targets (no update)
     DISLIKE_MODES savedDislikeMode_ = DISLIKE_MODES::COUNT;  // value on flash
 
 

@@ -483,6 +483,15 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::setup(size_t n_inputs, size_t n_outputs, 
         dislikeModeView = std::make_shared<RotarySelectView>("Dislike Mode");
         dislikeModeView->setOptions(std::span<String>(dislikeModeNames,
             static_cast<size_t>(DISLIKE_MODES::COUNT)));
+        static String dislikeModeDescs[] = {
+            "Push the sound away from your likes",
+            "Step away, mostly undoing what differs from the nearest like",
+            "Jump to a fresh sound here",
+            "Repeated no: nudge, then back to a like, then re-roll",
+            "Rebuild from qualities of nearby likes"
+        };
+        dislikeModeView->setDescriptions(std::span<String>(dislikeModeDescs,
+            static_cast<size_t>(DISLIKE_MODES::COUNT)));
         dislikeModeView->setSelection(static_cast<size_t>(dislikeMode_));
         dislikeModeView->setNewSelectionCallback([this](size_t idx) {
             // Runs in the rotary-encoder ISR — defer to the main loop.
@@ -973,8 +982,23 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::addInputSourceView(bool includeCCSelect) 
         available.push_back(INPUT_SOURCE::COMBINED);
     }
 
-    std::vector<String> opts;
-    for (auto src : available) opts.push_back(inputSourceName(src));
+    auto describe = [](INPUT_SOURCE src) -> const char* {
+        switch (src) {
+            case INPUT_SOURCE::JOYSTICK_3D:       return "Joystick X, Y and twist";
+            case INPUT_SOURCE::JOYSTICK_4D:       return "Both sticks: X, Y, Z and W";
+            case INPUT_SOURCE::MACHINE_LISTENING: return "Audio input features: pitch, energy, brightness...";
+            case INPUT_SOURCE::MIDI_1CC:          return "MIDI CC1 (mod wheel)";
+            case INPUT_SOURCE::MIDI_3CC:          return "MIDI CC1-3";
+            case INPUT_SOURCE::MIDI_8CC:          return "MIDI CC1-8";
+            case INPUT_SOURCE::COMBINED:          return "Joystick plus audio features";
+            default:                              return "";
+        }
+    };
+    std::vector<String> opts, descs;
+    for (auto src : available) {
+        opts.push_back(inputSourceName(src));
+        descs.push_back(describe(src));
+    }
 
     size_t initialSel = 0;
     auto it = std::find(available.begin(), available.end(), input_source_);
@@ -982,6 +1006,7 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::addInputSourceView(bool includeCCSelect) 
 
     auto view = std::make_shared<RotarySelectView>("Input Source");
     view->setOptions(std::span<String>(opts.data(), opts.size()));
+    view->setDescriptions(std::span<String>(descs.data(), descs.size()));
     view->setSelection(initialSel);
     view->setNewSelectionCallback([this, available](size_t idx) {
         // Runs in the rotary-encoder ISR — defer the actual switch to the main loop.
@@ -1557,51 +1582,72 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::pushMemoryPointsToInputsView() {
 
 // ─── Jolt ──────────────────────────────────────────────────────────────────────────
 
-// Plant a fresh set of kSynthPoints synthetic points (replacing the last): inputs as far
-// as possible from the liked inputs (best of kSynthCandidates random candidates, also kept
-// apart from each other), random targets. Only the focused output dims are changed; the
-// rest keep the net's current output there.
+// Plant a fresh set of kSynthPoints synthetic points (replacing the last). Inputs: random
+// in the playable range, clear of the liked inputs and of each other (a random acceptable
+// candidate, not the most extreme; the furthest if none is clear). Targets: each focused
+// output dim goes to the opposite half of its range from what the net plays there now,
+// so every jolted sound is a big change. Unfocused dims keep the current output.
 template<size_t N_OUTPUTS, size_t N_INPUTS>
 void InterfaceRL<N_OUTPUTS, N_INPUTS>::seedJolt() {
     synth_.clear();
     auto rnd = []() { return static_cast<float>(rand()) / static_cast<float>(RAND_MAX); };
     const size_t nAct = std::min(getActiveInputCount(), controlInput.size());
+    const float clearance = kSynthClearance * sqrtf(static_cast<float>(std::max<size_t>(nAct, 1)));
     std::vector<float> cand(controlInput.size(), unusedInputDefault_);
-    std::vector<float> best;
     for (int p = 0; p < kSynthPoints; p++) {
+        std::vector<float> best;
         float bestDist = -1.f;
-        for (int c = 0; c < kSynthCandidates; c++) {
-            for (size_t i = 0; i < nAct; i++) cand[i] = rnd();
-            float d = 1e9f;  // distance to the nearest like or other synthetic point
+        bool found = false;
+        for (int c = 0; c < kSynthCandidates && !found; c++) {
+            for (size_t i = 0; i < nAct; i++) cand[i] = kSynthInputLo + rnd() * (kSynthInputHi - kSynthInputLo);
+            float dLike = 1e9f, dSynth = 1e9f;
             for (size_t i = 0; i < replayMem.size(); i++) {
                 const auto& item = replayMem.getItem(i);
-                if (item.reward > 0.f) d = std::min(d, euclideanDistance(item.input, cand));
+                if (item.reward > 0.f) dLike = std::min(dLike, euclideanDistance(item.input, cand));
             }
-            for (const auto& sp : synth_) d = std::min(d, euclideanDistance(sp.input, cand));
-            if (d > bestDist) { bestDist = d; best = cand; }
+            for (const auto& sp : synth_) dSynth = std::min(dSynth, euclideanDistance(sp.input, cand));
+            const float d = std::min(dLike, dSynth * 2.f);
+            if (dLike >= clearance && dSynth >= clearance * 0.5f) found = true;  // take it
+            if (found || d > bestDist) { bestDist = d; best = cand; }
         }
         SynthPoint sp;
         sp.input = best;
         evalOut_.resize(N_OUTPUTS);
         synthMapping.GetOutput(sp.input, &evalOut_);
         sp.target = evalOut_;
+        const float mid = 0.5f * (kSynthTargetLo + kSynthTargetHi);
         for (size_t j = 0; j < sp.target.size(); j++) {
             if (!isActiveDim(j)) continue;
-            sp.target[j] = kSynthTargetLo + rnd() * (kSynthTargetHi - kSynthTargetLo);
+            sp.target[j] = (sp.target[j] < mid) ? mid + 0.05f + rnd() * (kSynthTargetHi - mid - 0.05f)
+                                                : kSynthTargetLo + rnd() * (mid - 0.05f - kSynthTargetLo);
         }
         synth_.push_back(std::move(sp));
     }
     synthSeedMs_ = millis();
+    synthSeedError_ = synthError();
+    synthBurst_ = true;
     wakeTraining();
     if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("jolt");
 }
 
 // One training step towards the synthetic points: a burst at kSynthBurstLR after a
-// jolt, then kSynthHoldLR as anchors. Returns true during the burst.
+// jolt, until the synthetic error is down to kSynthBurstDone of where it began (or
+// kSynthBurstMaxMs), then kSynthHoldLR as anchors. Returns true during the burst.
 template<size_t N_OUTPUTS, size_t N_INPUTS>
 bool InterfaceRL<N_OUTPUTS, N_INPUTS>::trainSynth(float lr) {
     if (synth_.empty()) return false;
-    const bool burst = millis() - synthSeedMs_ < kSynthBurstMs;
+    if (synthBurst_) {
+        const uint32_t age = millis() - synthSeedMs_;
+        // Check progress a few times a second (a full pass over 8 points).
+        static uint32_t lastCheck = 0;
+        if (millis() - lastCheck >= 200) {
+            lastCheck = millis();
+            const float e = synthError();
+            if (e <= synthSeedError_ * kSynthBurstDone || age >= kSynthBurstMaxMs) {
+                synthBurst_ = false;
+            }
+        }
+    }
     training_pair_t ts;
     ts.first.reserve(synth_.size());
     ts.second.reserve(synth_.size());
@@ -1609,6 +1655,20 @@ bool InterfaceRL<N_OUTPUTS, N_INPUTS>::trainSynth(float lr) {
         ts.first.push_back(sp.input);
         ts.second.push_back(sp.target);
     }
-    synthMapping.TrainBatch(ts, lr * (burst ? kSynthBurstLR : kSynthHoldLR), 1, synth_.size(), 0.f, false);
-    return burst;
+    synthMapping.TrainBatch(ts, lr * (synthBurst_ ? kSynthBurstLR : kSynthHoldLR), 1, synth_.size(), 0.f, false);
+    return synthBurst_;
+}
+
+// Mean MSE between the net and the synthetic targets (no update).
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+float InterfaceRL<N_OUTPUTS, N_INPUTS>::synthError() {
+    float sum = 0.f;
+    evalOut_.resize(N_OUTPUTS);
+    for (const auto& sp : synth_) {
+        synthMapping.GetOutput(sp.input, &evalOut_);
+        float se = 0.f;
+        for (size_t j = 0; j < sp.target.size(); j++) { const float d = sp.target[j] - evalOut_[j]; se += d * d; }
+        sum += se / sp.target.size();
+    }
+    return synth_.empty() ? 0.f : sum / synth_.size();
 }
