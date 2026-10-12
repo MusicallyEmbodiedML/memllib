@@ -116,7 +116,28 @@ private:
 
     int lastTouchX, lastTouchY;
 
-    const int topBarHeight = 30;
+    // Header layout and colours (see drawHeader()).
+    static constexpr int kHeaderH = 26;
+    static constexpr int kAccentH = 2;
+    static constexpr int kMainTop = kHeaderH + kAccentH + 1;
+    static constexpr int kTitleY = 10;   // arrow centre line
+    static constexpr int kTitleBaseline = 19;  // Orbitron caps are 17px tall
+    static constexpr int kTitleMargin = 22;    // keep clear of the arrows
+    static constexpr int kDotY = 23;
+    static constexpr int kDotPitch = 7;
+    static constexpr uint16_t kHeaderBg = 0x18E3;          // very dark grey
+    static constexpr uint16_t kArrowColour = 0xBDF7;       // light grey
+    static constexpr uint16_t kArrowDimColour = 0x39E7;
+    static constexpr uint16_t kDotColour = 0x528A;
+    static constexpr uint16_t kDotCurrentColour = TFT_CYAN;  // distinct from the white title
+    static constexpr uint16_t kAccentColour = TFT_DARKCYAN;
+    static constexpr uint16_t kAccentFocusColour = TFT_YELLOW;  // view holds the encoder
+    const int topBarHeight = kHeaderH;  // touch zone for the nav arrows
+    bool accentFocused_{false};
+
+    void drawHeader();
+    void drawAccent();
+    bool currentFocused() const;
 
 };
 

@@ -16,8 +16,8 @@ inline float euclideanDistance(const std::vector<float>& a, const std::vector<fl
 
 
 // Protected helper method implementations
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::_perform_like_action() {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::_perform_like_action() {
     static std::vector<String> likemsgs = {
         "Wow, incredible", "Awesome", "That's amazing", "Unbelievable+",
         "I love it!!", "More of this", "Yes!!!!", "A-M-A-Z-I-N-G",
@@ -29,13 +29,15 @@ void InterfaceRL<N_OUTPUTS>::_perform_like_action() {
     };
     String msg = likemsgs[rand() % likemsgs.size()];
     this->storeExperience(1.f, controlInput, action);
+    escalateStage_ = 0;
+    lastDislikeInput_.clear();  // a like ends any run of 'no's
     if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("yes");
     DEBUG_PRINTLN(msg);
     if (msgView) msgView->post(msg);
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::_perform_dislike_action() {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::_perform_dislike_action() {
     static std::vector<String> dislikemsgs = {
         "oh no!", "Get rid of this sound", 
         "Why even bother?", "New sound please!", "No, please no!!!",
@@ -46,6 +48,17 @@ void InterfaceRL<N_OUTPUTS>::_perform_dislike_action() {
         "Learning from this.", "I'll adjust, promise.", "Noted", "Rearranging",
         "Let's move on!"
     };
+    if (noiseAmp_ > 0.f) jumpNoise();  // the noise took us here: move it away too
+    if (rerollNearbySynth()) {         // a disliked jolt sound: try another there
+        if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("no");
+        if (msgView) msgView->post("No: new jolt sound here");
+        return;
+    }
+    if (dislikeMode_ != DISLIKE_MODES::CURRENT) {
+        handleDislike();  // posts its own message
+        if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("no");
+        return;
+    }
     String msg = dislikemsgs[rand() % dislikemsgs.size()];
     this->storeExperience(-1.f, controlInput, action);
     if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("no");
@@ -53,8 +66,8 @@ void InterfaceRL<N_OUTPUTS>::_perform_dislike_action() {
     if (msgView) msgView->post(msg);
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::_perform_randomiseRL_action() {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::_perform_randomiseRL_action() {
 
     this->randomiseTheNetwork();
     this->generateAction(true);
@@ -65,13 +78,13 @@ void InterfaceRL<N_OUTPUTS>::_perform_randomiseRL_action() {
 
 // Public trigger methods — called from ISR context, so only set a flag.
 // The actual action runs in the main-loop loopCallback before optimise().
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::trigger_like() {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::trigger_like() {
     pendingLike_ = true;
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::trigger_dislike() {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::trigger_dislike() {
     pendingDislike_ = true;
 }
 
@@ -80,8 +93,8 @@ void InterfaceRL<N_OUTPUTS>::trigger_dislike() {
 // }
 
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::setOptimiseDivisorInterf(float value)
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::setOptimiseDivisorInterf(float value)
 {
     size_t divisor = 1 + (value * 100);
     String msg;
@@ -97,11 +110,12 @@ void InterfaceRL<N_OUTPUTS>::setOptimiseDivisorInterf(float value)
 }
 
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::bind_RL_interface(INPUT_MODES input_mode, bool joystick4D) {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::bind_RL_interface(INPUT_MODES input_mode, bool joystick4D) {
 
     loadInputSource();
-    if (nnInputsGraphView) nnInputsGraphView->setNumDisplayBars(getActiveInputCount());
+    configureInputsView();
+    loadDislikeMode();
 
     // Set up momentary switch callbacks
     MEMLNaut::Instance()->setMomA1Callback([this]() {
@@ -119,13 +133,10 @@ void InterfaceRL<N_OUTPUTS>::bind_RL_interface(INPUT_MODES input_mode, bool joys
             _perform_randomiseRL_action();
         }
     });
-    // B2 held = momentary fast exploration (was: perturb network weights). The button ISR
-    // only dispatches a callback on press, so start the jolt here and detect *release* by
-    // polling getMOMB2State() in the loop callback below.
+    // B2 = jolt: plant new synthetic points (see seedJolt). The callback may run in
+    // the button ISR, so just flag it for the loop callback.
     MEMLNaut::Instance()->setMomB2Callback([this]() {
-        if (MEMLNaut::Instance()->getMOMB2State()) {
-            startJolt();
-        }
+        if (MEMLNaut::Instance()->getMOMB2State()) pendingSeed_ = true;
     });
 
     // Always register joystick callbacks — they write to raw_joystick_
@@ -184,9 +195,9 @@ void InterfaceRL<N_OUTPUTS>::bind_RL_interface(INPUT_MODES input_mode, bool joys
         rvZ1Override ? rvZ1Override : RVCallback([this](float value) { setNoiseLevel(value); }));
     // Set up loop callback
     MEMLNaut::Instance()->setLoopCallback([this]() {
-        // Jolt release: the B2 ISR only fires on press, so poll the live pin to end it.
-        if (joltActive_ && !MEMLNaut::Instance()->getMOMB2State()) {
-            stopJolt();
+        if (pendingSeed_) {  // jolt (B2)
+            pendingSeed_ = false;
+            seedJolt();
         }
         // Process deferred actions from ISR before touching replayMem in optimise
         if (pendingLike_) {
@@ -200,6 +211,8 @@ void InterfaceRL<N_OUTPUTS>::bind_RL_interface(INPUT_MODES input_mode, bool joys
         if (pendingDragStore_) {
             pendingDragStore_ = false;
             this->storeExperience(1.f, controlInput, savedAction);
+            escalateStage_ = 0;
+            lastDislikeInput_.clear();  // a like ends any run of 'no's
             if (nnOutputsGraphView) {
                 size_t pos = 0;
                 for (size_t i = 0; i < replayMem.size(); i++)
@@ -208,34 +221,121 @@ void InterfaceRL<N_OUTPUTS>::bind_RL_interface(INPUT_MODES input_mode, bool joys
             }
         }
         // Apply a deferred input-source change off the rotary ISR (heap/SPI/flash IO).
-        // Apply in-memory now for a responsive UI, but debounce the flash write: scrolling
-        // through sources would otherwise stall XIP per detent and blank the display.
+        // Apply in-memory now for a responsive UI; the flash write waits for the commit
+        // below, since scrolling through sources would otherwise blank the display.
         if (pendingInputSourceChange_) {
             pendingInputSourceChange_ = false;
             setInputSource(pendingInputSource_, false);
-            inputSourceSaveDueMs_ = millis() + kInputSourceSaveDelayMs;
         }
-        if (inputSourceSaveDueMs_ != 0 && millis() >= inputSourceSaveDueMs_) {
-            inputSourceSaveDueMs_ = 0;
-            saveInputSource();  // persist once the selection has settled
+        // Dislike-mode change from the rotary ISR: same apply-now, save-on-commit pattern.
+        if (pendingDislikeModeChange_) {
+            pendingDislikeModeChange_ = false;
+            setDislikeMode(pendingDislikeMode_, false);
+        }
+        // A selector lost focus: persist whatever changed (the save* calls skip no-ops).
+        // Any pending change above was applied first, so the latest value is saved.
+        if (pendingSettingsCommit_) {
+            pendingSettingsCommit_ = false;
+            saveInputSource();
+            saveDislikeMode();
+        }
+        // Joystick map on the NN Inputs screen: refresh the memory dots a few times a
+        // second, and only while that screen is showing.
+        if (millis() - lastMemPointsMs_ >= 300) {
+            lastMemPointsMs_ = millis();
+            pushMemoryPointsToInputsView();
         }
         uint32_t save = spin_lock_blocking(mlpActive);
-        if (joltActive_) {
-            this->stepJolt();                  // B2 held: morph weights, learning paused
-        } else {
-            // Ramp learning rate back up after a jolt (0 -> full over ~5s) so training
-            // doesn't immediately drag the net off the jolted sound.
-            if (joltLRRamp_ < 1.f) joltLRRamp_ = std::min(1.f, joltLRRamp_ + kJoltLRRampStep);
-            this->optimiseSometimes();
-        }
+        this->optimiseSometimes();
         this->generateAction();
         spin_unlock(mlpActive, save);
     });
 }
 
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::setRewardScaleInterf(float value)
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+bool InterfaceRL<N_OUTPUTS, N_INPUTS>::nearCurrentInput(const std::vector<float>& x) const {
+    const float r = kFocusEditRadius * sqrtf(static_cast<float>(std::max<size_t>(1, getActiveInputCount())));
+    return euclideanDistance(x, controlInput) < r;
+}
+
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+const std::vector<float>& InterfaceRL<N_OUTPUTS, N_INPUTS>::likeTarget(size_t i) {
+    const auto& item = replayMem.getItem(i);
+    if (!focusActive() || !nearCurrentInput(item.input)) return item.action;
+    synthMapping.GetOutput(item.input, &likeTargetBuf_);
+    for (size_t j = 0; j < likeTargetBuf_.size() && j < item.action.size(); j++)
+        if (!isActiveDim(j)) likeTargetBuf_[j] = item.action[j];  // frozen dims: still held
+    return likeTargetBuf_;
+}
+
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+float InterfaceRL<N_OUTPUTS, N_INPUTS>::likedError() {
+    float sum = 0.f;
+    size_t n = 0;
+    evalOut_.resize(N_OUTPUTS);
+    for (size_t i = 0; i < replayMem.size(); i++) {
+        const auto& item = replayMem.getItem(i);
+        if (item.reward <= 0.f) continue;
+        const std::vector<float> target = likeTarget(i);  // focus-released dims count as 0 error
+        synthMapping.GetOutput(item.input, &evalOut_);
+        const size_t m = std::min(evalOut_.size(), target.size());
+        float se = 0.f;
+        for (size_t j = 0; j < m; j++) {
+            const float d = target[j] - evalOut_[j];
+            se += d * d;
+        }
+        sum += m ? se / static_cast<float>(m) : 0.f;  // same scale as TrainBatch's MSE
+        n++;
+    }
+    for (const auto& sp : synth_) {  // seed-jolt points count as likes here
+        synthMapping.GetOutput(sp.input, &evalOut_);
+        const size_t m = std::min(evalOut_.size(), sp.target.size());
+        float se = 0.f;
+        for (size_t j = 0; j < m; j++) {
+            const float d = sp.target[j] - evalOut_[j];
+            se += d * d;
+        }
+        sum += m ? se / static_cast<float>(m) : 0.f;
+        n++;
+    }
+    return n ? sum / static_cast<float>(n) : 0.f;
+}
+
+// Called after each training step: settle once the error has stayed low (checked on
+// all likes, not just the noisy batch loss) and nothing time-limited is pending.
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::updateTrainState(bool trainedPositive, float lossPositive, bool pending) {
+    (void)trainedPositive; (void)lossPositive;
+    const uint32_t t = millis();
+    if (pending) {  // something time-limited still working: restart the settle tests
+        settleGoodChecks_ = 0;
+        plateauRefError_ = 1e9f;
+        plateauRefMs_ = t;
+        return;
+    }
+    if (t - lastErrorEvalMs_ < kSettleEvalMs) return;
+    lastErrorEvalMs_ = t;
+    const float e = likedError();
+
+    // Low: settle after kSettleChecks consecutive low checks.
+    settleGoodChecks_ = (e < kSettleError) ? settleGoodChecks_ + 1 : 0;
+    bool settle = settleGoodChecks_ >= kSettleChecks;
+
+    // Plateau: once per window, compare with the error a window ago.
+    if (!settle && t - plateauRefMs_ >= kPlateauWindowMs) {
+        settle = e > plateauRefError_ * (1.f - kPlateauGain);
+        plateauRefError_ = e;
+        plateauRefMs_ = t;
+    }
+    if (!settle) return;
+    trainSettled_ = true;
+    settledError_ = e;
+    if (nnOutputsGraphView) nnOutputsGraphView->setTrainingIdle(true);
+}
+
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::setRewardScaleInterf(float value)
 {
     this->setRewardScale(value);
     String msg = "Reward scale: " + String(value);
@@ -244,8 +344,8 @@ void InterfaceRL<N_OUTPUTS>::setRewardScaleInterf(float value)
 
 
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::_forget_replay_mem_interf()
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::_forget_replay_mem_interf()
 {
     this->forgetMemory();
     if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("forget");
@@ -259,8 +359,8 @@ void InterfaceRL<N_OUTPUTS>::_forget_replay_mem_interf()
 }
 
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf, bool enableFootcontroller)
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf, bool enableFootcontroller)
 {
     if (midi_interf) {
         midi_interf->SetCCCallback([this, enableFootcontroller] (uint8_t cc_number, uint8_t cc_value) {
@@ -346,8 +446,8 @@ void InterfaceRL<N_OUTPUTS>::bindMIDI(std::shared_ptr<MIDIInOut> midi_interf, bo
     }
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::setup(size_t n_inputs, size_t n_outputs, bool addMessageView)
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::setup(size_t n_inputs, size_t n_outputs, bool addMessageView)
 {
 
     InterfaceBase::setup(n_inputs, n_outputs);
@@ -376,30 +476,46 @@ void InterfaceRL<N_OUTPUTS>::setup(size_t n_inputs, size_t n_outputs, bool addMe
     // Memory limit
     replayMem.setMemoryLimit(memoryLimit);
 
-    ou_noises.reserve(n_outputs);
-    for(size_t i=0; i < n_outputs; i++) {
-        // OU(theta, mu, sigma, dt, x0). theta & dt set the *smoothness*: correlation
-        // time ~= 1/(theta*dt) calls = 1/(0.02*0.004) = 12500 calls ~= 62 s at the 200 Hz
-        // control rate, so the walk drifts in long smooth sweeps rather than per-frame
-        // kicks. sigma (amplitude) starts at 0 and is set by the intensity knob via
-        // setNoiseLevel()/setStationaryStd() on boot-sync. To make sweeps faster/coarser
-        // raise dt; slower/smoother, lower it.
-        ou_noises.push_back(std::make_unique<OrnsteinUhlenbeckNoise>(0.02f, 0.0f, 0.0f, kNoiseDt, 0.0f));
-    }
-
     itemsToRemove.reserve(replayMem.getMemoryLimit());
 
-    joltWeightLoc_.reserve(kJoltNumWeights);
-    joltTarget_.reserve(kJoltNumWeights);
 
     // GUI
     if (!nnOutputsGraphView) {
         nnOutputsGraphView = std::make_shared<RLView>("RL", n_outputs, 4, TFT_GREEN, 0.f, 1.f);
     }
     MEMLNaut::Instance()->disp->AddView(nnOutputsGraphView);
-    nnInputsGraphView = std::make_shared<BarGraphView>("NN Inputs", n_inputs, 10, TFT_YELLOW, 0.f, 1.f);
+    nnInputsGraphView = std::make_shared<InputsView>("NN Inputs", n_inputs);
     MEMLNaut::Instance()->disp->AddView(nnInputsGraphView);
 
+    {
+        static String dislikeModeNames[] = {
+            "Current (push away)", "Nudge + blame", "Re-roll", "Nudge>Back>Re-roll",
+            "Borrow from likes"
+        };
+        dislikeModeView = std::make_shared<RotarySelectView>("Dislike Mode");
+        dislikeModeView->setOptions(std::span<String>(dislikeModeNames,
+            static_cast<size_t>(DISLIKE_MODES::COUNT)));
+        static String dislikeModeDescs[] = {
+            "Push the sound away from your likes",
+            "Step away, mostly undoing what differs from the nearest like",
+            "Jump to a fresh sound here",
+            "Repeated no: nudge, then back to a like, then re-roll",
+            "Rebuild from qualities of nearby likes"
+        };
+        dislikeModeView->setDescriptions(std::span<String>(dislikeModeDescs,
+            static_cast<size_t>(DISLIKE_MODES::COUNT)));
+        dislikeModeView->setSelection(static_cast<size_t>(dislikeMode_));
+        dislikeModeView->setNewSelectionCallback([this](size_t idx) {
+            // Runs in the rotary-encoder ISR — defer to the main loop.
+            if (idx < static_cast<size_t>(DISLIKE_MODES::COUNT)) {
+                pendingDislikeMode_ = static_cast<DISLIKE_MODES>(idx);
+                pendingDislikeModeChange_ = true;
+            }
+        });
+        dislikeModeView->setFocusLostCallback([this]() { pendingSettingsCommit_ = true; });
+        MEMLNaut::Instance()->disp->AddView(dislikeModeView);
+    }
+    initExploreNoise();
     // memoryStoreModeView = std::make_shared<SingleSelectView>("Mem Mode");
     // MEMLNaut::Instance()->disp->AddView(memoryStoreModeView);
     // memoryStoreModeView->setOptions(memOptions);
@@ -412,20 +528,24 @@ void InterfaceRL<N_OUTPUTS>::setup(size_t n_inputs, size_t n_outputs, bool addMe
         MEMLNaut::Instance()->disp->AddView(msgView);
     }
 
-    // 12 slots laid out 6 columns x 2 rows. Size the buttons to fill the screen: width
-    // 10 + 6*43 + 5*10 gap = 318px (of 320); height 78 x 2 rows clears the message line.
-    // Smaller font (2) so slot names fit the narrower buttons.
-    fileSaveView = std::make_shared<BlockSelectView>("Save Model", TFT_BLUE, kNumSlots, 43, 78,
-        TFT_WHITE, std::vector<String>{}, TFT_BLUE, 2 /* fontNum */);
+    // 12 slots, 6 x 2. Slot style: numbered corners, empty slots dimmed; the slot of the
+    // model currently in use is filled with the accent colour on both screens.
+    const std::vector<String> emptySlots(kNumSlots, String(""));
+    fileSaveView = std::make_shared<BlockSelectView>("Save Model", kSaveAccent, kNumSlots, 43, 78,
+        TFT_WHITE, emptySlots, kSaveAccent);
+    fileSaveView->setSlotStyle(true);
     fileSaveView->SetOnSelectCallback([this](size_t id) {
         pendingSaveSlot = static_cast<int>(id) - 1;
-        nameInputView->reset(slotNames[pendingSaveSlot]);
+        // Unnamed saves are recorded under their number: don't offer that as a name.
+        const String& cur = slotNames[pendingSaveSlot];
+        nameInputView->reset(cur == String(pendingSaveSlot + 1) ? String("") : cur);
         MEMLNaut::Instance()->disp->ShowDialog(nameInputView);
     });
     MEMLNaut::Instance()->disp->AddView(fileSaveView);
 
-    fileLoadView = std::make_shared<BlockSelectView>("Load Model", TFT_PURPLE, kNumSlots, 43, 78,
-        TFT_WHITE, std::vector<String>{}, TFT_PURPLE, 2 /* fontNum */);
+    fileLoadView = std::make_shared<BlockSelectView>("Load Model", kLoadAccent, kNumSlots, 43, 78,
+        TFT_WHITE, emptySlots, kLoadAccent);
+    fileLoadView->setSlotStyle(true);
     fileLoadView->SetOnSelectCallback([this](size_t id) {
         int slotIdx = static_cast<int>(id) - 1;
         String filename = (slotNames[slotIdx].length() > 0) ? slotNames[slotIdx] : String(id);
@@ -433,7 +553,11 @@ void InterfaceRL<N_OUTPUTS>::setup(size_t n_inputs, size_t n_outputs, bool addMe
         uint32_t save = spin_lock_blocking(mlpActive);
         if (MEMLNaut::Instance()->startSD()) {
             if (this->_load_RL_from_SD(filename)) {
+                synth_.clear();
+                locDirty_ = true;
+                wakeTraining();  // new weights and memories
                 fileLoadView->SetMessage("Loaded " + filename);
+                markCurrentSlot(slotIdx);
             } else {
                 fileLoadView->SetMessage("Failed to load model");
             }
@@ -450,7 +574,9 @@ void InterfaceRL<N_OUTPUTS>::setup(size_t n_inputs, size_t n_outputs, bool addMe
         [this](const String& name) {
             if (pendingSaveSlot >= 0 && pendingSaveSlot < kNumSlots) {
                 String displayName = (name.length() > 0) ? name : String(pendingSaveSlot + 1);
-                slotNames[pendingSaveSlot] = name;
+                // Record unnamed saves under their number too, so the slot shows as used
+                // (the file is named the same way, so loading is unchanged).
+                slotNames[pendingSaveSlot] = displayName;
                 fileSaveView->updateButtonName(static_cast<size_t>(pendingSaveSlot), displayName);
                 fileLoadView->updateButtonName(static_cast<size_t>(pendingSaveSlot), displayName);
                 fileSaveView->SetMessage("Saving as " + displayName);
@@ -459,6 +585,7 @@ void InterfaceRL<N_OUTPUTS>::setup(size_t n_inputs, size_t n_outputs, bool addMe
                     _saveSlotNames();
                     if (this->_save_RL_to_SD(displayName)) {
                         fileSaveView->SetMessage("Saved as " + displayName);
+                        markCurrentSlot(pendingSaveSlot);
                     } else {
                         fileSaveView->SetMessage("Failed to save model");
                     }
@@ -478,8 +605,8 @@ void InterfaceRL<N_OUTPUTS>::setup(size_t n_inputs, size_t n_outputs, bool addMe
 }
 
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::setModeInfo(const String& modeRoot, const String& modeTag) {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::setModeInfo(const String& modeRoot, const String& modeTag) {
     _modeRoot = modeRoot;
     _modeTag = modeTag;
     if (MEMLNaut::Instance()->startSD()) {
@@ -488,8 +615,8 @@ void InterfaceRL<N_OUTPUTS>::setModeInfo(const String& modeRoot, const String& m
     }
 }
 
-template<size_t N_OUTPUTS>
-bool InterfaceRL<N_OUTPUTS>::_save_RL_to_SD(String id) {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+bool InterfaceRL<N_OUTPUTS, N_INPUTS>::_save_RL_to_SD(String id) {
     String dir = "/" + _modeRoot;
     String path = dir + "/" + id + ".bin";
 
@@ -527,13 +654,59 @@ bool InterfaceRL<N_OUTPUTS>::_save_RL_to_SD(String id) {
         }
     }
 
-    bool success = synthMapping.SaveMLPNetworkToFile(file);
+    bool success = synthMapping.SaveMLPNetworkToFile(file) && writeLikes(file);
     file.close();
     return success;
 }
 
-template<size_t N_OUTPUTS>
-bool InterfaceRL<N_OUTPUTS>::_load_RL_from_SD(String id) {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+bool InterfaceRL<N_OUTPUTS, N_INPUTS>::writeLikes(File& file) {
+    MEMLLikesHeader h;
+    memcpy(h.magic, "LIKE", 4);
+    h.input_size = static_cast<uint16_t>(controlInput.size());
+    h.action_size = static_cast<uint16_t>(n_outputs_);
+    uint16_t count = 0;
+    for (size_t i = 0; i < replayMem.size(); i++)
+        if (replayMem.getItem(i).reward > 0.f) count++;
+    h.count = count;
+    if (file.write((const uint8_t*)&h, sizeof(h)) != sizeof(h)) return false;
+    std::vector<float> in(h.input_size), act(h.action_size);
+    for (size_t i = 0; i < replayMem.size(); i++) {
+        const auto& item = replayMem.getItem(i);
+        if (item.reward <= 0.f) continue;
+        for (size_t j = 0; j < in.size(); j++) in[j] = j < item.input.size() ? item.input[j] : 0.f;
+        for (size_t j = 0; j < act.size(); j++) act[j] = j < item.action.size() ? item.action[j] : 0.f;
+        const float r = item.reward;
+        if (file.write((const uint8_t*)&r, sizeof(r)) != sizeof(r)) return false;
+        const size_t inBytes = in.size() * sizeof(float), actBytes = act.size() * sizeof(float);
+        if (file.write((const uint8_t*)in.data(), inBytes) != inBytes) return false;
+        if (file.write((const uint8_t*)act.data(), actBytes) != actBytes) return false;
+    }
+    return true;
+}
+
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+bool InterfaceRL<N_OUTPUTS, N_INPUTS>::readLikes(File& file) {
+    MEMLLikesHeader h;
+    if (file.read((uint8_t*)&h, sizeof(h)) != sizeof(h)) return false;
+    if (memcmp(h.magic, "LIKE", 4) != 0) return false;
+    if (h.input_size != controlInput.size() || h.action_size != n_outputs_) return false;
+    replayMem.clear();
+    for (uint16_t n = 0; n < h.count; n++) {
+        float r;
+        std::vector<float> in(h.input_size), act(h.action_size);
+        const size_t inBytes = in.size() * sizeof(float), actBytes = act.size() * sizeof(float);
+        if (file.read((uint8_t*)&r, sizeof(r)) != sizeof(r)) return false;
+        if (file.read((uint8_t*)in.data(), inBytes) != inBytes) return false;
+        if (file.read((uint8_t*)act.data(), actBytes) != actBytes) return false;
+        trainStatelessRLItem item = {in, act, r};
+        replayMem.add(item, millis());
+    }
+    return true;
+}
+
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+bool InterfaceRL<N_OUTPUTS, N_INPUTS>::_load_RL_from_SD(String id) {
     String path = "/" + _modeRoot + "/" + id + ".bin";
 
     auto file = SD.open(path.c_str(), FILE_READ);
@@ -580,6 +753,12 @@ bool InterfaceRL<N_OUTPUTS>::_load_RL_from_SD(String id) {
     }
 
     bool success = synthMapping.LoadMLPNetworkFromFile(file);
+    if (success) {
+        // The likes the model was trained on (v2+). Without them (v1 files) clear the
+        // memory: otherwise training would pull the loaded net towards unrelated likes.
+        if (header.format_version < 2 || !readLikes(file)) replayMem.clear();
+        dislikeTargets_.clear();
+    }
     file.close();
 
     // With a StaticMLP the architecture is fixed at compile time and
@@ -595,8 +774,8 @@ bool InterfaceRL<N_OUTPUTS>::_load_RL_from_SD(String id) {
     return success;
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::_saveSlotNames() {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::_saveSlotNames() {
     String dir = "/" + _modeRoot;
     if (!SD.exists(dir.c_str())) {
         SD.mkdir(dir.c_str());
@@ -611,8 +790,8 @@ void InterfaceRL<N_OUTPUTS>::_saveSlotNames() {
     file.close();
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::_loadSlotNames() {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::_loadSlotNames() {
     String path = "/" + _modeRoot + "/slots.txt";
     auto file = SD.open(path.c_str(), FILE_READ);
     if (!file) return;
@@ -629,13 +808,24 @@ void InterfaceRL<N_OUTPUTS>::_loadSlotNames() {
 }
 
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::optimise() {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::optimise() {
+
+    // Train on demand: settled -> no training; just an occasional watchdog check.
+    if (trainOnDemand_ && trainSettled_) {
+        const uint32_t t = millis();
+        if (t - lastErrorEvalMs_ < kWatchdogMs) return;
+        lastErrorEvalMs_ = t;
+        const float e = likedError();
+        if (e <= settledError_ * kWakeRatio + kWakeMargin) return;
+        wakeTraining();
+    }
 
     float lossPositive{0.f};
+    bool trainedPositive = false;
     float lossNegative{0.f};
     size_t batchSizeNeg=0;
-    const float effLR = learningRateScaled * joltLRRamp_;
+    const float effLR = learningRateScaled;
 
     //positive batch
     std::vector<size_t> sample = replayMem.sampleIndices(batchSize);
@@ -654,17 +844,16 @@ void InterfaceRL<N_OUTPUTS>::optimise() {
         for (auto &i : sample) {
             if (replayMem.getItem(i).reward > 0) {
                 tsPositive.first.push_back(replayMem.getItem(i).input);
-                tsPositive.second.push_back(replayMem.getItem(i).action);
+                tsPositive.second.push_back(likeTarget(i));
                 batchSizePos++;
                 avgRewardPos += replayMem.getItem(i).reward;
             }
         }
 
-        // Post-jolt recovery: scale the LR by the ramp (0 -> 1 over ~5s after a jolt) so
-        // training eases back in rather than yanking the net off the jolted sound.
         if (batchSizePos > 0){
             avgRewardPos /= static_cast<float>(batchSizePos);
             lossPositive = synthMapping.TrainBatch(tsPositive, effLR * avgRewardPos, 1, batchSize, 0.f, false);
+            trainedPositive = true;
             // Serial.printf("[DEBUG] Loss after positive TrainBatch: %f (inf=%d, nan=%d)\n",
             //              lossPositive, std::isinf(lossPositive), std::isnan(lossPositive));
         }
@@ -765,23 +954,38 @@ void InterfaceRL<N_OUTPUTS>::optimise() {
     replayMem.removeItems(itemsToRemove);
     itemsToRemove.clear();
 
+    // Non-CURRENT dislike modes: bounded, self-retiring targets (none in CURRENT mode).
+    trainDislikeTargets(effLR * kDislikeLR);
+
+    // Jolt: train towards the synthetic points (strongly just after a jolt).
+    const bool synthPending = trainSynth(effLR);
+
+    if (trainOnDemand_) {
+        // Anything time-limited still working keeps training on.
+        const bool pending = batchSizeNeg > 0 || !dislikeTargets_.empty() || synthPending;
+        updateTrainState(trainedPositive, lossPositive, pending);
+    }
+
     if (nnOutputsGraphView) {
-        nnOutputsGraphView->setLoss(lossPositive);
-        nnOutputsGraphView->setMemoryCounts(totalPosCount, replayMem.size() - totalPosCount);
+        // Only when a positive batch actually trained: lossPositive is 0 both for "no
+        // likes to train on" and for a net that already reproduces every liked sound.
+        if (trainedPositive) nnOutputsGraphView->setLoss(lossPositive);
+        nnOutputsGraphView->setMemoryCounts(totalPosCount,
+            replayMem.size() - totalPosCount + dislikeTargets_.size());
     }
 
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::readAnalysisParameters(std::vector<float> params) {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::readAnalysisParameters(std::vector<float> params) {
     for (size_t i = 0; i < params.size() && i < 6; i++) {
         raw_ml_[i] = params[i];
     }
     generateAction(true);
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::assembleInputs() {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::assembleInputs() {
     switch (input_source_) {
         case INPUT_SOURCE::JOYSTICK_3D:       copyAndZero(raw_joystick_, 3); break;
         case INPUT_SOURCE::JOYSTICK_4D:       copyAndZero(raw_joystick_, 4); break;
@@ -797,37 +1001,44 @@ void InterfaceRL<N_OUTPUTS>::assembleInputs() {
     }
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::copyAndZero(const float* src, size_t n) {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::copyAndZero(const float* src, size_t n) {
     // Pad the unused input tail with a non-zero constant instead of 0. A constant input
     // only adds a fixed term (Σ_j W1[i,j]·c) to each hidden unit — i.e. a per-unit layer-1
     // bias shift — which spreads effective biases to mixed signs so units switch both on
     // and off across a single-input sweep (more non-linear, direction-changing mapping).
     // unusedInputDefault_ is recomputed only on input-mode change (see updateUnusedInputDefault).
     size_t i = 0;
-    for (; i < n && i < kMaxNNInputs; ++i) controlInput[i] = src[i];
-    for (; i < kMaxNNInputs; ++i)           controlInput[i] = unusedInputDefault_;
+    for (; i < n && i < N_INPUTS; ++i) controlInput[i] = src[i];
+    for (; i < N_INPUTS; ++i)          controlInput[i] = unusedInputDefault_;
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::saveInputSource() {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::saveInputSource() {
+    if (input_source_ == savedInputSource_) return;  // unchanged: skip the flash write
     FILE* f = fopen(kInputSourceFile, "wb");
-    if (f) { fwrite(&input_source_, sizeof(input_source_), 1, f); fclose(f); }
+    if (f) {
+        fwrite(&input_source_, sizeof(input_source_), 1, f);
+        fclose(f);
+        savedInputSource_ = input_source_;
+    }
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::loadInputSource() {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::loadInputSource() {
     FILE* f = fopen(kInputSourceFile, "rb");
-    if (f) { fread(&input_source_, sizeof(input_source_), 1, f); fclose(f); }
+    if (f) {
+        if (fread(&input_source_, sizeof(input_source_), 1, f) == 1)
+            savedInputSource_ = input_source_;
+        fclose(f);
+    }
     updateUnusedInputDefault();
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::addInputSourceView(bool includeCCSelect) {
-    static const String srcNames[] = {
-        "3D Joystick", "4D Joystick", "Machine Listen",
-        "MIDI Mod Whl", "MIDI 3 CC", "MIDI 8 CC", "Combined"
-    };
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::addInputSourceView(bool includeCCSelect) {
+    configureInputsView();  // ML labels may have been set since bind (by the audio setup)
+
     std::vector<INPUT_SOURCE> available = {
         INPUT_SOURCE::JOYSTICK_3D, INPUT_SOURCE::JOYSTICK_4D,
         INPUT_SOURCE::MIDI_1CC, INPUT_SOURCE::MIDI_3CC, INPUT_SOURCE::MIDI_8CC
@@ -837,8 +1048,23 @@ void InterfaceRL<N_OUTPUTS>::addInputSourceView(bool includeCCSelect) {
         available.push_back(INPUT_SOURCE::COMBINED);
     }
 
-    std::vector<String> opts;
-    for (auto src : available) opts.push_back(srcNames[static_cast<size_t>(src)]);
+    auto describe = [](INPUT_SOURCE src) -> const char* {
+        switch (src) {
+            case INPUT_SOURCE::JOYSTICK_3D:       return "Joystick X, Y and twist";
+            case INPUT_SOURCE::JOYSTICK_4D:       return "Both sticks: X, Y, Z and W";
+            case INPUT_SOURCE::MACHINE_LISTENING: return "Audio input features: pitch, energy, brightness...";
+            case INPUT_SOURCE::MIDI_1CC:          return "MIDI CC1 (mod wheel)";
+            case INPUT_SOURCE::MIDI_3CC:          return "MIDI CC1-3";
+            case INPUT_SOURCE::MIDI_8CC:          return "MIDI CC1-8";
+            case INPUT_SOURCE::COMBINED:          return "Joystick plus audio features";
+            default:                              return "";
+        }
+    };
+    std::vector<String> opts, descs;
+    for (auto src : available) {
+        opts.push_back(inputSourceName(src));
+        descs.push_back(describe(src));
+    }
 
     size_t initialSel = 0;
     auto it = std::find(available.begin(), available.end(), input_source_);
@@ -846,11 +1072,13 @@ void InterfaceRL<N_OUTPUTS>::addInputSourceView(bool includeCCSelect) {
 
     auto view = std::make_shared<RotarySelectView>("Input Source");
     view->setOptions(std::span<String>(opts.data(), opts.size()));
+    view->setDescriptions(std::span<String>(descs.data(), descs.size()));
     view->setSelection(initialSel);
     view->setNewSelectionCallback([this, available](size_t idx) {
         // Runs in the rotary-encoder ISR — defer the actual switch to the main loop.
         if (idx < available.size()) requestInputSource(available[idx]);
     });
+    view->setFocusLostCallback([this]() { pendingSettingsCommit_ = true; });
     MEMLNaut::Instance()->disp->AddView(view);
 
     if (includeCCSelect) {
@@ -865,32 +1093,26 @@ void InterfaceRL<N_OUTPUTS>::addInputSourceView(bool includeCCSelect) {
     }
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::generateAction(bool donthesitate) {
-    if (newInput || donthesitate) {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::generateAction(bool donthesitate) {
+    // While noise is on, regenerate every cycle so it keeps moving even when the input is
+    // still and training has settled (nothing else sets newInput then).
+    if (newInput || donthesitate || noiseAmp_ > 0.f) {
         newInput = false;
 
         assembleInputs();
         if (inputInjectionHook) inputInjectionHook(controlInput);
 
         if (!actionBeingDragged) {
-            synthMapping.GetOutput(controlInput, &mappingOutput);
-            for(size_t i=0; i < mappingOutput.size(); i++) {
-                const float noise = ou_noises[i]->sample();
-                mappingOutput[i] += noise;
-                if (mappingOutput[i] < 0.f) {
-                    mappingOutput[i] = fmod(-mappingOutput[i],1.f); // reflect
-                } else if (mappingOutput[i] > 1.f) {
-                    mappingOutput[i] = 1.f - fmod(mappingOutput[i], 1.f); // reflect at 1.0
-                }
-            }
+            if (noiseAmp_ > 0.f) noisyForward(mappingOutput);  // exploration: weight noise
+            else synthMapping.GetOutput(controlInput, &mappingOutput);
         }
         if (paramTransformHook) paramTransformHook(mappingOutput);
         SendParamsToQueue(mappingOutput);
         action = mappingOutput;
         nnOutputsGraphView->UpdateValues(mappingOutput, resetMinMaxFlag);
         resetMinMaxFlag = false;
-        nnInputsGraphView->UpdateValues(controlInput, false);
+        nnInputsGraphView->UpdateValues(controlInput);
     }
 }
 
@@ -901,8 +1123,8 @@ void InterfaceRL<N_OUTPUTS>::generateAction(bool donthesitate) {
 // }
 
 
-template<size_t N_OUTPUTS>
-bool InterfaceRL<N_OUTPUTS>::removeItemsAtDistance(std::vector<float> &experienceState, const float distThreshold, const float reward) {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+bool InterfaceRL<N_OUTPUTS, N_INPUTS>::removeItemsAtDistance(std::vector<float> &experienceState, const float distThreshold, const float reward) {
     std::vector<size_t> indicesToRemove;
     bool accumulated = false;
     for(size_t i=0; i < replayMem.size(); i++) {
@@ -928,8 +1150,8 @@ bool InterfaceRL<N_OUTPUTS>::removeItemsAtDistance(std::vector<float> &experienc
     return accumulated;
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::decayItemsAtDistance(std::vector<float> &experienceState, const float distThreshold) {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::decayItemsAtDistance(std::vector<float> &experienceState, const float distThreshold) {
     std::vector<size_t> indicesToRemove;
     for(size_t i=0; i < replayMem.size(); i++) {
         trainStatelessRLItem& item = replayMem.getItem(i);   
@@ -947,8 +1169,10 @@ void InterfaceRL<N_OUTPUTS>::decayItemsAtDistance(std::vector<float> &experience
     replayMem.removeItems(indicesToRemove);             
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::storeExperience(float reward, std::vector<float> &experienceState, std::vector<float> &experienceAction ) {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::storeExperience(float reward, std::vector<float> &experienceState, std::vector<float> &experienceAction ) {
+    wakeTraining();  // new data
+    locDirty_ = true;
     trainStatelessRLItem trainItem = {experienceState, experienceAction, reward * rewardScale}; // state is s_t, action is a_t, reward is r_t, nextState is s_t
     bool skip_add = false;
     switch(memoryStoreMode) {
@@ -979,8 +1203,8 @@ void InterfaceRL<N_OUTPUTS>::storeExperience(float reward, std::vector<float> &e
     }
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::saveCCNumbers() {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::saveCCNumbers() {
     if (!ccSelectView) return;
     String path = "/" + _modeRoot + "_cc_numbers.bin";
     FILE* f = fopen(path.c_str(), "wb");
@@ -991,8 +1215,8 @@ void InterfaceRL<N_OUTPUTS>::saveCCNumbers() {
     }
 }
 
-template<size_t N_OUTPUTS>
-void InterfaceRL<N_OUTPUTS>::loadCCNumbers() {
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::loadCCNumbers() {
     if (!ccSelectView) return;
     String path = "/" + _modeRoot + "_cc_numbers.bin";
     FILE* f = fopen(path.c_str(), "rb");
@@ -1011,4 +1235,658 @@ void InterfaceRL<N_OUTPUTS>::loadCCNumbers() {
     std::vector<uint8_t> defaults(nDefault);
     for (size_t i = 0; i < nDefault; i++) defaults[i] = static_cast<uint8_t>(i + 1);
     ccSelectView->setSelectedCCs(defaults);
+}
+
+
+// ─── Dislike modes ──────────────────────────────────────────────────────────────────
+
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::setDislikeMode(DISLIKE_MODES m, bool persist) {
+    static const char* names[] = { "push away", "nudge + blame", "re-roll", "nudge>back>re-roll",
+                                   "borrow from likes" };
+    dislikeMode_ = m;
+    dislikeTargets_.clear();  // targets from the previous mode would keep training
+    escalateStage_ = 0;
+    lastDislikeInput_.clear();
+    if (dislikeModeView) dislikeModeView->setSelection(static_cast<size_t>(m));
+    if (msgView) msgView->post(String("Dislike: ") + names[static_cast<size_t>(m)]);
+    if (persist) saveDislikeMode();
+}
+
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::saveDislikeMode() {
+    if (dislikeMode_ == savedDislikeMode_) return;  // unchanged: skip the flash write
+    FILE* f = fopen(kDislikeModeFile, "wb");
+    if (f) {
+        fwrite(&dislikeMode_, sizeof(dislikeMode_), 1, f);
+        fclose(f);
+        savedDislikeMode_ = dislikeMode_;
+    }
+}
+
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::loadDislikeMode() {
+    FILE* f = fopen(kDislikeModeFile, "rb");
+    if (!f) return;
+    uint8_t v = 0;
+    if (fread(&v, 1, 1, f) == 1 && v < static_cast<uint8_t>(DISLIKE_MODES::COUNT)) {
+        dislikeMode_ = static_cast<DISLIKE_MODES>(v);
+        savedDislikeMode_ = dislikeMode_;
+        if (dislikeModeView) dislikeModeView->setSelection(v);
+    }
+    fclose(f);
+}
+
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+float InterfaceRL<N_OUTPUTS, N_INPUTS>::rmsDistActive(const std::vector<float>& a, const std::vector<float>& b) const {
+    const size_t n = std::min(a.size(), b.size());
+    float sum = 0.f;
+    size_t count = 0;
+    for (size_t j = 0; j < n; j++) {
+        if (!isActiveDim(j)) continue;
+        const float d = a[j] - b[j];
+        sum += d * d;
+        count++;
+    }
+    return count ? sqrtf(sum / static_cast<float>(count)) : 0.f;
+}
+
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+int InterfaceRL<N_OUTPUTS, N_INPUTS>::nearestLikeIndex(const std::vector<float>& input) const {
+    int best = -1;
+    float bestDist = 0.f;
+    for (size_t i = 0; i < replayMem.size(); i++) {
+        const auto& item = replayMem.getItem(i);
+        if (item.reward <= 0.f) continue;
+        const float d = euclideanDistance(item.input, input);
+        if (best < 0 || d < bestDist) { best = static_cast<int>(i); bestDist = d; }
+    }
+    return best;
+}
+
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+std::vector<float> InterfaceRL<N_OUTPUTS, N_INPUTS>::randomUnitDir(size_t n) const {
+    std::vector<float> dir(n, 0.f);
+    for (size_t j = 0; j < n; j++)
+        if (isActiveDim(j)) dir[j] = static_cast<float>(rand()) / RAND_MAX * 2.f - 1.f;
+    return dir;  // normalised by stepTarget
+}
+
+// origin + dir scaled to an RMS displacement of rmsStep over the active dims. A component
+// that would leave [kTargetLo, kTargetHi] is reflected back inside rather than clipped, so a
+// sound already at an edge moves inward instead of piling up against it.
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+std::vector<float> InterfaceRL<N_OUTPUTS, N_INPUTS>::stepTarget(const std::vector<float>& origin,
+                                                                std::vector<float> dir, float rmsStep) const {
+    float len = 0.f;
+    size_t count = 0;
+    for (size_t j = 0; j < dir.size(); j++) {
+        if (!isActiveDim(j)) { dir[j] = 0.f; continue; }
+        len += dir[j] * dir[j];
+        count++;
+    }
+    len = sqrtf(len);
+    if (len < 1e-6f || count == 0) return origin;
+    const float scale = rmsStep * sqrtf(static_cast<float>(count)) / len;
+    std::vector<float> target(origin);
+    for (size_t j = 0; j < target.size() && j < dir.size(); j++) {
+        if (!isActiveDim(j)) continue;
+        float v = origin[j] + dir[j] * scale;
+        if (v > kTargetHi) v = kTargetHi - (v - kTargetHi);
+        if (v < kTargetLo) v = kTargetLo + (kTargetLo - v);
+        target[j] = std::clamp(v, kTargetLo, kTargetHi);
+    }
+    return target;
+}
+
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::addDislikeTarget(DislikeTarget&& t) {
+    wakeTraining();
+    // A new 'no' here supersedes older ones here, so successive presses don't fight.
+    for (size_t i = dislikeTargets_.size(); i-- > 0;) {
+        if (euclideanDistance(dislikeTargets_[i].input, t.input) < kDislikeInputRadius)
+            dislikeTargets_.erase(dislikeTargets_.begin() + i);
+    }
+    if (dislikeTargets_.size() >= kMaxDislikeTargets) dislikeTargets_.erase(dislikeTargets_.begin());
+    dislikeTargets_.push_back(std::move(t));
+}
+
+// Likes at this input whose sound is (nearly) the one just disliked: the player has
+// changed their mind about them, so they go. Likes of a different sound here are kept —
+// they're what the nudge/retreat steers towards.
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::removeEndorsingLikes() {
+    if (focusActive()) return;  // a focused 'no' edits just those dims; keep the like
+    std::vector<size_t> idx;
+    for (size_t i = 0; i < replayMem.size(); i++) {
+        const auto& item = replayMem.getItem(i);
+        if (item.reward > 0.f
+            && euclideanDistance(item.input, controlInput) < kDislikeInputRadius
+            && rmsDistActive(item.action, action) < kRepelMargin)
+            idx.push_back(i);
+    }
+    if (!idx.empty()) {
+        replayMem.removeItems(idx);
+        if (msgView) msgView->post("Removing nearby like");
+    }
+}
+
+// A: move a bounded distance away. With blame (E), the direction reverts the params that
+// differ most from the nearest like (weighted by the squared difference); without it, the
+// direction is away from the centroid of the nearest likes. No likes -> a random direction,
+// fixed for this press.
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::dislikeNudge(bool blame) {
+    removeEndorsingLikes();
+    const size_t n = action.size();
+    std::vector<float> dir(n, 0.f);
+    bool haveDir = false;
+    String msg = "No: nudging away";
+
+    if (blame) {
+        const int li = nearestLikeIndex(controlInput);
+        if (li >= 0) {
+            const auto& ref = replayMem.getItem(static_cast<size_t>(li)).action;
+            for (size_t j = 0; j < n && j < ref.size(); j++) {
+                const float diff = ref[j] - action[j];
+                dir[j] = diff * fabsf(diff);
+            }
+            haveDir = true;
+            msg = "No: reverting what changed";
+        }
+    } else {
+        struct Cand { float dist; size_t idx; };
+        std::vector<Cand> cands;
+        for (size_t i = 0; i < replayMem.size(); i++) {
+            const auto& item = replayMem.getItem(i);
+            if (item.reward > 0.f) cands.push_back({euclideanDistance(item.input, controlInput), i});
+        }
+        std::sort(cands.begin(), cands.end(), [](const Cand& a, const Cand& b) { return a.dist < b.dist; });
+        const size_t k = std::min(cands.size(), kCentroidK);
+        if (k > 0) {
+            std::vector<float> centroid(n, 0.f);
+            for (size_t c = 0; c < k; c++) {
+                const auto& a = replayMem.getItem(cands[c].idx).action;
+                for (size_t j = 0; j < n && j < a.size(); j++) centroid[j] += a[j];
+            }
+            for (size_t j = 0; j < n; j++) dir[j] = action[j] - centroid[j] / static_cast<float>(k);
+            haveDir = true;
+        }
+    }
+
+    float len = 0.f;
+    for (size_t j = 0; j < n; j++) if (isActiveDim(j)) len += dir[j] * dir[j];
+    if (!haveDir || len < 1e-8f) dir = randomUnitDir(n);
+
+    addDislikeTarget({controlInput, action, stepTarget(action, std::move(dir), kRepelStep),
+                      millis(), DislikeTarget::Kind::REPEL});
+    if (msgView) msgView->post(msg);
+}
+
+// B: go back to the nearest liked sound (slightly jittered so it isn't an exact replay).
+// Falls through to a re-roll if there's nothing to go back to.
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::dislikeRetreat() {
+    removeEndorsingLikes();
+    const int li = nearestLikeIndex(controlInput);
+    if (li < 0) { dislikeReroll(); return; }
+    const auto& ref = replayMem.getItem(static_cast<size_t>(li)).action;
+    std::vector<float> target(action);
+    for (size_t j = 0; j < target.size() && j < ref.size(); j++) {
+        if (!isActiveDim(j)) continue;
+        const float jitter = (static_cast<float>(rand()) / RAND_MAX * 2.f - 1.f) * kRetreatJitter;
+        target[j] = std::clamp(ref[j] + jitter, kTargetLo, kTargetHi);
+    }
+    if (rmsDistActive(target, action) < kRepelMargin) { dislikeReroll(); return; }  // already there
+    addDislikeTarget({controlInput, action, std::move(target), millis(), DislikeTarget::Kind::SEEK});
+    if (msgView) msgView->post("No again: going back");
+}
+
+// C: a fresh sound for this input — half the time near a random liked sound, otherwise
+// anywhere in the middle of the range — kept at least kRerollMinDist from the disliked one.
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::dislikeReroll() {
+    removeEndorsingLikes();
+    std::vector<size_t> likes;
+    for (size_t i = 0; i < replayMem.size(); i++)
+        if (replayMem.getItem(i).reward > 0.f) likes.push_back(i);
+    auto uni = []() { return static_cast<float>(rand()) / RAND_MAX; };
+
+    std::vector<float> best;
+    float bestDist = -1.f;
+    for (int attempt = 0; attempt < 8 && bestDist < kRerollMinDist; attempt++) {
+        std::vector<float> cand(action);
+        const bool nearLike = !likes.empty() && (rand() & 1);
+        const std::vector<float>* base = nearLike
+            ? &replayMem.getItem(likes[rand() % likes.size()]).action : nullptr;
+        for (size_t j = 0; j < cand.size(); j++) {
+            if (!isActiveDim(j)) continue;
+            float v;
+            if (base && j < base->size()) {
+                const float g = (uni() + uni() + uni() - 1.5f) * 2.f;  // ~N(0,1)
+                v = (*base)[j] + g * kRerollSpread;
+            } else {
+                v = 0.15f + 0.7f * uni();
+            }
+            cand[j] = std::clamp(v, kTargetLo, kTargetHi);
+        }
+        const float d = rmsDistActive(cand, action);
+        if (d > bestDist) { bestDist = d; best = std::move(cand); }
+    }
+    addDislikeTarget({controlInput, action, std::move(best), millis(), DislikeTarget::Kind::SEEK});
+    if (msgView) msgView->post("No: trying something new");
+}
+
+// BORROW: the sound here moves towards the liked sounds nearby. Each active param either
+// keeps its current value (a random kBorrowKeepFraction of them, so the sound retains some
+// arbitrary character of its own) or is copied from one nearby like, chosen per param with
+// probability weighted by how close that like's input is. Copying per param from different
+// likes recombines their qualities rather than averaging them into a blur. Every target
+// value already exists in a liked sound or the current one, so it can't run to the edges,
+// and each press draws a fresh mix. No likes -> re-roll.
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::dislikeBorrow() {
+    removeEndorsingLikes();
+    std::vector<size_t> likes;
+    std::vector<float> w;
+    float minD2 = 0.f;
+    for (size_t i = 0; i < replayMem.size(); i++) {
+        const auto& item = replayMem.getItem(i);
+        if (item.reward <= 0.f) continue;
+        const float d = euclideanDistance(item.input, controlInput);
+        const float d2 = d * d;
+        if (likes.empty() || d2 < minD2) minD2 = d2;
+        likes.push_back(i);
+        w.push_back(d2);
+    }
+    if (likes.empty()) { dislikeReroll(); return; }
+    // Gaussian kernel on input distance, relative to the nearest like so it can't underflow
+    // when every like is far away (then the nearest ones still dominate).
+    const float inv2s2 = 1.f / (kBorrowInputSigma * kBorrowInputSigma);
+    float wSum = 0.f;
+    for (auto& x : w) { x = expf(-(x - minD2) * inv2s2); wSum += x; }
+    auto uni = []() { return static_cast<float>(rand()) / RAND_MAX; };
+    auto pickLike = [&]() -> const std::vector<float>& {
+        float r = uni() * wSum;
+        for (size_t k = 0; k < likes.size(); k++) {
+            r -= w[k];
+            if (r <= 0.f) return replayMem.getItem(likes[k]).action;
+        }
+        return replayMem.getItem(likes.back()).action;
+    };
+
+    // Keep fewer of the sound's own params on each retry until it has moved far enough.
+    std::vector<float> best;
+    float bestDist = -1.f;
+    for (float keep = kBorrowKeepFraction; keep >= -0.01f && bestDist < kRepelMargin; keep -= 0.1f) {
+        std::vector<float> cand(action);
+        for (size_t j = 0; j < cand.size(); j++) {
+            if (!isActiveDim(j) || uni() < keep) continue;
+            const auto& donor = pickLike();
+            if (j >= donor.size()) continue;
+            const float jitter = (uni() * 2.f - 1.f) * kBorrowJitter;
+            cand[j] = std::clamp(donor[j] + jitter, kTargetLo, kTargetHi);
+        }
+        const float d = rmsDistActive(cand, action);
+        if (d > bestDist) { bestDist = d; best = std::move(cand); }
+    }
+    // The nearby likes all sound like this one: borrowing can't move it, so try something new.
+    if (bestDist < kRepelMargin) { dislikeReroll(); return; }
+    addDislikeTarget({controlInput, action, std::move(best), millis(), DislikeTarget::Kind::SEEK});
+    if (msgView) msgView->post("No: borrowing from likes");
+}
+
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::handleDislike() {
+    switch (dislikeMode_) {
+        case DISLIKE_MODES::BOUNDED_BLAME: dislikeNudge(true); break;
+        case DISLIKE_MODES::REROLL:        dislikeReroll();    break;
+        case DISLIKE_MODES::BORROW:        dislikeBorrow();    break;
+        case DISLIKE_MODES::ESCALATE: {
+            const uint32_t now = millis();
+            const bool continuing = lastDislikeInput_.size() == controlInput.size()
+                && (now - lastDislikeMs_) < kEscalateWindowMs
+                && euclideanDistance(lastDislikeInput_, controlInput) < kEscalateInputRadius;
+            escalateStage_ = continuing ? std::min<size_t>(escalateStage_ + 1, 2) : 0;
+            lastDislikeMs_ = now;
+            lastDislikeInput_ = controlInput;
+            if (escalateStage_ == 0)      dislikeNudge(false);
+            else if (escalateStage_ == 1) dislikeRetreat();
+            else                          dislikeReroll();
+            break;
+        }
+        default: break;
+    }
+}
+
+// Train every live target toward its goal, retiring the ones that have got there (or
+// outlived kDislikeTargetLifetimeMs). Checks the network's own (noise-free) output at
+// the target's input.
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::trainDislikeTargets(float lr) {
+    if (dislikeTargets_.empty()) return;
+    const uint32_t now = millis();
+    training_pair_t batch;
+    std::vector<float> y;
+    for (size_t i = dislikeTargets_.size(); i-- > 0;) {
+        const auto& t = dislikeTargets_[i];
+        bool done = (now - t.t0) >= kDislikeTargetLifetimeMs;
+        if (!done) {
+            synthMapping.GetOutput(t.input, &y);
+            const float toTarget = rmsDistActive(y, t.target);
+            done = toTarget < kSeekEpsilon
+                || (t.kind == DislikeTarget::Kind::REPEL && rmsDistActive(y, t.origin) >= kRepelMargin);
+        }
+        if (done) {
+            dislikeTargets_.erase(dislikeTargets_.begin() + i);
+            continue;
+        }
+        batch.first.push_back(t.input);
+        batch.second.push_back(t.target);
+    }
+    if (!batch.first.empty())
+        synthMapping.TrainBatch(batch, lr, 1, batch.first.size(), 0.f, false);
+}
+
+
+// ─── NN Inputs screen ───────────────────────────────────────────────────────────────
+
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::configureInputsView() {
+    if (!nnInputsGraphView) return;
+    static const char* joy[] = {"X", "Y", "Z", "W"};
+    std::vector<String> labels;
+    auto addJoy  = [&](size_t n) { for (size_t i = 0; i < n; i++) labels.push_back(joy[i]); };
+    auto addMidi = [&](size_t n) { for (size_t i = 0; i < n; i++) labels.push_back("CC" + String(i + 1)); };
+    auto addML   = [&]() { for (size_t i = 0; i < 6; i++) labels.push_back(i < mlLabels_.size() ? mlLabels_[i] : String("")); };
+    bool map = false;
+    switch (input_source_) {
+        case INPUT_SOURCE::JOYSTICK_3D:       addJoy(3); map = true; break;
+        case INPUT_SOURCE::JOYSTICK_4D:       addJoy(4); map = true; break;
+        case INPUT_SOURCE::MACHINE_LISTENING: addML(); break;
+        case INPUT_SOURCE::MIDI_1CC:          addMidi(1); break;
+        case INPUT_SOURCE::MIDI_3CC:          addMidi(3); break;
+        case INPUT_SOURCE::MIDI_8CC:          addMidi(8); break;
+        case INPUT_SOURCE::COMBINED:          addJoy(4); addML(); break;
+        default: break;
+    }
+    labels.resize(std::min(labels.size(), getActiveInputCount()));
+    nnInputsGraphView->setSource(inputSourceName(input_source_), labels, map);
+}
+
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::pushMemoryPointsToInputsView() {
+    if (!nnInputsGraphView || !nnInputsGraphView->IsVisible() || !nnInputsGraphView->isMapMode())
+        return;
+    auto q = [](float v) {
+        v = v < 0.f ? 0.f : (v > 1.f ? 1.f : v);
+        return static_cast<uint8_t>(v * 255.f + 0.5f);
+    };
+    std::vector<InputsView::MemPoint> pts;
+    pts.reserve(replayMem.size());
+    for (size_t i = 0; i < replayMem.size(); i++) {
+        const auto& item = replayMem.getItem(i);
+        if (item.input.size() < 2) continue;
+        const bool has4 = item.input.size() >= 4;
+        pts.push_back({q(item.input[0]), q(item.input[1]),
+                       has4 ? q(item.input[2]) : uint8_t(0), has4 ? q(item.input[3]) : uint8_t(0),
+                       item.reward > 0.f});
+    }
+    for (const auto& sp : synth_) {
+        if (sp.input.size() < 4) continue;
+        InputsView::MemPoint mp{q(sp.input[0]), q(sp.input[1]), q(sp.input[2]), q(sp.input[3]), true};
+        mp.synth = true;
+        pts.push_back(mp);
+    }
+    nnInputsGraphView->setMemoryPoints(pts);
+}
+
+
+// ─── Jolt ──────────────────────────────────────────────────────────────────────────
+
+// Plant a fresh set of kSynthPoints synthetic points (replacing the last). Inputs: random
+// in the playable range, clear of the liked inputs and of each other (a random acceptable
+// candidate, not the most extreme; the furthest if none is clear). Targets: each focused
+// output dim goes to the opposite half of its range from what the net plays there now,
+// so every jolted sound is a big change. Unfocused dims keep the current output.
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::seedJolt() {
+    synth_.clear();
+    auto rnd = []() { return static_cast<float>(rand()) / static_cast<float>(RAND_MAX); };
+    const size_t nAct = std::min(getActiveInputCount(), controlInput.size());
+    const float clearance = kSynthClearance * sqrtf(static_cast<float>(std::max<size_t>(nAct, 1)));
+    std::vector<float> cand(controlInput.size(), unusedInputDefault_);
+    // Under focus, the first few points sit at/around the current input (re-roll the
+    // focused params here); the rest spread out as usual.
+    const int localSeeds = focusActive() ? kFocusLocalSeeds : 0;
+    for (int p = 0; p < kSynthPoints; p++) {
+        std::vector<float> best;
+        float bestDist = -1.f;
+        bool found = p < localSeeds;
+        if (found) {
+            best = controlInput;
+            if (p > 0)
+                for (size_t i = 0; i < nAct; i++)
+                    best[i] = std::clamp(best[i] + (rnd() * 2.f - 1.f) * kFocusSeedJitter, 0.f, 1.f);
+        }
+        for (int c = 0; c < kSynthCandidates && !found; c++) {
+            for (size_t i = 0; i < nAct; i++) cand[i] = kSynthInputLo + rnd() * (kSynthInputHi - kSynthInputLo);
+            float dLike = 1e9f, dSynth = 1e9f;
+            for (size_t i = 0; i < replayMem.size(); i++) {
+                const auto& item = replayMem.getItem(i);
+                if (item.reward > 0.f) dLike = std::min(dLike, euclideanDistance(item.input, cand));
+            }
+            for (const auto& sp : synth_) dSynth = std::min(dSynth, euclideanDistance(sp.input, cand));
+            const float d = std::min(dLike, dSynth * 2.f);
+            if (dLike >= clearance && dSynth >= clearance * 0.5f) found = true;  // take it
+            if (found || d > bestDist) { bestDist = d; best = cand; }
+        }
+        SynthPoint sp;
+        sp.input = best;
+        rollSynthTarget(sp);
+        synth_.push_back(std::move(sp));
+    }
+    synthSeedMs_ = millis();
+    synthSeedError_ = synthError();
+    synthBurst_ = true;
+    wakeTraining();
+    if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("jolt");
+}
+
+// Each focused output dim goes to the opposite half of its range from what the net plays
+// at sp.input now (a big change); unfocused dims keep the current output.
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::rollSynthTarget(SynthPoint& sp) {
+    auto rnd = []() { return static_cast<float>(rand()) / static_cast<float>(RAND_MAX); };
+    evalOut_.resize(N_OUTPUTS);
+    synthMapping.GetOutput(sp.input, &evalOut_);
+    sp.target = evalOut_;
+    const float mid = 0.5f * (kSynthTargetLo + kSynthTargetHi);
+    for (size_t j = 0; j < sp.target.size(); j++) {
+        if (!isActiveDim(j)) continue;
+        sp.target[j] = (sp.target[j] < mid) ? mid + 0.05f + rnd() * (kSynthTargetHi - mid - 0.05f)
+                                            : kSynthTargetLo + rnd() * (mid - 0.05f - kSynthTargetLo);
+    }
+}
+
+// Dislike near a jolt point: give that point a new sound and restart the burst so it
+// lands. Returns false if no jolt point is near.
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+bool InterfaceRL<N_OUTPUTS, N_INPUTS>::rerollNearbySynth() {
+    if (synth_.empty()) return false;
+    const float r = kSynthDislikeRadius * sqrtf(static_cast<float>(std::max<size_t>(1, getActiveInputCount())));
+    int nearest = -1;
+    float best = r;
+    for (size_t i = 0; i < synth_.size(); i++) {
+        const float d = euclideanDistance(synth_[i].input, controlInput);
+        if (d < best) { best = d; nearest = static_cast<int>(i); }
+    }
+    if (nearest < 0) return false;
+    rollSynthTarget(synth_[nearest]);
+    synthSeedMs_ = millis();
+    synthSeedError_ = synthError();
+    synthBurst_ = true;
+    wakeTraining();
+    return true;
+}
+
+// Dislike while exploring: each noise coefficient jumps to the other side of zero, at
+// least kNoiseDislikeJump away, so the mapping moves somewhere audibly different.
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::jumpNoise() {
+    for (auto& ou : exploreOU_) {
+        const float x = ou.get();
+        ou.set((x >= 0.f ? -1.f : 1.f) * (fabsf(x) + kNoiseDislikeJump));
+    }
+}
+
+// One training step towards the synthetic points: a burst at kSynthBurstLR after a
+// jolt, until the synthetic error is down to kSynthBurstDone of where it began (or
+// kSynthBurstMaxMs), then kSynthHoldLR as anchors. Returns true during the burst.
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+bool InterfaceRL<N_OUTPUTS, N_INPUTS>::trainSynth(float lr) {
+    if (synth_.empty()) return false;
+    if (synthBurst_) {
+        const uint32_t age = millis() - synthSeedMs_;
+        // Check progress a few times a second (a full pass over 8 points).
+        static uint32_t lastCheck = 0;
+        if (millis() - lastCheck >= 200) {
+            lastCheck = millis();
+            const float e = synthError();
+            if (e <= synthSeedError_ * kSynthBurstDone || age >= kSynthBurstMaxMs) {
+                synthBurst_ = false;
+            }
+        }
+    }
+    training_pair_t ts;
+    ts.first.reserve(synth_.size());
+    ts.second.reserve(synth_.size());
+    for (const auto& sp : synth_) {
+        ts.first.push_back(sp.input);
+        ts.second.push_back(sp.target);
+    }
+    synthMapping.TrainBatch(ts, lr * (synthBurst_ ? kSynthBurstLR : kSynthHoldLR), 1, synth_.size(), 0.f, false);
+    return synthBurst_;
+}
+
+// Mean MSE between the net and the synthetic targets (no update).
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+float InterfaceRL<N_OUTPUTS, N_INPUTS>::synthError() {
+    float sum = 0.f;
+    evalOut_.resize(N_OUTPUTS);
+    for (const auto& sp : synth_) {
+        synthMapping.GetOutput(sp.input, &evalOut_);
+        float se = 0.f;
+        for (size_t j = 0; j < sp.target.size(); j++) { const float d = sp.target[j] - evalOut_[j]; se += d * d; }
+        sum += se / sp.target.size();
+    }
+    return synth_.empty() ? 0.f : sum / synth_.size();
+}
+
+
+// ─── Exploration noise (weight-space) ───────────────────────────────────────────────
+
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::initExploreNoise() {
+    exploreOU_.clear();
+    exploreOU_.reserve(kWeightDirs);
+    for (size_t i = 0; i < kWeightDirs; i++) {
+        // OU(theta, mu, sigma, dt, x0): correlation time ~1/(theta*dt) calls (~60s at
+        // 200Hz), so the mapping morphs in long smooth sweeps. Unit std, scaled where used.
+        exploreOU_.emplace_back(0.02f, 0.0f, 0.0f, kNoiseDt, 0.0f);
+        exploreOU_.back().setStationaryStd(1.f);
+    }
+    // Fixed random +-1 weight directions (a simple LCG, so they're the same every boot).
+    uint32_t r = 0x12345678u;
+    for (size_t k = 0; k < kWeightDirs; k++)
+        for (size_t o = 0; o < N_OUTPUTS; o++)
+            for (size_t h = 0; h < kHidden; h++) {
+                r = r * 1664525u + 1013904223u;
+                weightDirs_[k][o][h] = (r >> 31) ? 1 : -1;
+            }
+}
+
+// Noise scale at input x: kNearFloor right on a liked input, rising to 1 at kNearRadius.
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+float InterfaceRL<N_OUTPUTS, N_INPUTS>::noiseLocality(const std::vector<float>& x) {
+    if (focusActive()) return 1.f;  // focus protects the rest: explore right here
+    if (!locDirty_ && locMemSize_ == replayMem.size() && locInput_ == x) return locValue_;
+    locDirty_ = false;
+    locMemSize_ = replayMem.size();
+    locInput_ = x;
+    locValue_ = 1.f;
+    const size_t nAct = std::max<size_t>(1, getActiveInputCount());
+    const float radius = kNearRadius * sqrtf(static_cast<float>(nAct));
+    float d = 1e9f;
+    for (size_t i = 0; i < replayMem.size(); i++) {
+        const auto& item = replayMem.getItem(i);
+        if (item.reward > 0.f) d = std::min(d, euclideanDistance(item.input, x));
+    }
+    if (d < radius) locValue_ = kNearFloor + (1.f - kNearFloor) * (d / radius);
+    return locValue_;
+}
+
+// dW = sum_k c_k D_k, with each drift stepped once per control cycle since the last
+// rebuild (so the morphing speed doesn't depend on the rebuild rate).
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::rebuildNoiseW() {
+    const uint32_t t = millis();
+    uint32_t steps = noiseWValid_ ? (t - noiseWMs_) / kControlPeriodMs : 1;
+    steps = std::min<uint32_t>(std::max<uint32_t>(steps, 1), 100);
+    noiseWMs_ = t;
+    noiseWValid_ = true;
+    float c[kWeightDirs];
+    for (size_t k = 0; k < kWeightDirs; k++) {
+        for (uint32_t i = 1; i < steps; i++) exploreOU_[k].sample();
+        c[k] = exploreOU_[k].sample();
+    }
+    for (size_t o = 0; o < N_OUTPUTS; o++)
+        for (size_t j = 0; j < kHidden; j++) {
+            float w = 0.f;
+            for (size_t k = 0; k < kWeightDirs; k++) w += c[k] * weightDirs_[k][o][j];
+            noiseW_[o][j] = w;
+        }
+}
+
+// The net's forward pass done by hand (same maths as StaticMLP: ReLU, ReLU, hard
+// sigmoid) with the last layer's weights perturbed: dW = sum_k c_k D_k, so the output
+// pre-activation shifts by dz_o = sum_k c_k (D_k[o] . h2). Normalised by |h2| and sqrt(K)
+// to ~unit std per output, then x6 (the hard sigmoid's slope is 1/6) so each output moves
+// by ~noiseAmp_ (scaled down near the likes).
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::noisyForward(std::vector<float>& out) {
+    const float amp = noiseAmp_ * noiseLocality(controlInput);
+    const auto& L0 = synthMapping.template layer<0>();
+    const auto& L1 = synthMapping.template layer<1>();
+    const auto& L2 = synthMapping.template layer<2>();
+
+    float h1[kHidden], h2[kHidden];
+    for (size_t j = 0; j < kHidden; j++) {
+        float z = L0.bias(j);
+        for (size_t i = 0; i < N_INPUTS && i < controlInput.size(); i++) z += L0.weight(j, i) * controlInput[i];
+        h1[j] = z > 0.f ? z : 0.f;
+    }
+    float hn = 0.f;
+    for (size_t j = 0; j < kHidden; j++) {
+        float z = L1.bias(j);
+        for (size_t i = 0; i < kHidden; i++) z += L1.weight(j, i) * h1[i];
+        h2[j] = z > 0.f ? z : 0.f;
+        hn += h2[j] * h2[j];
+    }
+    hn = sqrtf(hn);
+    const float wScale = hn > 1e-6f ? 6.f * amp / (hn * sqrtf(static_cast<float>(kWeightDirs))) : 0.f;
+    if (!noiseWValid_ || millis() - noiseWMs_ >= kNoiseRebuildMs) rebuildNoiseW();
+
+    out.resize(N_OUTPUTS);
+    for (size_t o = 0; o < N_OUTPUTS; o++) {
+        float z = L2.bias(o);
+        float dz = 0.f;
+        const float* nw = noiseW_[o];
+        for (size_t i = 0; i < kHidden; i++) {
+            z += L2.weight(o, i) * h2[i];
+            dz += nw[i] * h2[i];
+        }
+        z += dz * wScale;
+        out[o] = z <= -3.f ? 0.f : (z >= 3.f ? 1.f : (z + 3.f) / 6.f);
+    }
 }

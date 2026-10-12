@@ -5,6 +5,15 @@
 #include "maximilian.h"
 #include "../audio/AudioDriver.hpp"
 
+// One scratch cycle shared by every GrainDelayI16 fill function, whatever the template
+// arguments. Each fill used to have its own static 8KB array, so every instantiation cost
+// 9 x 8KB of RAM. The fills copy out of it synchronously (control loop, never the audio
+// path), so sharing is safe.
+inline int16_t* grainCycleScratch() {
+    static int16_t cycle[4096];
+    return cycle;
+}
+
 template<size_t BUFSIZE = 16384, size_t NGRAINS = 4>
 class GrainDelayI16 {
     static_assert((BUFSIZE & (BUFSIZE - 1)) == 0, "BUFSIZE must be a power of 2");
@@ -101,7 +110,7 @@ public:
 
     void fillWithSaw(float freqHz) {
         const size_t period = periodSamples(freqHz);
-        static int16_t cycle[kMaxPeriod];
+        int16_t* cycle = grainCycleScratch();
         const float inv_period = static_cast<float>(period);
         const float inc = 1.f / inv_period;
         float phase = 0.f;
@@ -118,7 +127,7 @@ public:
 
     void fillWithSquare(float freqHz, float duty = 0.5f) {
         const size_t period = periodSamples(freqHz);
-        static int16_t cycle[kMaxPeriod];
+        int16_t* cycle = grainCycleScratch();
         const float inv_period = static_cast<float>(period);
         const float inc = 1.f / inv_period;
         float phase = 0.f;
@@ -138,7 +147,7 @@ public:
 
     void fillWithTriangle(float freqHz) {
         const size_t period = periodSamples(freqHz);
-        static int16_t cycle[kMaxPeriod];
+        int16_t* cycle = grainCycleScratch();
         const float inv_period = static_cast<float>(period);
         const float inc = 1.f / inv_period;
         float phase = 0.f;
@@ -156,7 +165,7 @@ public:
 
     void fillWithFallingSaw(float freqHz) {
         const size_t period = periodSamples(freqHz);
-        static int16_t cycle[kMaxPeriod];
+        int16_t* cycle = grainCycleScratch();
         const float inv_period = static_cast<float>(period);
         const float inc = 1.f / inv_period;
         float phase = 0.f;
@@ -173,7 +182,7 @@ public:
 
     void fillWithSine(float freqHz) {
         const size_t period = periodSamples(freqHz);
-        static int16_t cycle[kMaxPeriod];
+        int16_t* cycle = grainCycleScratch();
         const float phase_inc = 2.f * static_cast<float>(M_PI) / static_cast<float>(period);
         float phase = 0.f;
         for (size_t i = 0; i < period; ++i) {
@@ -188,7 +197,7 @@ public:
     // PolyBLAMP at both zero crossings (both are positive slope jumps).
     void fillWithHalfRectSine(float freqHz) {
         const size_t period = periodSamples(freqHz);
-        static int16_t cycle[kMaxPeriod];
+        int16_t* cycle = grainCycleScratch();
         const float inv_period = static_cast<float>(period);
         const float inc = 1.f / inv_period;
         float phase = 0.f;
@@ -211,7 +220,7 @@ public:
     void fillWithTrapezoid(float freqHz, float rise = 0.2f) {
         rise = fmaxf(0.01f, fminf(0.49f, rise));
         const size_t period = periodSamples(freqHz);
-        static int16_t cycle[kMaxPeriod];
+        int16_t* cycle = grainCycleScratch();
         const float inv_period = static_cast<float>(period);
         const float inc = 1.f / inv_period;
         float phase = 0.f;
@@ -244,7 +253,7 @@ public:
     void fillWithAsymTriangle(float freqHz, float peak = 0.5f) {
         peak = fmaxf(0.01f, fminf(0.99f, peak));
         const size_t period = periodSamples(freqHz);
-        static int16_t cycle[kMaxPeriod];
+        int16_t* cycle = grainCycleScratch();
         const float inv_period = static_cast<float>(period);
         const float inc = 1.f / inv_period;
         float phase = 0.f;
@@ -268,7 +277,7 @@ public:
     void fillWithStaircase(float freqHz, size_t steps = 8) {
         steps = std::max(size_t(2), std::min(steps, size_t(32)));
         const size_t period = periodSamples(freqHz);
-        static int16_t cycle[kMaxPeriod];
+        int16_t* cycle = grainCycleScratch();
         const float inv_period = static_cast<float>(period);
         const float inc = 1.f / inv_period;
         const float fsteps = static_cast<float>(steps);

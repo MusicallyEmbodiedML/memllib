@@ -40,7 +40,7 @@ public:
             for (int c = 0; c < 5; c++) {
                 int idx = r * 5 + c;
                 String label = String(kChars[idx]);
-                auto btn = std::make_shared<ButtonView>(label, static_cast<size_t>(idx + 1), TFT_DARKGREY, TFT_WHITE, 2);
+                auto btn = std::make_shared<ButtonView>(label, static_cast<size_t>(idx + 1), 0x7BEF /* grey */, TFT_WHITE, 2);
                 rect bounds = {
                     area.x + 2 + c * (kBtnW + kColGap),
                     area.y + kRowTop + r * (kBtnH + kRowGap),
@@ -76,7 +76,7 @@ public:
             if (onCancel) onCancel();
         });
 
-        auto okBtn = std::make_shared<ButtonView>("OK", 23, TFT_DARKGREEN, TFT_WHITE, 2);
+        auto okBtn = std::make_shared<ButtonView>("OK", 23, TFT_GREEN, TFT_WHITE, 2);
         AddSubView(okBtn, {area.x + 228, area.y + kCtrlY, 90, kCtrlH});
         okBtn->SetReleaseCallback([this](size_t) {
             if (onConfirm) onConfirm(currentName);
