@@ -487,7 +487,7 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::setup(size_t n_inputs, size_t n_outputs, 
     nnInputsGraphView = std::make_shared<InputsView>("NN Inputs", n_inputs);
     MEMLNaut::Instance()->disp->AddView(nnInputsGraphView);
 
-    {
+    if (kShowDislikeModeView) {
         static String dislikeModeNames[] = {
             "Current (push away)", "Nudge + blame", "Re-roll", "Nudge>Back>Re-roll",
             "Borrow from likes"
@@ -1255,6 +1255,7 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::setDislikeMode(DISLIKE_MODES m, bool pers
 
 template<size_t N_OUTPUTS, size_t N_INPUTS>
 void InterfaceRL<N_OUTPUTS, N_INPUTS>::saveDislikeMode() {
+    if (!kShowDislikeModeView) return;  // mode is fixed: nothing to save
     if (dislikeMode_ == savedDislikeMode_) return;  // unchanged: skip the flash write
     FILE* f = fopen(kDislikeModeFile, "wb");
     if (f) {
@@ -1266,6 +1267,7 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::saveDislikeMode() {
 
 template<size_t N_OUTPUTS, size_t N_INPUTS>
 void InterfaceRL<N_OUTPUTS, N_INPUTS>::loadDislikeMode() {
+    if (!kShowDislikeModeView) return;  // mode is fixed: ignore any saved choice
     FILE* f = fopen(kDislikeModeFile, "rb");
     if (!f) return;
     uint8_t v = 0;

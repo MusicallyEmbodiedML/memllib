@@ -456,7 +456,11 @@ private:
                     // SEEK:  done once the output is within kSeekEpsilon of target
     };
     std::vector<DislikeTarget> dislikeTargets_;
-    DISLIKE_MODES dislikeMode_ = DISLIKE_MODES::CURRENT;
+    // The dislike mode is fixed to ESCALATE (nudge > back > re-roll) and its selector screen
+    // is hidden. Set kShowDislikeModeView = true to bring back the "Dislike Mode" screen
+    // (and the saved choice in kDislikeModeFile); all the other modes still work.
+    static constexpr bool kShowDislikeModeView = false;
+    DISLIKE_MODES dislikeMode_ = DISLIKE_MODES::ESCALATE;
     volatile bool pendingDislikeModeChange_{false};
     DISLIKE_MODES pendingDislikeMode_{DISLIKE_MODES::CURRENT};
     static constexpr const char* kDislikeModeFile = "/dislike_mode.bin";
