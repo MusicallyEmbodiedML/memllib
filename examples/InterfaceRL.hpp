@@ -556,7 +556,7 @@ private:
 
     // --- Jolt (B2): synthetic pseudo-likes ------------------------------------------
     // A jolt plants kSynthPoints synthetic training points spread through the playable
-    // input range but clear of the liked inputs, with target sounds well away from what
+    // input range but clear of the liked inputs, with targets shifted coherently from what
     // the net plays there now, and trains towards them (a burst at a high LR until they
     // are mostly reached, then as anchors at normal weight) until the next jolt.
     // New sounds appear in the untaught regions while the likes keep training at their own
@@ -572,9 +572,14 @@ private:
     static constexpr float kSynthInputLo = 0.1f;
     static constexpr float kSynthInputHi = 0.9f;
     static constexpr float kSynthClearance = 0.2f;   // min distance from likes (per sqrt dim)
-    static constexpr float kSynthTargetLo = 0.05f;   // keep targets off the flat ends
-    static constexpr float kSynthTargetHi = 0.95f;
-    static constexpr float kSynthBurstLR = 10.f;     // burst at this x the base LR...
+    static constexpr float kSynthTargetLo = 0.02f;   // keep targets off the flat ends
+    static constexpr float kSynthTargetHi = 0.98f;
+    // Each jolt shifts every focused output by one random amount, the same at all points
+    // (so the points agree and the mapping moves as a whole, keeping its shape), in the
+    // direction with more room on average.
+    static constexpr float kJoltShiftMin = 0.25f;
+    static constexpr float kJoltShiftMax = 0.5f;
+    static constexpr float kSynthBurstLR = 3.f;      // burst at this x the base LR...
     static constexpr float kSynthBurstDone = 0.25f;  // ...until the error is this x where it began
     static constexpr uint32_t kSynthBurstMaxMs = 8000;  // (or this long)
     static constexpr float kSynthHoldLR = 1.f;       // then as anchors at this x
@@ -584,7 +589,8 @@ private:
     uint32_t synthSeedMs_ = 0;
     volatile bool pendingSeed_ = false;  // set from the B2 callback (ISR-safe)
     void seedJolt();
-    void rollSynthTarget(SynthPoint& sp);  // big-change target for the focused dims
+    void shiftSynthTargets();              // coherent per-dim shift over all points
+    void rollSynthTarget(SynthPoint& sp);  // big-change target for the focused dims (one point)
     // Dislikes vs exploration: a dislike near a jolt point re-rolls that point's sound
     // (and replaces the normal dislike, which would fight it); a dislike while noise is
     // on also jumps the noise to the other side of the mapping (it, not the net, took
@@ -647,10 +653,10 @@ private:
     // Settle when the error on the likes is low, or has stopped improving (a small net
     // with conflicting/noisy likes has an error floor it can't train below). Wake when it
     // rises clearly above where it settled.
-    static constexpr float kSettleError = 1e-3f;       // settle below this (MSE) outright,
+    static constexpr float kSettleError = 1e-4f;       // settle below this (MSE) outright,
     static constexpr int kSettleChecks = 3;            //   for this many checks in a row
-    static constexpr float kPlateauGain = 0.01f;       // or: <1% better over...
-    static constexpr uint32_t kPlateauWindowMs = 1000; // ...this long (training is slow, so
+    static constexpr float kPlateauGain = 0.005f;      // or: <0.5% better over...
+    static constexpr uint32_t kPlateauWindowMs = 2000; // ...this long (training is slow, so
                                                        //  a short window misreads a plateau)
     static constexpr uint32_t kSettleEvalMs = 100;     // full-error check while training
     static constexpr float kWakeRatio = 1.5f;          // wake above settled error * this

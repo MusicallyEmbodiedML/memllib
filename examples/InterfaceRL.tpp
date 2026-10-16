@@ -1646,9 +1646,8 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::pushMemoryPointsToInputsView() {
 
 // Plant a fresh set of kSynthPoints synthetic points (replacing the last). Inputs: random
 // in the playable range, clear of the liked inputs and of each other (a random acceptable
-// candidate, not the most extreme; the furthest if none is clear). Targets: each focused
-// output dim goes to the opposite half of its range from what the net plays there now,
-// so every jolted sound is a big change. Unfocused dims keep the current output.
+// candidate, not the most extreme; the furthest if none is clear). Targets: see
+// shiftSynthTargets.
 template<size_t N_OUTPUTS, size_t N_INPUTS>
 void InterfaceRL<N_OUTPUTS, N_INPUTS>::seedJolt() {
     synth_.clear();
@@ -1683,9 +1682,9 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::seedJolt() {
         }
         SynthPoint sp;
         sp.input = best;
-        rollSynthTarget(sp);
         synth_.push_back(std::move(sp));
     }
+    shiftSynthTargets();
     synthSeedMs_ = millis();
     synthSeedError_ = synthError();
     synthBurst_ = true;
@@ -1693,8 +1692,40 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::seedJolt() {
     if (nnOutputsGraphView) nnOutputsGraphView->setLastAction("jolt");
 }
 
-// Each focused output dim goes to the opposite half of its range from what the net plays
-// at sp.input now (a big change); unfocused dims keep the current output.
+// Targets = what the net plays at each point now, with every focused output dim shifted
+// by one shared random amount (kJoltShiftMin..Max). Independent per-point targets
+// conflicted and the net averaged them to the middle; a shared shift agrees across the
+// points, so the mapping moves as a whole and keeps its shape. The direction is random,
+// weighted by the room each way from the dim's mean over the points, so outputs near an
+// end mostly head inwards but can still be pushed out. Unfocused dims keep the current
+// output.
+template<size_t N_OUTPUTS, size_t N_INPUTS>
+void InterfaceRL<N_OUTPUTS, N_INPUTS>::shiftSynthTargets() {
+    if (synth_.empty()) return;
+    auto rnd = []() { return static_cast<float>(rand()) / static_cast<float>(RAND_MAX); };
+    evalOut_.resize(N_OUTPUTS);
+    std::vector<float> mean(N_OUTPUTS, 0.f);
+    for (auto& sp : synth_) {
+        synthMapping.GetOutput(sp.input, &evalOut_);
+        sp.target = evalOut_;
+        for (size_t j = 0; j < N_OUTPUTS; j++) mean[j] += evalOut_[j];
+    }
+    for (size_t j = 0; j < N_OUTPUTS; j++) {
+        if (!isActiveDim(j)) continue;
+        const float m = mean[j] / static_cast<float>(synth_.size());
+        const float up = std::max(kSynthTargetHi - m, 0.f);
+        const float down = std::max(m - kSynthTargetLo, 0.f);
+        const float pUp = (up + down > 0.f) ? up / (up + down) : 0.5f;
+        const float mag = kJoltShiftMin + rnd() * (kJoltShiftMax - kJoltShiftMin);
+        const float shift = (rnd() < pUp) ? mag : -mag;
+        for (auto& sp : synth_)
+            sp.target[j] = std::clamp(sp.target[j] + shift, kSynthTargetLo, kSynthTargetHi);
+    }
+}
+
+// One point (dislike re-roll): each focused output dim goes to the opposite half of its
+// range from what the net plays at sp.input now (a big change); unfocused dims keep the
+// current output.
 template<size_t N_OUTPUTS, size_t N_INPUTS>
 void InterfaceRL<N_OUTPUTS, N_INPUTS>::rollSynthTarget(SynthPoint& sp) {
     auto rnd = []() { return static_cast<float>(rand()) / static_cast<float>(RAND_MAX); };
