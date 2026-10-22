@@ -36,7 +36,11 @@ public:
     }
 
     float __force_inline process(float input, float externalFb = 0.f) {
-        if (!frozen_) buf_.write(input + out_ * feedback_ + externalFb + tap_out_ * tap_feedback_);
+        if (!frozen_) {
+            float w = input + out_ * feedback_ + externalFb + tap_out_ * tap_feedback_;
+            if (clampWrite_) w = w > 1.f ? 1.f : (w < -1.f ? -1.f : w);
+            buf_.write(w);
+        }
 
         float sum = 0.f;
         const float write_idx = static_cast<float>(buf_.getWriteIndex());
@@ -107,6 +111,9 @@ public:
     void setTapLevel(float level)    { tap_level_ = level;   hasTap_ = (tap_level_ > 0.f || tap_feedback_ > 0.f); }
     void setTapFeedback(float fb)    { tap_feedback_ = fb;   hasTap_ = (tap_level_ > 0.f || tap_feedback_ > 0.f); }
     void setFreeze(bool freeze)      { frozen_ = freeze; }
+    // Clamp what process() writes to +-1. Off by default: past full scale the int16
+    // buffer wraps, which feedback-heavy patches may rely on for grit.
+    void setClampWrite(bool clamp)   { clampWrite_ = clamp; }
 
     void fillWithSaw(float freqHz) {
         const size_t period = periodSamples(freqHz);
@@ -311,6 +318,7 @@ private:
     float tap_out_     = 0.f;
     float out_        = 0.f;
     bool  frozen_     = false;
+    bool  clampWrite_ = false;
     bool  hasTap_     = false;
     float sample_rate_= 48000.f;
 
