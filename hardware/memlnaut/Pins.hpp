@@ -22,10 +22,10 @@ public:
      * Digital inputs with internal pull-up resistors
      * @{
      */
-    static constexpr uint8_t MOM_A1 = 24;  ///< Momentary switch A1
-    static constexpr uint8_t MOM_A2 = 25;  ///< Momentary switch A2
-    static constexpr uint8_t MOM_B1 = 28;  ///< Momentary switch B1
-    static constexpr uint8_t MOM_B2 = 29;  ///< Momentary switch B2
+    static constexpr uint8_t MOM_A1 = 28;  ///< Momentary switch A1 (left)
+    static constexpr uint8_t MOM_A2 = 29;  ///< Momentary switch A2 (left)
+    static constexpr uint8_t MOM_B1 = 24;  ///< Momentary switch B1 (right)
+    static constexpr uint8_t MOM_B2 = 25;  ///< Momentary switch B2 (right)
     static constexpr uint8_t RE_SW = 23;   ///< Rotary encoder switch
     static constexpr uint8_t RE_B = 17;    ///< Rotary encoder B signal
     static constexpr uint8_t RE_A = 11;    ///< Rotary encoder A signal
@@ -37,10 +37,10 @@ public:
      * Digital inputs with internal pull-up resistors
      * @{
      */
-    static constexpr uint8_t TOG_A1 = 26;  ///< Toggle switch A1
-    static constexpr uint8_t TOG_A2 = 27;  ///< Toggle switch A2
-    static constexpr uint8_t TOG_B1 = 30;  ///< Toggle switch B1
-    static constexpr uint8_t TOG_B2 = 31;  ///< Toggle switch B2
+    static constexpr uint8_t TOG_A1 = 31;  ///< Toggle switch A1 (left, up)
+    static constexpr uint8_t TOG_A2 = 30;  ///< Toggle switch A2 (left, down)
+    static constexpr uint8_t TOG_B1 = 26;  ///< Toggle switch B1 (right)
+    static constexpr uint8_t TOG_B2 = 27;  ///< Toggle switch B2 (right)
     /** @} */
 
     /**
@@ -54,8 +54,8 @@ public:
     static constexpr uint8_t ADC3 = 43;    ///< Joystick Z-axis (ADC3)
     static constexpr uint8_t RV_GAIN1 = 47; ///< Gain potentiometer (ADC7)
     static constexpr uint8_t RV_Z1 = 46;    ///< Z1 potentiometer (ADC6)
-    static constexpr uint8_t RV_Y1 = 45;    ///< Y1 potentiometer (ADC5)
-    static constexpr uint8_t RV_X1 = 44;    ///< X1 potentiometer (ADC4)
+    static constexpr uint8_t RV_Y1 = 44;    ///< Y1 potentiometer, panel knob Y (ADC4)
+    static constexpr uint8_t RV_X1 = 45;    ///< X1 potentiometer, panel knob X (ADC5)
     /** @} */
 
     /**

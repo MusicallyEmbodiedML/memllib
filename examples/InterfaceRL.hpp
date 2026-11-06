@@ -277,8 +277,8 @@ public:
     void setExtraLoadCallback(ExtraLoadDataFn fn) { _extraLoadFn = fn; }
 
     using RVCallback = std::function<void(float)>;
-    void setRVX1Override(RVCallback fn) { rvX1Override = std::move(fn); }
     void setRVY1Override(RVCallback fn) { rvY1Override = std::move(fn); }
+    void setRVX1Override(RVCallback fn) { rvX1Override = std::move(fn); }
     void setRVZ1Override(RVCallback fn) { rvZ1Override = std::move(fn); }
 
     void setActiveDims(std::vector<bool> dims) { activeDims_ = std::move(dims); }
@@ -388,8 +388,8 @@ private:
     OnMIDICtrlCallback midi5cb = nullptr;
     OnMIDICtrlCallback midi6cb = nullptr;
 
-    RVCallback rvX1Override;
     RVCallback rvY1Override;
+    RVCallback rvX1Override;
     RVCallback rvZ1Override;
 
     static constexpr size_t bias=1;
@@ -558,7 +558,7 @@ private:
     float noiseLocality(const std::vector<float>& x);
     void noisyForward(std::vector<float>& out);
 
-    // --- Jolt (B2): synthetic pseudo-likes ------------------------------------------
+    // --- Jolt (A2): synthetic pseudo-likes ------------------------------------------
     // A jolt plants kSynthPoints synthetic training points spread through the playable
     // input range but clear of the liked inputs, with targets shifted coherently from what
     // the net plays there now, and trains towards them (a burst at a high LR until they
@@ -587,11 +587,14 @@ private:
     static constexpr float kSynthBurstDone = 0.25f;  // ...until the error is this x where it began
     static constexpr uint32_t kSynthBurstMaxMs = 8000;  // (or this long)
     static constexpr float kSynthHoldLR = 1.f;       // then as anchors at this x
+    // Each jolt step also trains up to this many likes in the same batch at the same LR,
+    // so the shift lands in the gaps instead of dragging the liked sounds along with it.
+    static constexpr size_t kSynthLikeAnchors = 8;
     float synthSeedError_ = 0.f;
     bool synthBurst_ = false;
     std::vector<SynthPoint> synth_;
     uint32_t synthSeedMs_ = 0;
-    volatile bool pendingSeed_ = false;  // set from the B2 callback (ISR-safe)
+    volatile bool pendingSeed_ = false;  // set from the A2 callback (ISR-safe)
     void seedJolt();
     void shiftSynthTargets();              // coherent per-dim shift over all points
     void rollSynthTarget(SynthPoint& sp);  // big-change target for the focused dims (one point)

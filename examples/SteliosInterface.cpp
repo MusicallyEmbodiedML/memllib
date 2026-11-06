@@ -357,12 +357,12 @@ bool SteliosInterface::MLTraining_()
 void SteliosInterface::bindInterface()
 {
     // Set up momentary switch callbacks
-    MEMLNaut::Instance()->setMomA1Callback([this]() {
+    MEMLNaut::Instance()->setMomB1Callback([this]() {
         if (this->Randomise() && disp_) {
             disp_->post("Randomised");
         }
     });
-    MEMLNaut::Instance()->setMomA2Callback([this]() {
+    MEMLNaut::Instance()->setMomB2Callback([this]() {
         if (this->ClearData() && disp_) {
             disp_->post("Dataset cleared");
         }
@@ -389,7 +389,7 @@ void SteliosInterface::bindInterface()
         }
     };
 
-    MEMLNaut::Instance()->setMomB1Callback(handle_save_data);
+    MEMLNaut::Instance()->setMomA1Callback(handle_save_data);
 
     MEMLNaut::Instance()->setRotaryEncoderCallback([=](int direction) {
         if (direction == 1) {
@@ -397,7 +397,7 @@ void SteliosInterface::bindInterface()
         }
     });
 
-    MEMLNaut::Instance()->setMomB2Callback([this]() {
+    MEMLNaut::Instance()->setMomA2Callback([this]() {
         if (disp_) {
             disp_->post("Training...");
         }
@@ -416,14 +416,14 @@ void SteliosInterface::bindInterface()
             disp_->post("Training iterations = " + String(valInt));
         }
     });
-    MEMLNaut::Instance()->setRVX1Callback([this](float value) {
+    MEMLNaut::Instance()->setRVY1Callback([this](float value) {
         // Scale value from 0-1 range to 0-1
         this->SetZoomFactor(value);
         if (disp_) {
             disp_->post("Zoom factor = " + String(value));
         }
     });
-    MEMLNaut::Instance()->setRVY1Callback([this](float value) {
+    MEMLNaut::Instance()->setRVX1Callback([this](float value) {
         // Map [0..1] to a category index
         size_t category_index = static_cast<size_t>(value * (this->n_outputs_));
         if (category_index >= this->n_outputs_) {

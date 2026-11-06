@@ -360,19 +360,19 @@ bool IMLInterface::MLTraining_()
 void IMLInterface::bindInterface(bool disable_joystick)
 {
     // Set up momentary switch callbacks
-    MEMLNaut::Instance()->setMomA1Callback([this]() {
+    MEMLNaut::Instance()->setMomB1Callback([this]() {
         if (this->Randomise()) {
             msgView->post("Randomised");
         }
     });
-    MEMLNaut::Instance()->setMomA2Callback([this]() {
+    MEMLNaut::Instance()->setMomB2Callback([this]() {
         if (this->ClearData()) {
             msgView->post("Dataset cleared");
         }
     });
 
     // Set up toggle switch callbacks
-    MEMLNaut::Instance()->setTogA1Callback([this](bool state) {
+    MEMLNaut::Instance()->setTogB1Callback([this](bool state) {
         msgView->post(state ? "Training mode" : "Inference mode");
         bool trained = this->SetTrainingMode(state ? TRAINING_MODE : INFERENCE_MODE);
         // if (state == false && trained) {
@@ -380,7 +380,7 @@ void IMLInterface::bindInterface(bool disable_joystick)
         // }
     });
 
-    MEMLNaut::Instance()->setTogB2Callback([this](bool state) {
+    MEMLNaut::Instance()->setTogA1Callback([this](bool state) {
         this->SetZoomEnabled(state);
     });
 
@@ -413,12 +413,12 @@ void IMLInterface::bindInterface(bool disable_joystick)
         this->SetIterations(valInt);
         msgView->post("Training iterations = " + String(valInt));
     });
-    MEMLNaut::Instance()->setRVX1Callback([this](float value) {
+    MEMLNaut::Instance()->setRVY1Callback([this](float value) {
         // Scale value from 0-1 range to 0-1
         this->SetZoomFactor(value);
         msgView->post("Zoom factor = " + String(value));
     });
-    MEMLNaut::Instance()->setRVY1Callback([this](float value) {
+    MEMLNaut::Instance()->setRVX1Callback([this](float value) {
         // Scale random purturbations from 0-1 range to 0-1
         this->randomScale = value;
         msgView->post("Random scaling = " + String(value));

@@ -118,25 +118,25 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::bind_RL_interface(INPUT_MODES input_mode,
     loadDislikeMode();
 
     // Set up momentary switch callbacks
-    MEMLNaut::Instance()->setMomA1Callback([this]() {
-        if (MEMLNaut::Instance()->getMOMA1State()) {
+    MEMLNaut::Instance()->setMomB1Callback([this]() {
+        if (MEMLNaut::Instance()->getMOMB1State()) {
             this->trigger_like();
         }
     });
-    MEMLNaut::Instance()->setMomA2Callback([this]() {
-        if (MEMLNaut::Instance()->getMOMA2State()) {
+    MEMLNaut::Instance()->setMomB2Callback([this]() {
+        if (MEMLNaut::Instance()->getMOMB2State()) {
             this->trigger_dislike();
         }
     });
-    MEMLNaut::Instance()->setMomB1Callback([this]() {
-        if (MEMLNaut::Instance()->getMOMB1State()) {
+    MEMLNaut::Instance()->setMomA1Callback([this]() {
+        if (MEMLNaut::Instance()->getMOMA1State()) {
             _perform_randomiseRL_action();
         }
     });
-    // B2 = jolt: plant new synthetic points (see seedJolt). The callback may run in
+    // A2 = jolt: plant new synthetic points (see seedJolt). The callback may run in
     // the button ISR, so just flag it for the loop callback.
-    MEMLNaut::Instance()->setMomB2Callback([this]() {
-        if (MEMLNaut::Instance()->getMOMB2State()) pendingSeed_ = true;
+    MEMLNaut::Instance()->setMomA2Callback([this]() {
+        if (MEMLNaut::Instance()->getMOMA2State()) pendingSeed_ = true;
     });
 
     // Always register joystick callbacks — they write to raw_joystick_
@@ -162,13 +162,13 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::bind_RL_interface(INPUT_MODES input_mode,
     MEMLNaut::Instance()->setADC3Callback([this](float value) { raw_joystick_[3] = value; newInput = true; });
 
 
-    MEMLNaut::Instance()->setTogB1Callback([this](bool state) { // scr_ref no longer captured directly
+    MEMLNaut::Instance()->setTogA2Callback([this](bool state) { // scr_ref no longer captured directly
         if (state) {
             this->_forget_replay_mem_interf();
         }
     });
 
-    MEMLNaut::Instance()->setTogA1Callback([this](bool state) {
+    MEMLNaut::Instance()->setTogB1Callback([this](bool state) {
         if (state) {
             savedAction = action;
             actionBeingDragged = true;
@@ -185,17 +185,17 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::bind_RL_interface(INPUT_MODES input_mode,
     });
 
 
-    MEMLNaut::Instance()->setRVX1Callback(
-        rvX1Override ? rvX1Override : RVCallback([this](float value) { this->setRewardScaleInterf(value); }));
-
     MEMLNaut::Instance()->setRVY1Callback(
-        rvY1Override ? rvY1Override : RVCallback([this](float value) { this->setLRScale(value); }));
+        rvY1Override ? rvY1Override : RVCallback([this](float value) { this->setRewardScaleInterf(value); }));
+
+    MEMLNaut::Instance()->setRVX1Callback(
+        rvX1Override ? rvX1Override : RVCallback([this](float value) { this->setLRScale(value); }));
 
     MEMLNaut::Instance()->setRVZ1Callback(
         rvZ1Override ? rvZ1Override : RVCallback([this](float value) { setNoiseLevel(value); }));
     // Set up loop callback
     MEMLNaut::Instance()->setLoopCallback([this]() {
-        if (pendingSeed_) {  // jolt (B2)
+        if (pendingSeed_) {  // jolt (A2)
             pendingSeed_ = false;
             seedJolt();
         }
@@ -1085,6 +1085,10 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::addInputSourceView(bool includeCCSelect) 
         size_t maxCC = midi_ ? midi_->getParamCount() : n_outputs_;
         ccSelectView = std::make_shared<CCSelectView>(maxCC, "MIDI CC Out");
         loadCCNumbers();
+        // bindMIDI() usually runs before this view exists, so apply the loaded
+        // CCs here; otherwise MIDI keeps its own defaults until the page is edited.
+        if (midi_ && !ccSelectView->getSelectedCCs().empty())
+            midi_->SetParamCCNumbers(ccSelectView->getSelectedCCs());
         ccSelectView->setOnChangeCallback([this](const std::vector<uint8_t>& ccs) {
             if (midi_) midi_->SetParamCCNumbers(ccs);
             saveCCNumbers();
@@ -1792,13 +1796,23 @@ bool InterfaceRL<N_OUTPUTS, N_INPUTS>::trainSynth(float lr) {
         }
     }
     training_pair_t ts;
-    ts.first.reserve(synth_.size());
-    ts.second.reserve(synth_.size());
+    ts.first.reserve(synth_.size() + kSynthLikeAnchors);
+    ts.second.reserve(synth_.size() + kSynthLikeAnchors);
     for (const auto& sp : synth_) {
         ts.first.push_back(sp.input);
         ts.second.push_back(sp.target);
     }
-    synthMapping.TrainBatch(ts, lr * (synthBurst_ ? kSynthBurstLR : kSynthHoldLR), 1, synth_.size(), 0.f, false);
+    // Likes as anchors in the same batch (a random subset if there are many).
+    std::vector<size_t> likes;
+    for (size_t i = 0; i < replayMem.size(); i++)
+        if (replayMem.getItem(i).reward > 0.f) likes.push_back(i);
+    for (size_t k = 0; k < kSynthLikeAnchors && k < likes.size(); k++) {
+        if (likes.size() > kSynthLikeAnchors)
+            std::swap(likes[k], likes[k + rand() % (likes.size() - k)]);
+        ts.first.push_back(replayMem.getItem(likes[k]).input);
+        ts.second.push_back(likeTarget(likes[k]));
+    }
+    synthMapping.TrainBatch(ts, lr * (synthBurst_ ? kSynthBurstLR : kSynthHoldLR), 1, ts.first.size(), 0.f, false);
     return synthBurst_;
 }
 
