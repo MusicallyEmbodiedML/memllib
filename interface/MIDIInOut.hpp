@@ -7,10 +7,18 @@
 #include "../hardware/memlnaut/Pins.hpp"
 #include <functional>
 #include <span>
+#include <algorithm>
 #include "hardware/dma.h"
 #include "hardware/uart.h"
+#include "pico/util/queue.h"
 
-//#define MIDI_USB_CLIENT
+// USB MIDI device: enabled automatically when the firmware is built with the
+// Adafruit TinyUSB stack (arduino-cli FQBN option usbstack=tinyusb, which defines
+// USE_TINYUSB). The MEMLNaut then also appears as a class-compliant "MEMLNaut MIDI"
+// port, mirroring the DIN MIDI output and accepting input like DIN MIDI IN.
+#if defined(USE_TINYUSB) && !defined(MIDI_USB_CLIENT)
+#define MIDI_USB_CLIENT
+#endif
 
 
 
@@ -124,6 +132,23 @@ public:
      * @brief Poll input. Put in a regular loop.
      */
     void Poll();
+
+    /**
+     * @brief Service USB MIDI: send queued output, queue received input for Poll().
+     * Call regularly from core 0 (TinyUSB runs there). Does nothing without USB MIDI.
+     */
+    void PollUSB();
+
+    /**
+     * @brief True when the firmware was built with USB MIDI.
+     */
+    static constexpr bool HasUSBMIDI() {
+#ifdef MIDI_USB_CLIENT
+        return true;
+#else
+        return false;
+#endif
+    }
     /**
      * @brief Set the CC numbers that the parameters are sent to.
      *
@@ -242,6 +267,10 @@ public:
      * @param enable True to track changes (default), false to always send
      */
     void SetChangeTracking(bool enable) { track_changes_ = enable; }
+    /**
+     * @brief Forget the last values sent, so the next SendParamsAsMIDICC() sends every CC.
+     */
+    void ResendAllCCs() { std::fill(last_sent_values_.begin(), last_sent_values_.end(), 0xFF); }
 
     /**
      * @brief Set maximum messages to process per Poll() call
@@ -351,6 +380,14 @@ private:
     static constexpr size_t MIDI_QUEUE_BUFFER_SIZE = 1024;
     uint8_t midi_queue_buffer_[MIDI_QUEUE_BUFFER_SIZE];
     size_t queue_write_pos_;  // No volatile needed - single-threaded user code only
+
+    // USB MIDI: complete messages pass between cores through these queues, so only
+    // core 0 (PollUSB) touches TinyUSB. Output is sent from either core.
+    struct UsbMsg { uint8_t b[3]; uint8_t len; };
+    queue_t usb_tx_q_;
+    queue_t usb_rx_q_;
+    void usbQueueMessage_(uint8_t status, uint8_t d1, uint8_t d2, uint8_t len);
+    void usbQueueStream_(const uint8_t* data, size_t length);  // expands running status
 };
 
 #endif  // __MIDI_IN_OUT_HPP__

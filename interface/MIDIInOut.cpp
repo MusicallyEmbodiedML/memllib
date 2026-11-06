@@ -17,8 +17,8 @@ MIDI_CREATE_CUSTOM_INSTANCE(HardwareSerial, Serial2, MIDI, CustomMIDISettings);
 
 #ifdef MIDI_USB_CLIENT
 #include <Adafruit_TinyUSB.h>
-Adafruit_USBD_MIDI usb_midi;
-MIDI_CREATE_INSTANCE(Adafruit_USBD_MIDI, usb_midi, USBMIDI);
+static Adafruit_USBD_MIDI usb_midi;
+static constexpr unsigned kUsbQueueLen = 256;
 #endif
 
 
@@ -53,9 +53,17 @@ MIDIInOut::MIDIInOut() : n_outputs_(0),
     memset(msg_queue_, 0, sizeof(msg_queue_));
     memset(midi_queue_buffer_, 0, sizeof(midi_queue_buffer_));
 #ifdef MIDI_USB_CLIENT
-    // TinyUSB setup - must be before Serial
-    TinyUSBDevice.setManufacturerDescriptor("ELI");
-    TinyUSBDevice.setProductDescriptor("MEMLNaut MIDI");
+    // Constructed in setup() on core 0. USB is already enumerated by then (as a
+    // serial port), so the MIDI interface needs a re-enumeration to appear.
+    queue_init(&usb_tx_q_, sizeof(UsbMsg), kUsbQueueLen);
+    queue_init(&usb_rx_q_, sizeof(UsbMsg), kUsbQueueLen);
+    usb_midi.setStringDescriptor("MEMLNaut MIDI");
+    usb_midi.begin();
+    if (TinyUSBDevice.mounted()) {
+        TinyUSBDevice.detach();
+        delay(10);
+        TinyUSBDevice.attach();
+    }
 #endif
 }
 
@@ -167,15 +175,6 @@ void MIDIInOut::Setup(size_t n_outputs,
     // Serial2.flush();
     // MEMORY_BARRIER();
 
-#ifdef MIDI_USB_CLIENT
-    USBMIDI.begin(MIDI_CHANNEL_OMNI);
-    
-    // Set up callbacks for incoming MIDI
-    USBMIDI.setHandleNoteOn(handleNoteOn);
-    USBMIDI.setHandleNoteOff(handleNoteOff);
-    MIDI.setHandleControlChange(handleControlChange);    
-
-#endif    
 
      DEBUG_PRINTLN("MIDI setup complete");
     // Serial2.flush();  // Ensure the message is sent completely
@@ -204,7 +203,80 @@ void MIDIInOut::Poll()
         // Process queued messages with rate limiting
         processQueuedMessages();
     }
-    // USBMIDI.read();
+#ifdef MIDI_USB_CLIENT
+    // USB input arrives through PollUSB (core 0); hand it to the same callbacks.
+    UsbMsg m;
+    while (queue_try_remove(&usb_rx_q_, &m)) {
+        queueMessage(m.b[0] & 0xF0, (m.b[0] & 0x0F) + 1, m.b[1], m.b[2]);
+    }
+    processQueuedMessages();
+#endif
+}
+
+void MIDIInOut::PollUSB() {
+#ifdef MIDI_USB_CLIENT
+    UsbMsg m;
+    if (!TinyUSBDevice.mounted()) {
+        while (queue_try_remove(&usb_tx_q_, &m)) {}   // no host: drop output
+        return;
+    }
+    while (queue_try_remove(&usb_tx_q_, &m)) {
+        uint8_t packet[4];
+        if (m.b[0] >= 0xF8) {                          // real-time (clock etc.)
+            packet[0] = 0x0F; packet[1] = m.b[0]; packet[2] = 0; packet[3] = 0;
+        } else {                                       // channel voice
+            packet[0] = m.b[0] >> 4; packet[1] = m.b[0]; packet[2] = m.b[1]; packet[3] = m.b[2];
+        }
+        if (!usb_midi.writePacket(packet)) break;      // host not reading: drop the rest
+    }
+    uint8_t packet[4];
+    while (usb_midi.readPacket(packet)) {
+        const uint8_t cin = packet[0] & 0x0F;
+        if (cin >= 0x8 && cin <= 0xE) {
+            UsbMsg in{{packet[1], packet[2], packet[3]}, 3};
+            queue_try_add(&usb_rx_q_, &in);
+        }
+    }
+#endif
+}
+
+void MIDIInOut::usbQueueMessage_(uint8_t status, uint8_t d1, uint8_t d2, uint8_t len) {
+#ifdef MIDI_USB_CLIENT
+    UsbMsg m{{status, d1, d2}, len};
+    queue_try_add(&usb_tx_q_, &m);
+#else
+    (void)status; (void)d1; (void)d2; (void)len;
+#endif
+}
+
+// TinyUSB's stream writer does not handle MIDI running status, so expand the DIN
+// byte stream into complete messages. SysEx and system common are not sent on USB.
+void MIDIInOut::usbQueueStream_(const uint8_t* data, size_t length) {
+#ifdef MIDI_USB_CLIENT
+    uint8_t status = 0, need = 0, have = 0, d[2] = {0, 0};
+    bool sysex = false;
+    for (size_t i = 0; i < length; i++) {
+        const uint8_t b = data[i];
+        if (b >= 0xF8) { usbQueueMessage_(b, 0, 0, 1); continue; }
+        if (b == 0xF0) { sysex = true; status = 0; continue; }
+        if (sysex) { if (b == 0xF7) sysex = false; continue; }
+        if (b & 0x80) {
+            const uint8_t hi = b >> 4;
+            status = (hi >= 0x8 && hi <= 0xE) ? b : 0;
+            need = (hi == 0xC || hi == 0xD) ? 1 : 2;
+            have = 0;
+            continue;
+        }
+        if (!status) continue;
+        d[have++] = b;
+        if (have == need) {
+            usbQueueMessage_(status, d[0], need > 1 ? d[1] : 0, need + 1);
+            have = 0;                                  // running status: keep status
+        }
+    }
+#else
+    (void)data; (void)length;
+#endif
 }
 
 
@@ -284,6 +356,7 @@ void MIDIInOut::SendParamsAsMIDICC(std::span<const float> params) {
 
     // Only send if we have data
     if (buf_idx > 0) {
+        usbQueueStream_(tx_dma_buffer_, buf_idx);
         if (tx_dma_channel_ >= 0) {
             sendViaDMADirect(buf_idx);  // No memcpy - buffer already built in place
         } else {
@@ -416,6 +489,7 @@ bool MIDIInOut::sendNoteOn(uint8_t note_number, uint8_t velocity) {
 
     // while(!Serial2) { delay(1); } // Wait for Serial2
     MIDI.sendNoteOn(note_number, velocity, note_channel_);
+    usbQueueMessage_(0x90 | ((note_channel_ - 1) & 0x0F), note_number, velocity, 3);
     // MEMORY_BARRIER();
     return true;
 }
@@ -429,6 +503,7 @@ bool MIDIInOut::sendNoteOff(uint8_t note_number, uint8_t velocity) {
 
     while(!Serial2) { delay(1); } // Wait for Serial2
     MIDI.sendNoteOff(note_number, velocity, note_channel_);
+    usbQueueMessage_(0x80 | ((note_channel_ - 1) & 0x0F), note_number, velocity, 3);
     MEMORY_BARRIER();
     return true;
 }
@@ -517,6 +592,7 @@ size_t MIDIInOut::flushQueue() {
     }
 
     size_t bytes_to_send = queue_write_pos_;
+    usbQueueStream_(midi_queue_buffer_, bytes_to_send);
 
     // Wait for any existing DMA to complete
     waitForDMA();
@@ -611,6 +687,7 @@ void MIDIInOut::waitForDMA() {
 
 void MIDIInOut::sendRawBytes(const uint8_t* data, size_t length) {
     if (length == 0) return;
+    usbQueueStream_(data, length);
     if (tx_dma_channel_ >= 0) {
         sendViaDMA(data, length);
     } else {
