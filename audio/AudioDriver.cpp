@@ -292,6 +292,10 @@ void AudioDriver::setDACVolume(float n) {
     codecCtl.dacVolume(n);
 }
 
+void AudioDriver::SetLineInLevel(uint8_t level) {
+    codecCtl.lineInLevel(level > 15 ? 15 : level);
+}
+
 void AudioDriver::SetSampleRate(size_t rate) {
     kSampleRate = rate;
     kSampleRateRcpr = 1.0f / (float)rate;

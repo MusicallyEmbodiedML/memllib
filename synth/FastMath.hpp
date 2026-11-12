@@ -23,6 +23,7 @@
 //   sinTurns / sin : max abs error ~4e-6
 //   exp2 / exp     : max rel error ~3e-7 (inputs clamped to +-126 octaves)
 //   tanh           : max abs error ~2e-7
+//   log2           : max abs error ~2e-4 (x > 0, normal floats)
 //   fmod1          : exact, = fmodf(x, 1.f) for |x| < 2^31
 // ---------------------------------------------------------------------------
 namespace FastMath {
@@ -64,6 +65,18 @@ namespace FastMath {
 
     // e^x
     static __force_inline float exp(float x) { return exp2(x * 1.44269504089f); }
+
+    // log2(x) for x > 0: exponent bits plus a quartic fit of log2 on the mantissa [1, 2).
+    static __force_inline float log2(float x) {
+        int32_t bits;
+        std::memcpy(&bits, &x, sizeof(bits));
+        const float e = static_cast<float>(((bits >> 23) & 0xff) - 127);
+        bits = (bits & 0x007fffff) | 0x3f800000;
+        float m;
+        std::memcpy(&m, &bits, sizeof(m));
+        return e + (-2.49684606f + m * (4.02854794f + m * (-2.08121416f
+                 + m * (0.62887362f - 0.07915816f * m))));
+    }
 
     // tanh(x) = sign(x) * (1 - e^-2|x|) / (1 + e^-2|x|)
     static __force_inline float tanh(float x) {

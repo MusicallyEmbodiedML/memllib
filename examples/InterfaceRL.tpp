@@ -481,7 +481,7 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::setup(size_t n_inputs, size_t n_outputs, 
 
     // GUI
     if (!nnOutputsGraphView) {
-        nnOutputsGraphView = std::make_shared<RLView>("RL", n_outputs, 4, TFT_GREEN, 0.f, 1.f);
+        nnOutputsGraphView = std::make_shared<RLView>("Neural Net", n_outputs, 4, TFT_GREEN, 0.f, 1.f);
     }
     MEMLNaut::Instance()->disp->AddView(nnOutputsGraphView);
     nnInputsGraphView = std::make_shared<InputsView>("NN Inputs", n_inputs);

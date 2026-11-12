@@ -33,6 +33,17 @@ public:
     void setOnChange(ChangeFn fn) { onChange_ = fn; }
     void setOnCommit(CommitFn fn) { onCommit_ = fn; }
 
+    // Optional: a different value range, the mark position (e.g. 0 dB or a default),
+    // a step to snap to (0 = continuous), and how the value readout is written.
+    // Defaults: kMin..kMax, mark at kUnity, continuous, "1.00".
+    void setRange(float minV, float maxV, float markV, float step = 0.f) {
+        min_ = minV; max_ = maxV; mark_ = markV; step_ = step;
+        for (auto& c : channels_) c.value = clamp(c.value);
+        dirty_.assign(channels_.size(), true);
+        needRedraw_ = true;
+    }
+    void setFormatter(std::function<String(float)> fn) { format_ = fn; }
+
     // Set without firing onChange (e.g. restoring saved values).
     void setValue(size_t ch, float v) {
         if (ch >= channels_.size()) return;
@@ -74,14 +85,14 @@ private:
     static constexpr uint16_t kUnityColour = 0x7BEF;
     static constexpr uint16_t kTextColour = 0xBDF7;
 
-    static float clamp(float v) { return v < kMin ? kMin : (v > kMax ? kMax : v); }
+    float clamp(float v) const { return v < min_ ? min_ : (v > max_ ? max_ : v); }
 
     int colW() const { return (area.w - (static_cast<int>(channels_.size()) + 1) * kGap) / static_cast<int>(channels_.size()); }
     int colX(size_t i) const { return area.x + kGap + static_cast<int>(i) * (colW() + kGap); }
     int trackTop() const { return area.y + kValueH + 4; }
     int trackBottom() const { return area.y + area.h - kLabelH - 4; }
     int valueToY(float v) const {
-        const float t = (v - kMin) / (kMax - kMin);
+        const float t = (v - min_) / (max_ - min_);
         return trackBottom() - static_cast<int>(t * (trackBottom() - trackTop()));
     }
 
@@ -100,8 +111,9 @@ private:
         const int top = trackTop(), bottom = trackBottom();
         int yy = static_cast<int>(y);
         yy = yy < top ? top : (yy > bottom ? bottom : yy);
-        float v = kMin + (kMax - kMin) * static_cast<float>(bottom - yy) / static_cast<float>(bottom - top);
-        if (fabsf(v - kUnity) < 0.04f) v = kUnity;  // easy to land on unity
+        float v = min_ + (max_ - min_) * static_cast<float>(bottom - yy) / static_cast<float>(bottom - top);
+        if (step_ > 0.f) v = min_ + step_ * roundf((v - min_) / step_);
+        else if (fabsf(v - mark_) < 0.02f * (max_ - min_)) v = mark_;  // easy to land on the mark
         auto& ch = channels_[activeCh_];
         if (v == ch.value) return;
         ch.value = v;
@@ -125,14 +137,15 @@ private:
         const int vy = valueToY(channels_[i].value) - area.y;
         spr.fillRoundRect(cx - kTrackW / 2, top, kTrackW, bottom - top, 3, kTrack);
         if (bottom > vy) spr.fillRoundRect(cx - kTrackW / 2, vy, kTrackW, bottom - vy, 3, kAccent);
-        const int uy = valueToY(kUnity) - area.y;
+        const int uy = valueToY(mark_) - area.y;
         spr.drawFastHLine(cx - kTrackW / 2 - 4, uy, kTrackW + 8, kUnity);  // unity mark
         spr.fillRect(cx - kTrackW / 2 - 3, vy - 2, kTrackW + 6, 4, kText);  // handle
 
         spr.setFreeFont(&Orbitron_12);
         spr.setTextColor(kText);
         spr.setTextDatum(TC_DATUM);
-        spr.drawString(String(channels_[i].value, 2).c_str(), cx, 2);
+        const String valueText = format_ ? format_(channels_[i].value) : String(channels_[i].value, 2);
+        spr.drawString(valueText.c_str(), cx, 2);
         spr.setTextDatum(BC_DATUM);
         String label = channels_[i].name;
         label.toUpperCase();
@@ -146,6 +159,8 @@ private:
     std::vector<bool> dirty_;
     uint16_t accent_;
     int activeCh_ = -1;
+    float min_ = kMin, max_ = kMax, mark_ = kUnity, step_ = 0.f;
+    std::function<String(float)> format_;
     ChangeFn onChange_;
     CommitFn onCommit_;
 };

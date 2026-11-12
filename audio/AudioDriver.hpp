@@ -95,6 +95,10 @@ class AudioDriver {
          DEBUG_PRINT("AUDIO_DRIVER - Block Callback address: ");
          DEBUG_PRINTF("%p\n", audio_callback_block_);
     }
+    // Codec line-input analog gain, 0..15 (0 dB .. +22.5 dB in 1.5 dB steps, applied
+    // before the ADC). One I2C write; safe while audio runs. Call after Setup().
+    static void SetLineInLevel(uint8_t level);
+
     static inline void SetMasterVolume(float volume) {
         if (volume > 1.0f) {
             volume = 1.0f;
@@ -127,6 +131,7 @@ class AudioDriver {
 
 private:
     static void setDACVolume(float n);
+
 };
 
 #endif  // __AUDIO_DRIVER_HPP__
