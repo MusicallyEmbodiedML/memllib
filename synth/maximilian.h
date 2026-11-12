@@ -40,6 +40,7 @@
 #include <functional>
 
 #include "../PicoDefs.hpp"
+#include "FastMath.hpp"
 #include "../utils/MedianFilter.h"
 #include "../utils/CircularBuffer.hpp"
 
@@ -280,7 +281,7 @@ public:
     \param frequency in Hz */
     float __force_inline sinewave(float frequency) {
         //This is a sinewave oscillator
-        output=sinf (phase*(TWOPI));
+        output = FastMath::sinTurns(phase);  // sinf is a flash call on the Pico
         phase += maxiSettings::one_over_sampleRate * frequency;
         if ( phase >= 1.0 ) phase -= 1.0;
         return output ;
@@ -461,7 +462,7 @@ public:
         
         // Chamberlin SVF coefficients with pre-warping
         const float omega = TWOPI * cutoff1 * maxiSettings::one_over_sampleRate;
-        const float f = 2.f * sinf(omega * 0.5f);  // Pre-warped frequency
+        const float f = 2.f * FastMath::sin(omega * 0.5f);  // Pre-warped frequency
         const float q = 1.f / resonance;
         const float qAdjust = 1.f + q * f + f * f;  // Stability compensation
         
@@ -481,7 +482,7 @@ public:
 
         // Chamberlin SVF coefficients
         const float omega = TWOPI * cutoff1 * maxiSettings::one_over_sampleRate;
-        const float f = 2.f * sinf(omega * 0.5f);
+        const float f = 2.f * FastMath::sin(omega * 0.5f);
         const float q = 1.f / resonance;
         const float qAdjust = 1.f + q * f + f * f;
 
@@ -500,7 +501,7 @@ public:
     */
     __force_inline float bandpassChamberlain(float input, float cutoff1, float resonance) {
         const float omega = TWOPI * cutoff1 * maxiSettings::one_over_sampleRate;
-        const float f = 2.f * sinf(omega * 0.5f);
+        const float f = 2.f * FastMath::sin(omega * 0.5f);
         const float q = 1.f / resonance;
         const float qAdjust = 1.f + q * f + f * f;
 

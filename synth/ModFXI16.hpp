@@ -3,6 +3,24 @@
 #include "maximilian.h"
 
 // ─────────────────────────────────────────────────────────────────────────────
+// FastSineOsc
+// maxiOsc::sinewave() with an inline sine (FastMath::sinTurns) instead of a
+// sinf() flash call. Same phase accumulator (public `phase`, 0..1).
+// ─────────────────────────────────────────────────────────────────────────────
+class FastSineOsc {
+public:
+    float phase{0.f};
+
+    float __force_inline sinewave(float frequency) {
+        const float out = FastMath::sinTurns(phase);
+        phase += maxiSettings::one_over_sampleRate * frequency;
+        if (phase >= 1.f) phase -= 1.f;
+        return out;
+    }
+};
+
+
+// ─────────────────────────────────────────────────────────────────────────────
 // FlangerI16
 // Short modulated delay (0–BUFSIZE samples).
 // process(input, delayBaseSamples, depth, ratHz, feedback, mix)
@@ -26,7 +44,7 @@ public:
 
 private:
     DynamicDelayI16<BUFSIZE> buf_;
-    maxiOsc lfo_;
+    FastSineOsc lfo_;
 };
 
 
@@ -62,7 +80,7 @@ public:
 
 private:
     DynamicDelayI16<BUFSIZE> buf1_, buf2_;
-    maxiOsc lfo1_, lfo2_;
+    FastSineOsc lfo1_, lfo2_;
 };
 
 
@@ -82,7 +100,7 @@ public:
         return input * (1.f - mix) + (input * c) * mix;
     }
 private:
-    maxiOsc osc_;
+    FastSineOsc osc_;
 };
 
 
