@@ -130,8 +130,17 @@ void DisplayDriver::ChangeView(int delta) {
 void DisplayDriver::PollTouch() {
     // lastTouchTime_ = millis();
 
-    uint16_t x, y;
-    bool pressed = tft_.getTouch(&x, &y, 20);
+    // getTouch() takes 5 samples, each debounced with delay(1)/delay(2) calls: ~33 ms of
+    // blocking per poll, which held the core-0 control loop (and the network) to ~30
+    // passes per second. Check the pressure once first (one SPI read, ~26 us) and only
+    // run the full getTouch() while pressed. Measured raw Z on the MEMLNaut: idle
+    // ~150-190 (max seen 278), pressed ~1000-3000; getTouch's own threshold of 20 is
+    // below the idle noise, so it always ran the full sampling.
+    constexpr uint16_t kTouchDetectZ = 500;
+    constexpr uint16_t kTouchThreshold = 20;
+    uint16_t x = 0, y = 0;
+    const bool pressed = (tft_.getTouchRawZ() > kTouchDetectZ)
+                      && tft_.getTouch(&x, &y, kTouchThreshold);
     if(pressed) {
         lastTouchX = x;
         lastTouchY = y;

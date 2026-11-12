@@ -513,6 +513,29 @@ private:
     // the current input releases its focused dims to the net's current output there.
     const std::vector<float>& likeTarget(size_t i);
     std::vector<float> likeTargetBuf_;
+
+    // TrainBatch scratch, reused every tick so training doesn't allocate once these
+    // have grown: per-row pointers to the sample inputs and targets, computed
+    // targets (N_OUTPUTS floats per row), and index lists.
+    std::vector<const float*> tbIn_, tbOut_;
+    std::vector<float> tbTargets_;
+    std::vector<size_t> tbSample_, tbNegIdx_, tbLikes_;
+    std::vector<float> tbMeanPos_, tbY_;
+    std::vector<std::pair<float, size_t>> tbCand_;
+    // Make room for `rows` rows. Call before taking any tbRow() pointer.
+    void tbReserve(size_t rows) {
+        if (tbIn_.size() < rows) { tbIn_.resize(rows); tbOut_.resize(rows); }
+        if (tbTargets_.size() < rows * N_OUTPUTS) tbTargets_.resize(rows * N_OUTPUTS);
+    }
+    float* tbRow(size_t r) { return &tbTargets_[r * N_OUTPUTS]; }
+    // Copy a target into row r (zero-padded to N_OUTPUTS) and point tbOut_[r] at it.
+    void tbSetTarget(size_t r, const std::vector<float>& v) {
+        float* row = tbRow(r);
+        const size_t m = std::min(v.size(), N_OUTPUTS);
+        for (size_t j = 0; j < m; j++) row[j] = v[j];
+        for (size_t j = m; j < N_OUTPUTS; j++) row[j] = 0.f;
+        tbOut_[r] = row;
+    }
     float rmsDistActive(const std::vector<float>& a, const std::vector<float>& b) const;
     int nearestLikeIndex(const std::vector<float>& input) const;  // -1 if none
     std::vector<float> stepTarget(const std::vector<float>& origin, std::vector<float> dir, float rmsStep) const;

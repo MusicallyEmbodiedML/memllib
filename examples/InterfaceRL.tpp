@@ -828,31 +828,31 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::optimise() {
     const float effLR = learningRateScaled;
 
     //positive batch
-    std::vector<size_t> sample = replayMem.sampleIndices(batchSize);
+    replayMem.sampleIndices(batchSize, tbSample_);
+    const std::vector<size_t>& sample = tbSample_;
     if (sample.size() >1) {
         //run sample through network
         size_t batchSizePos=0;
         float avgRewardPos=0.f;
-        training_pair_t tsPositive;
+        tbReserve(sample.size());
 
-        // Pre-allocate to avoid repeated allocations
-        tsPositive.first.reserve(sample.size());
-        tsPositive.second.reserve(sample.size());
-
-
-        // Positive batch: random sample (diversity for generalisation)
+        // Positive batch: random sample (diversity for generalisation). Inputs are used
+        // in place; targets are copied into the reused row buffer (likeTarget() may
+        // return a shared buffer).
         for (auto &i : sample) {
-            if (replayMem.getItem(i).reward > 0) {
-                tsPositive.first.push_back(replayMem.getItem(i).input);
-                tsPositive.second.push_back(likeTarget(i));
+            const auto& item = replayMem.getItem(i);
+            if (item.reward > 0) {
+                tbIn_[batchSizePos] = item.input.data();
+                tbSetTarget(batchSizePos, likeTarget(i));
                 batchSizePos++;
-                avgRewardPos += replayMem.getItem(i).reward;
+                avgRewardPos += item.reward;
             }
         }
 
         if (batchSizePos > 0){
             avgRewardPos /= static_cast<float>(batchSizePos);
-            lossPositive = synthMapping.TrainBatch(tsPositive, effLR * avgRewardPos, 1, batchSize, 0.f, false);
+            lossPositive = synthMapping.TrainBatch(tbIn_.data(), tbOut_.data(), batchSizePos,
+                                                   effLR * avgRewardPos, 1, batchSize, 0.f, false);
             trainedPositive = true;
             // Serial.printf("[DEBUG] Loss after positive TrainBatch: %f (inf=%d, nan=%d)\n",
             //              lossPositive, std::isinf(lossPositive), std::isnan(lossPositive));
@@ -862,9 +862,7 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::optimise() {
     // Negative batch: scan ALL negatives so every dislike is guaranteed to push.
     // No decay — a 'no' pushes at full strength until it's lived kDislikeLifetimeMs,
     // then it's removed outright.
-    training_pair_t tsNegative;
-    tsNegative.first.reserve(sample.size());
-    tsNegative.second.reserve(sample.size());
+    tbNegIdx_.clear();
     // Single scan over all memory: tally positives (for display + LR ratio) and collect
     // negatives (expiring any that have outlived kDislikeLifetimeMs).
     float avgRewardNeg=0.f;
@@ -877,29 +875,29 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::optimise() {
             itemsToRemove.push_back(i);  // lived its lifetime -> stop pushing, remove
             continue;
         }
-        tsNegative.first.push_back(replayMem.getItem(i).input);
-        tsNegative.second.push_back(replayMem.getItem(i).action);
+        tbNegIdx_.push_back(i);
         batchSizeNeg++;
         avgRewardNeg += reward;
     }
     if (batchSizeNeg > 0){
 
-        struct PosCandidate { float dist; size_t idx; };
-        std::vector<PosCandidate> candidates;
-        candidates.reserve(replayMem.size());
+        // likes by distance from the current input (dist, replay index); reused scratch
+        auto& candidates = tbCand_;
+        candidates.clear();
         for (size_t i = 0; i < replayMem.size(); i++) {
             const auto& item = replayMem.getItem(i);
             if (item.reward > 0.f)
                 candidates.push_back({euclideanDistance(item.input, controlInput), i});
         }
         std::sort(candidates.begin(), candidates.end(),
-                [](const PosCandidate& a, const PosCandidate& b){ return a.dist < b.dist; });
+                [](const std::pair<float, size_t>& a, const std::pair<float, size_t>& b){ return a.first < b.first; });
 
-        std::vector<float> meanPositiveAction(action.size(), 0.f);
+        std::vector<float>& meanPositiveAction = tbMeanPos_;
+        meanPositiveAction.assign(action.size(), 0.f);
         size_t posMemCount = 0;
         const size_t kUsed = std::min(candidates.size(), kCentroidK);
         for (size_t ci = 0; ci < kUsed; ci++) {
-            const auto& item = replayMem.getItem(candidates[ci].idx);
+            const auto& item = replayMem.getItem(candidates[ci].second);
             for (size_t j = 0; j < meanPositiveAction.size(); j++)
                 meanPositiveAction[j] += item.action[j];
             posMemCount++;
@@ -915,39 +913,42 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::optimise() {
         // from the liked region (the taper used to kill exactly that case). Bigger
         // kGeometricPushScale + higher negLRRatio => the sound slides away faster/further.
         const bool havePositives = (posMemCount > 0);
-        training_pair_t tsGeometric;
-        tsGeometric.first = tsNegative.first;
-        tsGeometric.second.reserve(tsNegative.second.size());
 
         float pushStep = std::clamp(fabsf(avgRewardNeg), 0.25f, 1.0f) * kGeometricPushScale;
 
-        for (const auto& neg_action : tsNegative.second) {
+        // Each negative trains from its own input (in place) toward a pushed target,
+        // built straight into the reused row buffer.
+        tbReserve(batchSizeNeg);
+        for (size_t r = 0; r < batchSizeNeg; r++) {
+            const auto& negItem = replayMem.getItem(tbNegIdx_[r]);
+            const auto& neg_action = negItem.action;
             // Fix 3: guard against size mismatch with old saved actions
-            const size_t dimCount = std::min(neg_action.size(), meanPositiveAction.size());
+            const size_t dimCount = std::min({neg_action.size(), meanPositiveAction.size(), N_OUTPUTS});
             float len = 0.f;
-            std::vector<float> dir(dimCount);
             for (size_t j = 0; j < dimCount; j++) {
-                dir[j] = neg_action[j] - meanPositiveAction[j];  // meanPositiveAction is 0 when no likes
-                len += dir[j] * dir[j];
+                const float dj = neg_action[j] - meanPositiveAction[j];  // mean is 0 when no likes
+                len += dj * dj;
             }
             len = sqrtf(len);
             const bool useRandom = !havePositives || (len <= 1e-4f);
-            std::vector<float> target(neg_action);  // copy keeps out-of-range dims intact
+            tbSetTarget(r, neg_action);  // copy keeps out-of-range dims intact
+            float* target = tbRow(r);
             for (size_t j = 0; j < dimCount; j++) {
                 bool active = activeDims_.empty() || (j < activeDims_.size() && activeDims_[j]);
                 if (!active) continue;
                 float d = useRandom
                     ? (static_cast<float>(rand() & 0xFF) / 127.5f - 1.f)
-                    : (dir[j] / len);
+                    : ((neg_action[j] - meanPositiveAction[j]) / len);
                 target[j] = std::clamp(neg_action[j] + d * pushStep, 0.f, 1.f);
             }
-            tsGeometric.second.push_back(std::move(target));
+            tbIn_[r] = negItem.input.data();
         }
         // Dynamic LR ratio: push harder when dislikes are rare, gentler when they flood the buffer
         const float negFraction = static_cast<float>(batchSizeNeg)
             / static_cast<float>(std::max(batchSizeNeg + totalPosCount, size_t{1}));
         const float negLRRatio = kNegLRBase - 0.4f * negFraction;
-        lossNegative = synthMapping.TrainBatch(tsGeometric, effLR * negLRRatio, 1, batchSizeNeg, 0.f, false);
+        lossNegative = synthMapping.TrainBatch(tbIn_.data(), tbOut_.data(), batchSizeNeg,
+                                               effLR * negLRRatio, 1, batchSizeNeg, 0.f, false);
     }
 
     // Fix 4: always clear — stale indices corrupt subsequent optimise() calls
@@ -1572,8 +1573,9 @@ template<size_t N_OUTPUTS, size_t N_INPUTS>
 void InterfaceRL<N_OUTPUTS, N_INPUTS>::trainDislikeTargets(float lr) {
     if (dislikeTargets_.empty()) return;
     const uint32_t now = millis();
-    training_pair_t batch;
-    std::vector<float> y;
+    std::vector<float>& y = tbY_;
+    // Retire finished targets first, then train from the survivors in place (taking
+    // pointers while erasing would leave them pointing at moved elements).
     for (size_t i = dislikeTargets_.size(); i-- > 0;) {
         const auto& t = dislikeTargets_[i];
         bool done = (now - t.t0) >= kDislikeTargetLifetimeMs;
@@ -1583,15 +1585,17 @@ void InterfaceRL<N_OUTPUTS, N_INPUTS>::trainDislikeTargets(float lr) {
             done = toTarget < kSeekEpsilon
                 || (t.kind == DislikeTarget::Kind::REPEL && rmsDistActive(y, t.origin) >= kRepelMargin);
         }
-        if (done) {
-            dislikeTargets_.erase(dislikeTargets_.begin() + i);
-            continue;
-        }
-        batch.first.push_back(t.input);
-        batch.second.push_back(t.target);
+        if (done) dislikeTargets_.erase(dislikeTargets_.begin() + i);
     }
-    if (!batch.first.empty())
-        synthMapping.TrainBatch(batch, lr, 1, batch.first.size(), 0.f, false);
+    const size_t n = dislikeTargets_.size();
+    if (n > 0) {
+        tbReserve(n);
+        for (size_t r = 0; r < n; r++) {
+            tbIn_[r] = dislikeTargets_[r].input.data();
+            tbSetTarget(r, dislikeTargets_[r].target);
+        }
+        synthMapping.TrainBatch(tbIn_.data(), tbOut_.data(), n, lr, 1, n, 0.f, false);
+    }
 }
 
 
@@ -1795,24 +1799,28 @@ bool InterfaceRL<N_OUTPUTS, N_INPUTS>::trainSynth(float lr) {
             }
         }
     }
-    training_pair_t ts;
-    ts.first.reserve(synth_.size() + kSynthLikeAnchors);
-    ts.second.reserve(synth_.size() + kSynthLikeAnchors);
-    for (const auto& sp : synth_) {
-        ts.first.push_back(sp.input);
-        ts.second.push_back(sp.target);
-    }
     // Likes as anchors in the same batch (a random subset if there are many).
-    std::vector<size_t> likes;
+    std::vector<size_t>& likes = tbLikes_;
+    likes.clear();
     for (size_t i = 0; i < replayMem.size(); i++)
         if (replayMem.getItem(i).reward > 0.f) likes.push_back(i);
-    for (size_t k = 0; k < kSynthLikeAnchors && k < likes.size(); k++) {
+    const size_t nAnchors = std::min(likes.size(), kSynthLikeAnchors);
+    tbReserve(synth_.size() + nAnchors);
+    size_t r = 0;
+    for (const auto& sp : synth_) {
+        tbIn_[r] = sp.input.data();
+        tbSetTarget(r, sp.target);
+        r++;
+    }
+    for (size_t k = 0; k < nAnchors; k++) {
         if (likes.size() > kSynthLikeAnchors)
             std::swap(likes[k], likes[k + rand() % (likes.size() - k)]);
-        ts.first.push_back(replayMem.getItem(likes[k]).input);
-        ts.second.push_back(likeTarget(likes[k]));
+        tbIn_[r] = replayMem.getItem(likes[k]).input.data();
+        tbSetTarget(r, likeTarget(likes[k]));
+        r++;
     }
-    synthMapping.TrainBatch(ts, lr * (synthBurst_ ? kSynthBurstLR : kSynthHoldLR), 1, ts.first.size(), 0.f, false);
+    synthMapping.TrainBatch(tbIn_.data(), tbOut_.data(), r,
+                            lr * (synthBurst_ ? kSynthBurstLR : kSynthHoldLR), 1, r, 0.f, false);
     return synthBurst_;
 }
 
