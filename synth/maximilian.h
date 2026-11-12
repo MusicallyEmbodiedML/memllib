@@ -523,13 +523,24 @@ public:
     * \param input A signal
     * \param cutoff1 The cutoff frequency (between 0 and 1)
     */
-    float lopass(float input, float cutoff);
+    // Inline (was in maximilian.cpp): called per sample, e.g. in maxiDelayline's
+    // lpcombfb, and a call into maximilian.cpp is a flash (XIP) call from the SRAM
+    // audio callback.
+    __force_inline float lopass(float input, float cutoff) {
+        output = outputs[0] + cutoff * (input - outputs[0]);
+        outputs[0] = output;
+        return output;
+    }
 
     /** A simple low pass filter
     * \param input A signal
     * \param cutoff1 The cutoff frequency (between 0 and 1)
     */
-    float hipass(float input, float cutoff);
+    __force_inline float hipass(float input, float cutoff) {
+        output = input - (outputs[0] + cutoff * (input - outputs[0]));
+        outputs[0] = output;
+        return output;
+    }
 
     // ------------------------------------------------
     // getters/setters

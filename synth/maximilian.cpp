@@ -227,19 +227,7 @@ float maxiOsc::triangle(float frequency) {
 
 
 
-//I particularly like these. cutoff between 0 and 1
-float maxiFilter::lopass(float input, float cutoff) {
-	output=outputs[0] + cutoff*(input-outputs[0]);
-	outputs[0]=output;
-	return(output);
-}
-
-//as above
-float maxiFilter::hipass(float input, float cutoff) {
-	output=input-(outputs[0] + cutoff*(input-outputs[0]));
-	outputs[0]=output;
-	return(output);
-}
+// maxiFilter::lopass / hipass are inline in maximilian.h (per-sample, keep out of flash).
 
 
 //This works a bit. Needs attention.
