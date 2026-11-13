@@ -18,8 +18,9 @@ MIDI_CREATE_CUSTOM_INSTANCE(HardwareSerial, Serial2, MIDI, CustomMIDISettings);
 #ifdef MIDI_USB_CLIENT
 #include <Adafruit_TinyUSB.h>
 static Adafruit_USBD_MIDI usb_midi;
-static constexpr unsigned kUsbQueueLen = 256;
 #endif
+static constexpr unsigned kUsbQueueLen = 256;
+static constexpr unsigned kThruQueueLen = 128;
 
 
 MIDIInOut* MIDIInOut::instance_ = nullptr;
@@ -52,6 +53,7 @@ MIDIInOut::MIDIInOut() : n_outputs_(0),
     memset(parser_data_, 0, sizeof(parser_data_));
     memset(msg_queue_, 0, sizeof(msg_queue_));
     memset(midi_queue_buffer_, 0, sizeof(midi_queue_buffer_));
+    queue_init(&thru_q_, sizeof(UsbMsg), kThruQueueLen);
 #ifdef MIDI_USB_CLIENT
     // Constructed in setup() on core 0. USB is already enumerated by then (as a
     // serial port), so the MIDI interface needs a re-enumeration to appear.
@@ -213,7 +215,36 @@ void MIDIInOut::Poll()
 #endif
 }
 
+void MIDIInOut::sendThruDIN_(const uint8_t* data, size_t length) {
+    if (length == 0) return;
+    if (tx_dma_channel_ >= 0) {
+        sendViaDMA(data, length);
+    } else {
+        Serial2.write(data, length);
+    }
+}
+
 void MIDIInOut::PollUSB() {
+    // MIDI thru from the hardware input (parsed on core 1): to hardware out and/or USB.
+    {
+        const bool toHw = thru_hw_hw_;
+#ifdef MIDI_USB_CLIENT
+        const bool toUsb = thru_hw_usb_;
+#endif
+        UsbMsg t;
+        uint8_t buf[96];
+        size_t n = 0;
+        while (n + 3 <= sizeof(buf) && queue_try_remove(&thru_q_, &t)) {
+            if (toHw) {
+                memcpy(buf + n, t.b, t.len);
+                n += t.len;
+            }
+#ifdef MIDI_USB_CLIENT
+            if (toUsb) usbQueueMessage_(t.b[0], t.b[1], t.b[2], t.len);
+#endif
+        }
+        sendThruDIN_(buf, n);
+    }
 #ifdef MIDI_USB_CLIENT
     UsbMsg m;
     if (!TinyUSBDevice.mounted()) {
@@ -230,13 +261,22 @@ void MIDIInOut::PollUSB() {
         if (!usb_midi.writePacket(packet)) break;      // host not reading: drop the rest
     }
     uint8_t packet[4];
+    uint8_t thru[96];
+    size_t nThru = 0;
     while (usb_midi.readPacket(packet)) {
         const uint8_t cin = packet[0] & 0x0F;
         if (cin >= 0x8 && cin <= 0xE) {
             UsbMsg in{{packet[1], packet[2], packet[3]}, 3};
             queue_try_add(&usb_rx_q_, &in);
+            if (thru_usb_hw_) {                           // MIDI thru: USB in -> hardware out
+                const uint8_t len = (cin == 0xC || cin == 0xD) ? 2 : 3;
+                memcpy(thru + nThru, packet + 1, len);
+                nThru += len;
+                if (nThru + 3 > sizeof(thru)) { sendThruDIN_(thru, nThru); nThru = 0; }
+            }
         }
     }
+    sendThruDIN_(thru, nThru);
 #endif
 }
 
@@ -853,6 +893,12 @@ void MIDIInOut::processMidiByte(uint8_t byte) {
             uint8_t data2 = (expected_bytes > 1) ? parser_data_[1] : 0;
 
             queueMessage(msg_type, channel, parser_data_[0], data2);
+
+            if (thru_hw_hw_ || thru_hw_usb_) {                     // MIDI thru, sent from core 0 (PollUSB)
+                UsbMsg t{{parser_status_, parser_data_[0], data2},
+                         static_cast<uint8_t>(expected_bytes + 1)};
+                queue_try_add(&thru_q_, &t);
+            }
 
             // Reset for next message (but keep running status)
             parser_index_ = 0;

@@ -140,6 +140,17 @@ public:
     void PollUSB();
 
     /**
+     * @brief MIDI thru: copy incoming channel messages to the outputs, merged with
+     * what the firmware sends. Each route is set separately; all off by default.
+     * USB in is never sent back to USB.
+     * Thru output is written in PollUSB() (core 0), so call PollUSB regularly and
+     * send the firmware's own DIN output from core 0 too.
+     */
+    void SetThru(bool hwToHw, bool hwToUsb, bool usbToHw) {
+        thru_hw_hw_ = hwToHw; thru_hw_usb_ = hwToUsb; thru_usb_hw_ = usbToHw;
+    }
+
+    /**
      * @brief True when the firmware was built with USB MIDI.
      */
     static constexpr bool HasUSBMIDI() {
@@ -388,6 +399,14 @@ private:
     queue_t usb_rx_q_;
     void usbQueueMessage_(uint8_t status, uint8_t d1, uint8_t d2, uint8_t len);
     void usbQueueStream_(const uint8_t* data, size_t length);  // expands running status
+
+    // MIDI thru: hardware input is parsed on core 1 and passed to core 0 (PollUSB)
+    // through thru_q_, so all DIN output is written from one core.
+    queue_t thru_q_;
+    volatile bool thru_hw_hw_ = false;
+    volatile bool thru_hw_usb_ = false;
+    volatile bool thru_usb_hw_ = false;
+    void sendThruDIN_(const uint8_t* data, size_t length);
 };
 
 #endif  // __MIDI_IN_OUT_HPP__
